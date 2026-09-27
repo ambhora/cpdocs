@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+contract: 1
+
+build:
+  describe:
+    - [cmake, -S, "{source}", -B, "{build}", -G, Ninja,
+       "-DCPDOCS_REQUEST={request}",
+       "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={cpdocs.cmake}"]
+
+checks:
+  broken-references: fail
+
+versions:
+  # The examples share the branches and tags of the cpdocs repository; refs from before an
+  # example existed, or before it had docs/cpdocs.yml, are skipped.
+  branches:
+    include: [main]
+    variants: all
+  tags:
+    select: all
+    variants: all
+  default: latest-tag
+  aliases: {stable: latest-tag, dev: main}
+  legacy: skip

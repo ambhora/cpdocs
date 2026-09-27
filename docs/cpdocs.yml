@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+contract: 1
+
+build:
+  describe:
+    - ["{python}", -m, cpdocs, manifest, python, --request, "{request}",
+       --package, cpdocs, --source, src/cpdocs]
+
+versions:
+  branches:
+    include: [main]
+  tags:
+    select: all
+  default: main
+  legacy: skip
+
+site:
+  copyright: Copyright © cpdocs developers · Apache-2.0

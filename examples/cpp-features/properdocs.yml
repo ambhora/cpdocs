@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+site_name: demo-solver
+docs_dir: docs/web
+site_dir: build/site
+
+theme:
+  name: materialx
+  features:
+    - navigation.instant
+    - navigation.top
+    - search.highlight
+
+plugins:
+  - search
+  - cpdocs:
+      mount: reference/api
+
+nav:
+  - Home: index.md
+  - API reference: api.md

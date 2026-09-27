@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+site_name: cpdocs
+site_url: https://ambhora.github.io/cpdocs/
+site_author: Jayesh Badwaik
+site_description: Semantic, versioned API documentation for C, C++, Python and Rust
+docs_dir: docs/web
+site_dir: build/site
+
+repo_name: ambhora/cpdocs
+repo_url: https://github.com/ambhora/cpdocs
+edit_uri: edit/main/docs/web/
+
+copyright: Copyright © cpdocs developers · Apache-2.0
+
+theme:
+  name: materialx
+  features:
+    - content.code.copy
+    - navigation.instant
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+markdown_extensions:
+  - tables
+
+plugins:
+  - search
+  - cpdocs:
+      mount: reference/python-api
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - A first API reference: tutorials/first-reference.md
+  - How-To:
+      - Document feature variants: how-to/variants.md
+      - Document generated headers: how-to/generated-headers.md
+      - Use another build system: how-to/other-build-systems.md
+      - Mount the API in ProperDocs: how-to/properdocs.md
+      - Build in CI: how-to/ci.md
+  - Reference:
+      - Build-system contract: reference/contract.md
+      - cpdocs.yml: reference/configuration.md
+      - Command line: reference/cli.md
+      - CMake adapter: reference/cmake.md
+      - Extraction: reference/extraction.md
+      - Documentation comments: reference/comments.md
+      - Semantic links: reference/links.md
+      - Python API: reference/api.md
+  - Explanation:
+      - Architecture: explanation/architecture.md
+      - Why the build system owns variants: explanation/variants.md
+  - Examples: examples/index.md

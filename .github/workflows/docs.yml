@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+name: documentation
+
+# The published site is always built from the default branch: with the full history, cpdocs
+# documents every configured branch and tag from there. The github-pages environment only accepts
+# deployments from the default branch, so a pushed tag does not deploy itself; it starts this
+# workflow on the default branch, whose build then includes the new tag.
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-for-tag:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Rebuild the site on the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh workflow run docs.yml
+          --repo "${{ github.repository }}"
+          --ref "${{ github.event.repository.default_branch }}"
+
+  build:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Install toolchain for the C and C++ examples
+        run: sudo apt-get install -y --no-install-recommends clang cmake ninja-build
+      - name: Build documentation
+        run: uv run properdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    if: >
+      github.event_name != 'pull_request'
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

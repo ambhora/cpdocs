@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+contract: 3
+
+build:
+  feature-sets: >
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
+  build: >
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SET="{{feature-set}}"
+    -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
+
+site:
+  copyright: Copyright © cpdocs example developers · Apache-2.0
+
+api:
+  hide:
+    cpp-namespaces: ["*::detail"]
+
+checks:
+  broken-references: fail
+  undocumented: fail
+
+versions: [main]

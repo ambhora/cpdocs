@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+contract: 3
+
+build:
+  feature-sets: >
+    "{{python}}" -m cpdocs manifest python feature-sets
+    --source "{{source}}" --output "{{output-file}}"
+  build: >
+    "{{python}}" -m cpdocs manifest python build
+    --source "{{source}}" --feature-set "{{feature-set}}" --output "{{output-file}}"
+    --package cpdocs --package-source src/cpdocs
+
+versions: [main]
+
+site:
+  copyright: Copyright © cpdocs developers · Apache-2.0

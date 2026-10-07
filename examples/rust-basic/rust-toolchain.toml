@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+
+[toolchain]
+channel = "nightly-2026-10-01"
+profile = "minimal"

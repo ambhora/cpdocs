@@ -1,0 +1,57 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cpdocs"
+dynamic = ["version"]
+description = "Semantic, versioned API documentation for C, C++, CUDA, HIP, Fortran, Python and Rust projects"
+readme = "readme.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Jayesh Badwaik", email = "j.badwaik@fz-juelich.de" }]
+dependencies = [
+  "markdown-it-py>=3",
+  "Pygments>=2.17",
+  "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+properdocs = ["properdocs>=1.6.7"]
+
+[project.urls]
+Source = "https://github.com/ambhora/cpdocs"
+
+[project.scripts]
+cpdocs = "cpdocs.cli:main"
+
+[project.entry-points."properdocs.plugins"]
+cpdocs = "cpdocs.properdocs_plugin:CpdocsPlugin"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.8", "properdocs>=1.6.7", "mkdocs-materialx"]
+
+[tool.hatch.version]
+path = "src/cpdocs/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cpdocs"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tools"]
+testpaths = ["test"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "UP022"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cpdocs", "conftest"]

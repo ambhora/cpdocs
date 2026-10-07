@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+site_name: Fortran cpdocs example
+site_description: A minimal Fortran API rendered by cpdocs.
+docs_dir: docs
+site_dir: build/site
+plugins:
+  - search
+  - cpdocs:
+      config: docs/cpdocs.yml
+
+theme:
+  name: materialx
+  features:
+    - navigation.instant
+    - navigation.top
+    - search.highlight
+
+
+
+nav:
+  - Home: index.md

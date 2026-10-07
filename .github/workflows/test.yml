@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install toolchain for the C and C++ examples
+        run: sudo apt-get install -y --no-install-recommends clang cmake ninja-build
+      - name: Install toolchain for the Rust example
+        run: rustup toolchain install nightly-2026-10-01 --profile minimal
+      - name: Lint
+        run: uv run ruff check && uv run ruff format --check
+      - name: Test
+        run: uv run pytest -q

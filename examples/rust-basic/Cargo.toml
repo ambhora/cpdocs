@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "rust-geometry"
+version = "1.0.0"
+edition = "2024"
+
+[features]
+batch = []
+checked = []

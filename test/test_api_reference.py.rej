@@ -1,0 +1,9 @@
+diff a/test/test_api_reference.py b/test/test_api_reference.py	(rejected hunks)
+@@ -354,6 +354,7 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
+     assert "Public Functions" not in namespace_page
+     assert "Defined in" not in namespace_page
+     assert ">foo()</a>" in namespace_page
++    assert '>foo()</a><span class="api-language-badge">C++</span></li>' in namespace_page
+     source_page = (site / "_sources" / "dice" / "version.hpp" / "index.html").read_text(encoding="utf-8")
+     assert 'class="language-cpp"' in source_page
+     assert "style=" in source_page or "besa-syntax-keyword" in source_page

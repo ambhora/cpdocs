@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+# The same project documented through tools/minibuild.py instead of CMake:
+#   cpdocs build --config docs/cpdocs-minibuild.yml
+contract: 3
+
+build:
+  feature-sets: >
+    "{{python}}" tools/minibuild.py feature-sets "{{output-file}}"
+  build: >
+    "{{python}}" tools/minibuild.py build "{{feature-set}}" "{{output-file}}"
+
+api:
+  hide:
+    cpp-namespaces: ["*::detail"]

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# SPDX-License-Identifier: Apache-2.0
+contract: 3
+
+build:
+  feature-sets: >
+    cpdocs rust feature-sets
+    --source "{{source}}" --output "{{output-file}}"
+  build: >
+    cpdocs rust build
+    --source "{{source}}" --feature-set "{{feature-set}}" --output "{{output-file}}"
+
+checks:
+  broken-references: fail
+
+versions: [main]

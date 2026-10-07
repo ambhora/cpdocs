@@ -19,8 +19,8 @@ from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
-from .contract import ParseOptions
-from .model import (
+from ...contract import ParseOptions
+from ...model import (
     ApiAttribute,
     ApiEntity,
     ApiGraph,

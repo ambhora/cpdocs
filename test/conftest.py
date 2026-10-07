@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -16,6 +17,22 @@ import pytest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 EXAMPLES = REPOSITORY / "examples"
+
+# Make Git-driven tests independent of the developer/CI Git configuration and
+# guarantee that no test can open an editor, pager, signing prompt, or credential prompt.
+os.environ.update(
+    {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "tag.gpgSign",
+        "GIT_CONFIG_VALUE_0": "false",
+        "GIT_EDITOR": "true",
+        "GIT_SEQUENCE_EDITOR": "true",
+        "GIT_PAGER": "cat",
+        "MANPAGER": "cat",
+        "PAGER": "cat",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+)
 
 
 def git(project: Path, *arguments: str) -> str:

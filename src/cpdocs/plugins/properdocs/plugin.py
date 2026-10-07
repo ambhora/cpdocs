@@ -20,7 +20,7 @@ from properdocs.plugins import BasePlugin
 from cpdocs.build import Layout, build_versions, recorded_default_version
 from cpdocs.config import DEFAULT_CONFIG, CpdocsConfig, load_config
 
-from .properdocs_core import (
+from .core import (
     default_issue_url,
     edit_url,
     expand_versions_directive,

@@ -10,10 +10,10 @@ from pathlib import Path
 from . import __version__
 from .build import build_current, build_versions
 from .config import DEFAULT_CONFIG, load_config
-from .python_manifest import write_feature_sets as write_python_feature_sets
-from .python_manifest import write_manifest as write_python_manifest
-from .rust_manifest import write_feature_sets as write_rust_feature_sets
-from .rust_manifest import write_manifest as write_rust_manifest
+from .providers.python import write_feature_sets as write_python_feature_sets
+from .providers.python import write_manifest as write_python_manifest
+from .providers.cargo import write_feature_sets as write_rust_feature_sets
+from .providers.cargo import write_manifest as write_rust_manifest
 
 
 def _path(value: str) -> Path:

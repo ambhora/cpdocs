@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from cpdocs.clang_backend import extract_clang_graph
+from cpdocs.languages.cpp.extract import extract_clang_graph
 from cpdocs.contract import ParseOptions
-from cpdocs.html_renderer import render_html_site
+from cpdocs.rendering.html import render_html_site
 from cpdocs.model import (
     ApiAttribute,
     ApiEntity,
@@ -21,9 +21,9 @@ from cpdocs.model import (
     merge_graphs,
     stable_entity_id,
 )
-from cpdocs.python_backend import build_python_graph
-from cpdocs.render import entity_document
-from cpdocs.rust_backend import build_rust_graph
+from cpdocs.languages.python.extract import build_python_graph
+from cpdocs.rendering.common import entity_document
+from cpdocs.languages.rust.extract import build_rust_graph
 
 
 def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
@@ -376,8 +376,8 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert "Described by" in feature_sets_page
     assert "Feature sets have no names" in feature_sets_page
     assert "cpu" in feature_sets_page
-    assert 'class="api-feature-set-list"' in feature_sets_page
-    assert 'class="api-feature-set-row"' in feature_sets_page
+    assert 'class="api-feature-set-table"' in feature_sets_page
+    assert '<th scope="row">1</th>' in feature_sets_page
     assert (site / "assets" / "cpdocs-api.css").is_file()
     assert (site / "assets" / "cpdocs-api.js").is_file()
     assert "api-outline-children" in home_page

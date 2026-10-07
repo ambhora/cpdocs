@@ -21,7 +21,8 @@ except ImportError:  # pragma: no cover - optional dependency in some bootstrap 
     HtmlFormatter = None
     CppLexer = FortranLexer = PythonLexer = RustLexer = TextLexer = None
 
-from .model import ApiEntity, ApiGraph, ApiSignature
+from ..languages import kind_marker, rendering_for, source_language
+from ..model import ApiEntity, ApiGraph, ApiSignature
 
 
 def split_qualified(name: str, separator: str) -> list[str]:
@@ -48,9 +49,7 @@ def split_qualified(name: str, separator: str) -> list[str]:
 
 
 def _segments(entity: ApiEntity) -> list[str]:
-    separator = "." if entity.language == "python" else "::"
-    return split_qualified(entity.qualified_name, separator)
-
+    return split_qualified(entity.qualified_name, rendering_for(entity.language).separator)
 
 # Operator names as words, longest spelling first, so that ``operator<<`` is not read as ``<``.
 _OPERATOR_WORDS = (
@@ -162,10 +161,11 @@ def entity_document(entity: ApiEntity) -> Path:
     override = _DOCUMENT_OVERRIDES.get(entity.id)
     if override is not None:
         return override
+    rendering = rendering_for(entity.language)
     parts = [_slug(part) for part in _segments(entity)]
-    if entity.kind in {"namespace", "module", "package"}:
+    if entity.kind in rendering.container_kinds:
         return Path("api", *parts, "index.md")
-    if entity.kind in {"class", "struct", "derived_type", "union", "enum", "trait", "protocol"}:
+    if entity.kind in rendering.type_page_kinds:
         if len(parts) > 1:
             return Path("api", *parts[:-1], f"{entity.kind}-{parts[-1]}", "index.md")
         return Path("api", f"{entity.kind}-{parts[0]}", "index.md")
@@ -180,16 +180,7 @@ def _source_document(source_path: str) -> Path:
 
 
 def _source_language(source_path: str) -> str:
-    suffix = Path(source_path).suffix.casefold()
-    if suffix in {".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh"}:
-        return "cpp"
-    if suffix in {".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}:
-        return "fortran"
-    if suffix in {".py", ".pyi"}:
-        return "python"
-    if suffix == ".rs":
-        return "rust"
-    return "text"
+    return source_language(source_path)
 
 
 def _pygments_lexer(language: str):
@@ -470,25 +461,27 @@ def _highlight_source_lines(content: str, language: str) -> list[str]:
     return ["".join(parts) or " " for parts in rendered]
 
 
-_TYPE_LIKE_KINDS = {
-    "class",
-    "struct",
-    "union",
-    "enum",
-    "trait",
-    "protocol",
-    "type_alias",
-    "concept",
-}
+def _is_container(entity: ApiEntity) -> bool:
+    return entity.kind in rendering_for(entity.language).container_kinds
 
-_CLASS_LIKE_KINDS = {"class", "struct", "derived_type", "union", "trait", "protocol"}
+
+def _is_class_like(entity: ApiEntity) -> bool:
+    return entity.kind in rendering_for(entity.language).class_like_kinds
+
+
+def _is_type_page(entity: ApiEntity) -> bool:
+    return entity.kind in rendering_for(entity.language).type_page_kinds
+
+
+def _is_function(entity: ApiEntity) -> bool:
+    return entity.kind in rendering_for(entity.language).function_kinds
 
 
 def _preferred_type_target(name: str, entity: ApiEntity, graph: ApiGraph) -> ApiEntity | None:
     candidates = [
         candidate
         for candidate in graph.entities.values()
-        if candidate.kind in _TYPE_LIKE_KINDS and candidate.name == name
+        if candidate.kind in rendering_for(candidate.language).type_like_kinds and candidate.name == name
     ]
     if not candidates:
         return None
@@ -503,7 +496,7 @@ def _embedded_member_parent(entity: ApiEntity, graph: ApiGraph) -> ApiEntity | N
     if not entity.parent or entity.parent not in graph.entities:
         return None
     parent = graph.entities[entity.parent]
-    return parent if parent.kind in _CLASS_LIKE_KINDS else None
+    return parent if _is_class_like(parent) else None
 
 
 def _member_anchor(entity: ApiEntity) -> str:
@@ -580,154 +573,17 @@ def _highlight_declaration(
     return "".join(values)
 
 
-def _parameter_spelling(signature: ApiSignature, language: str) -> str:
-    if language != "python":
-        values: list[str] = []
-        for parameter in signature.parameters:
-            value = parameter.type or parameter.name
-            if parameter.name and parameter.type:
-                value += f" {parameter.name}"
-            if parameter.default is not None:
-                value += f" = {parameter.default}"
-            values.append(value)
-        return ", ".join(values)
-
-    values: list[str] = []
-    parameters = list(signature.parameters)
-    positional_only = [item for item in parameters if item.kind == "positional-only"]
-    has_var_positional = any(item.kind == "var-positional" for item in parameters)
-    keyword_marker_emitted = False
-    for index, parameter in enumerate(parameters):
-        if (
-            parameter.kind == "keyword-only"
-            and not has_var_positional
-            and not keyword_marker_emitted
-        ):
-            values.append("*")
-            keyword_marker_emitted = True
-        prefix = ""
-        if parameter.kind == "var-positional":
-            prefix = "*"
-            keyword_marker_emitted = True
-        elif parameter.kind == "var-keyword":
-            prefix = "**"
-        value = prefix + parameter.name
-        if parameter.type:
-            value += f": {parameter.type}"
-        if parameter.default is not None:
-            value += f" = {parameter.default}"
-        values.append(value)
-        if positional_only and index + 1 == len(positional_only):
-            values.append("/")
-    return ", ".join(values)
-
-
-def _with_template(template: str, declaration: str) -> str:
-    return f"{template}\n{declaration}" if template else declaration
-
-
 def _signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
-    return _with_template(signature.template, _plain_signature_spelling(entity, signature))
+    value = rendering_for(entity.language).signature_spelling(entity, signature)
+    return f"{signature.template}\n{value}" if signature.template else value
 
 
 def _plain_signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
-    attribute_spellings = list(
-        dict.fromkeys(attribute.spelling for attribute in signature.attributes if attribute.spelling)
-    )
-    attribute_prefix = " ".join(attribute_spellings)
-    if signature.spelling:
-        return f"{attribute_prefix} {signature.spelling}".strip()
-    parameters = _parameter_spelling(signature, entity.language)
-    if entity.language == "python":
-        prefix = "async def" if "async" in signature.qualifiers else "def"
-        value = f"{prefix} {entity.qualified_name}({parameters})"
-        if signature.returns:
-            value += f" -> {signature.returns}"
-        return value
-    if entity.language == "rust":
-        modifiers = [value for value in entity.properties if value != "pub"]
-        prefix = "pub " + ((" ".join(modifiers) + " ") if modifiers else "")
-        value = f"{prefix}fn {entity.qualified_name}({parameters})"
-        if signature.returns:
-            value += f" -> {signature.returns}"
-        return value
-    prefix_values = [
-        value
-        for value in entity.properties
-        if value in {"inline", "constexpr", "consteval", "static", "virtual"}
-    ]
-    prefix = (" ".join(prefix_values) + " ") if prefix_values else ""
-    result = (signature.returns + " ") if signature.returns else ""
-    suffix_values = [value for value in signature.qualifiers if value not in prefix_values]
-    suffix = (" " + " ".join(suffix_values)) if suffix_values else ""
-    declaration = f"{prefix}{result}{entity.qualified_name}({parameters}){suffix}".strip()
-    return f"{attribute_prefix} {declaration}".strip()
+    return rendering_for(entity.language).signature_spelling(entity, signature)
 
 
 def _entity_declaration(entity: ApiEntity) -> str:
-    if entity.language == "python":
-        if entity.kind in {"class", "protocol"}:
-            bases = f"({', '.join(entity.bases)})" if entity.bases else ""
-            return f"class {entity.qualified_name}{bases}"
-        if entity.kind in {"module", "package"}:
-            return f"module {entity.qualified_name}"
-        if entity.kind == "type_alias":
-            target = next((value[2:] for value in entity.properties if value.startswith("= ")), "")
-            return f"{entity.qualified_name} = {target}".rstrip()
-        if entity.kind in {"attribute", "variable", "constant", "property"}:
-            type_name = next(
-                (
-                    value
-                    for value in entity.properties
-                    if not value.startswith("=") and value not in {"property"}
-                ),
-                "",
-            )
-            assigned = next(
-                (value[2:] for value in entity.properties if value.startswith("= ")), ""
-            )
-            value = entity.qualified_name + (f": {type_name}" if type_name else "")
-            return value + (f" = {assigned}" if assigned else "")
-        return entity.qualified_name
-
-    if entity.language == "rust":
-        prefix = "pub " if "pub" in entity.properties else ""
-        keyword = {
-            "struct": "struct",
-            "enum": "enum",
-            "trait": "trait",
-            "module": "mod",
-            "type_alias": "type",
-            "constant": "const",
-        }.get(entity.kind, entity.kind)
-        return f"{prefix}{keyword} {entity.qualified_name}".strip()
-
-    if entity.declaration:
-        return entity.declaration
-    return _with_template(entity.template, _cpp_declaration(entity))
-
-
-def _cpp_declaration(entity: ApiEntity) -> str:
-    if entity.kind == "namespace":
-        return f"namespace {entity.qualified_name}"
-    if entity.kind in {"class", "struct", "union"}:
-        bases = f" : {', '.join(entity.bases)}" if entity.bases else ""
-        return f"{entity.kind} {entity.qualified_name}{bases}"
-    if entity.kind == "enum":
-        scoped = " class" if "scoped" in entity.properties else ""
-        return f"enum{scoped} {entity.qualified_name}"
-    if entity.kind == "type_alias":
-        target = next((value[2:] for value in entity.properties if value.startswith("= ")), "")
-        return f"using {entity.qualified_name} = {target}".rstrip()
-    if entity.kind in {"attribute", "variable", "constant"}:
-        type_name = next((value for value in entity.properties if not value.startswith("=")), "")
-        value = next((value[2:] for value in entity.properties if value.startswith("= ")), "")
-        return f"{type_name} {entity.qualified_name}".strip() + (f" = {value}" if value else "")
-    if entity.kind == "concept":
-        return f"concept {entity.qualified_name}"
-    if entity.kind == "macro" and entity.signatures:
-        return entity.signatures[0].spelling or entity.name
-    return entity.qualified_name
+    return rendering_for(entity.language).entity_declaration(entity)
 
 
 def _paragraphs(text: str) -> str:
@@ -793,21 +649,7 @@ def _feature_set_display_name(name: str) -> str:
 
 
 def _member_summary_spelling(entity: ApiEntity) -> str:
-    if entity.kind in {"attribute", "variable", "constant"}:
-        type_name = next((value for value in entity.properties if not value.startswith("=")), "")
-        value = next((value[2:] for value in entity.properties if value.startswith("= ")), "")
-        if entity.language == "python":
-            result = entity.name + (f": {type_name}" if type_name else "")
-            return result + (f" = {value}" if value else "")
-        return f"{type_name} {entity.name}".strip() + (f" = {value}" if value else "")
-    if entity.kind == "type_alias":
-        target = next((value[2:] for value in entity.properties if value.startswith("= ")), "")
-        if entity.language == "python":
-            return f"{entity.name} = {target}".rstrip()
-        return _with_template(entity.template, f"using {entity.name} = {target}".rstrip())
-    if entity.kind in {"class", "struct", "derived_type", "union", "enum", "trait", "protocol"}:
-        return f"{entity.kind} {entity.name}"
-    return entity.name
+    return rendering_for(entity.language).member_summary(entity)
 
 
 def _relative_link(source: Path, target: Path) -> str:
@@ -824,28 +666,5 @@ def _relative_link(source: Path, target: Path) -> str:
     return "./" if value == "." else value.rstrip("/") + "/"
 
 
-def _kind_marker(kind: str) -> str:
-    return {
-        "namespace": "N",
-        "module": "M",
-        "package": "P",
-        "class": "C",
-        "struct": "S",
-        "derived_type": "T",
-        "union": "U",
-        "enum": "E",
-        "trait": "T",
-        "protocol": "P",
-        "function": "F",
-        "subroutine": "F",
-        "method": "F",
-        "constructor": "F",
-        "type_alias": "T",
-        "variable": "V",
-        "attribute": "A",
-        "property": "P",
-        "constant": "C",
-        "macro": "D",
-        "concept": "K",
-        "deduction_guide": "G",
-    }.get(kind, "·")
+def _kind_marker(kind: str, language: str | None = None) -> str:
+    return kind_marker(kind, language)

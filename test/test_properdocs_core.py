@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from cpdocs.properdocs_core import publish_api, resolve_api_references
+from cpdocs.plugins.properdocs.core import publish_api, resolve_api_references
 
 
 def test_semantic_api_links_resolve_against_mount() -> None:
@@ -69,7 +69,7 @@ def test_known_references_link_straight_to_the_page() -> None:
 
 
 def test_versions_directive_lists_every_version() -> None:
-    from cpdocs.properdocs_core import expand_versions_directive
+    from cpdocs.plugins.properdocs.core import expand_versions_directive
 
     rendered = expand_versions_directive(
         "Versions:\n\n@apidocs-versions\n",
@@ -100,7 +100,7 @@ def test_code_is_left_alone() -> None:
 
 
 def test_subsite_mounts_are_relative_to_project_root(tmp_path: Path) -> None:
-    from cpdocs.properdocs_plugin import CpdocsPlugin
+    from cpdocs.plugins.properdocs.plugin import CpdocsPlugin
 
     (tmp_path / "examples" / "demo").mkdir(parents=True)
     (tmp_path / "examples" / "demo" / "properdocs.yml").write_text("site_name: demo\n")
@@ -113,7 +113,7 @@ def test_subsite_mounts_are_relative_to_project_root(tmp_path: Path) -> None:
 def test_serve_reuses_cached_subsites_until_their_inputs_change(
     tmp_path: Path, monkeypatch
 ) -> None:
-    from cpdocs.properdocs_plugin import CpdocsPlugin
+    from cpdocs.plugins.properdocs.plugin import CpdocsPlugin
 
     project = tmp_path / "examples" / "demo"
     project.mkdir(parents=True)

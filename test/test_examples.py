@@ -312,6 +312,7 @@ def test_root_properdocs_config_mounts_example_sites() -> None:
         "examples/mixed",
         "examples/fortran-basic",
         "examples/python-basic",
+        "examples/rust-basic",
     ]
     assert not (REPOSITORY / "tools" / "build_example_sites.py").exists()
 
@@ -447,7 +448,7 @@ def test_outline_collapses_on_small_screens(tmp_path: Path) -> None:
 
 def test_urls_are_readable_and_collisions_stay_apart() -> None:
     from cpdocs.model import ApiEntity
-    from cpdocs.render import _slug, assign_documents, entity_document
+    from cpdocs.rendering.common import _slug, assign_documents, entity_document
 
     assert _slug("storage_traits<bool>") == "storage_traits-bool"
     assert _slug("storage_traits<bool*>") == "storage_traits-bool-ptr"
@@ -491,7 +492,7 @@ def test_parameter_documentation_is_a_list(tmp_path: Path) -> None:
 
 
 def test_documentation_fields_and_strong_text() -> None:
-    from cpdocs.html_renderer import _documentation_description
+    from cpdocs.rendering.html import _documentation_description
 
     rendered = _documentation_description(
         "Add **two** values.\n\n@param left Left operand.\n\n@param right Right operand."

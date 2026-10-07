@@ -23,14 +23,20 @@ from pathlib import Path, PurePosixPath
 
 from markdown_it import MarkdownIt
 
-from .model import ApiEntity, ApiGraph, ApiSignature, entity_sort_key
-from .render import (
-    _CLASS_LIKE_KINDS,
+from ..languages import kind_label as language_kind_label
+from ..languages import language_label as semantic_language_label
+from ..languages import rendering_for
+from ..model import ApiEntity, ApiGraph, ApiSignature, entity_sort_key
+from .common import (
     _documentation_blocks,
     _embedded_member_parent,
     _entity_declaration,
+    _feature_set_anchor,
     _highlight_declaration,
     _highlight_source_lines,
+    _is_container,
+    _is_function,
+    _is_type_page,
     _kind_marker,
     _member_anchor,
     _member_summary_spelling,
@@ -38,15 +44,10 @@ from .render import (
     _signature_spelling,
     _source_document,
     _source_language,
-    _feature_set_anchor,
     assign_documents,
     entity_document,
 )
 
-_CONTAINER_KINDS = {"namespace", "module", "package"}
-_FUNCTION_KINDS = {"function", "subroutine", "method", "constructor", "deduction_guide"}
-_TYPE_KINDS = {"class", "struct", "derived_type", "union", "enum", "trait", "protocol", "type_alias", "concept"}
-_MEMBER_VALUE_KINDS = {"property", "attribute", "variable", "constant"}
 
 _INLINE_DOCUMENTATION = re.compile(
     r"`(?P<code>[^`]+)`"
@@ -169,55 +170,21 @@ def _source_href(source_document: Path, entity: ApiEntity, graph: ApiGraph) -> s
 # ---------------------------------------------------------------------------
 
 
-def _kind_label(kind: str) -> str:
-    return {
-        "namespace": "namespace",
-        "module": "module",
-        "package": "package",
-        "class": "class",
-        "struct": "struct",
-        "derived_type": "derived type",
-        "union": "union",
-        "enum": "enum",
-        "trait": "trait",
-        "protocol": "protocol",
-        "type_alias": "type alias",
-        "concept": "concept",
-        "function": "function",
-        "subroutine": "subroutine",
-        "method": "method",
-        "constructor": "constructor",
-        "property": "property",
-        "attribute": "attribute",
-        "variable": "variable",
-        "constant": "constant",
-        "macro": "macro",
-        "deduction_guide": "deduction guide",
-    }.get(kind, kind.replace("_", " "))
+def _kind_label(kind: str, language: str | None = None) -> str:
+    return language_kind_label(kind, language)
 
 
-def _kind_badge(kind: str) -> str:
-    marker = html.escape(_kind_marker(kind))
-    return f'<span class="api-kind" title="{html.escape(_kind_label(kind))}">{marker}</span>'
-
-
-_LANGUAGE_LABELS = {
-    "c": "C",
-    "cpp": "C++",
-    "cuda": "CUDA",
-    "hip": "HIP",
-    "fortran": "Fortran",
-    "python": "Python",
-    "rust": "Rust",
-}
+def _kind_badge(kind: str, language: str | None = None) -> str:
+    marker = html.escape(_kind_marker(kind, language))
+    return f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
 
 
 def _language_label(language: str) -> str:
-    return _LANGUAGE_LABELS.get(language, language)
+    return semantic_language_label(language)
 
 
 def _language_badge(entity: ApiEntity) -> str:
-    if entity.kind in _CONTAINER_KINDS:
+    if _is_container(entity):
         return ""
     label = _language_label(entity.language)
     return f'<span class="api-language-badge">{html.escape(label)}</span>'
@@ -246,28 +213,17 @@ def _feature_set_inline(graph: ApiGraph, key: str) -> str:
 
 
 def _legend(graph: ApiGraph) -> str:
-    present = {entity.kind for entity in graph.entities.values()}
-    order = [
-        "namespace",
-        "module",
-        "package",
-        "class",
-        "struct",
-        "union",
-        "enum",
-        "trait",
-        "protocol",
-        "concept",
-        "function",
-        "macro",
-    ]
-    entries = []
-    for kind in order:
-        if kind not in present:
+    kinds: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for entity in sorted(graph.entities.values(), key=entity_sort_key):
+        if entity.kind in seen:
             continue
-        entries.append(
-            f'<span class="api-legend-entry">{_kind_badge(kind)} {_kind_label(kind)}</span>'
-        )
+        seen.add(entity.kind)
+        kinds.append((entity.kind, entity.language))
+    entries = [
+        f'<span class="api-legend-entry">{_kind_badge(kind, language)} {_kind_label(kind, language)}</span>'
+        for kind, language in kinds
+    ]
     return (
         '<div class="api-legend">'
         + '<span class="api-legend-separator">·</span>'.join(entries)
@@ -278,7 +234,7 @@ def _legend(graph: ApiGraph) -> str:
 def _visible_outline_children(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
     # Public members of records live on the record page and should not duplicate themselves in the
     # global API outline.  Namespaces/modules/packages retain their recursive API tree.
-    if entity.kind in _CLASS_LIKE_KINDS or entity.kind == "enum":
+    if _is_type_page(entity):
         return []
     values = [
         graph.entities[child_id]
@@ -308,7 +264,7 @@ def _outline_entity(
     href = _entity_href(document, entity, graph)
     row = [
         '<div class="api-outline-row' + (" is-current" if active else "") + '">',
-        _kind_badge(entity.kind),
+        _kind_badge(entity.kind, entity.language),
         f'<a class="api-outline-link" href="{html.escape(href)}">{html.escape(entity.member_label)}</a>',
         f'<span class="api-outline-language">{_language_badge(entity)}</span>',
     ]
@@ -573,7 +529,7 @@ def _availability(
 
 
 def _defined_in(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
-    if entity.kind in _CONTAINER_KINDS or entity.source is None:
+    if _is_container(entity) or entity.source is None:
         return ""
     href = _source_href(document, entity, graph)
     label = Path(entity.source.path).name
@@ -671,7 +627,7 @@ def _member_anchor_for_signature(entity: ApiEntity, index: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _namespace_page(
+def _container_page(
     entity: ApiEntity, graph: ApiGraph, document: Path
 ) -> tuple[str, list[tuple[str, str, int]]]:
     title = f"{_kind_label(entity.kind).title()} {entity.qualified_name}"
@@ -683,9 +639,9 @@ def _namespace_page(
     else:
         body.append(
             '<div class="api-namespace-doc api-namespace-doc-generated">'
-            f"<p>The <code>{html.escape(entity.qualified_name)}</code> namespace groups the public API "
-            "declared in this scope. The hierarchy below expands nested namespaces through their "
-            "public types and function families; members of classes and structs remain documented "
+            f"<p>The <code>{html.escape(entity.qualified_name)}</code> {_kind_label(entity.kind, entity.language)} groups the public API "
+            "declared in this scope. The hierarchy below expands nested containers through their "
+            "public types and callable families; members of record-like types remain documented "
             "on their corresponding type pages.</p>"
             "</div>"
         )
@@ -698,7 +654,7 @@ def _namespace_page(
         ]
     )
 
-    def render_namespace_children(container: ApiEntity) -> str:
+    def render_container_children(container: ApiEntity) -> str:
         children = [
             graph.entities[value]
             for value in container.children
@@ -708,20 +664,20 @@ def _namespace_page(
         parts: list[str] = []
         for child in children:
             parts.append('<li><div class="api-namespace-tree-row">')
-            parts.append(_kind_badge(child.kind))
+            parts.append(_kind_badge(child.kind, child.language))
             parts.append(
                 f'<a href="{html.escape(_entity_href(document, child, graph))}">{html.escape(child.member_label)}</a>'
             )
             parts.append(_language_badge(child))
             parts.append("</div>")
-            if child.kind in _CONTAINER_KINDS:
-                nested = render_namespace_children(child)
+            if _is_container(child):
+                nested = render_container_children(child)
                 if nested:
                     parts.append("<ul>" + nested + "</ul>")
             parts.append("</li>")
         return "".join(parts)
 
-    body.append(render_namespace_children(entity))
+    body.append(render_container_children(entity))
     body.extend(["</ul>", _availability(entity, graph, document), "</section>"])
     return "".join(body), [("Members", "members", 1)]
 
@@ -735,20 +691,8 @@ def _record_page(
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
     ]
-    if entity.language in {"c", "cpp", "cuda", "hip"} and entity.kind in {"class", "struct", "union", "enum"}:
-        scoped = " class" if entity.kind == "enum" and "scoped" in entity.properties else ""
-        bases = f" : {', '.join(entity.bases)}" if entity.bases else ""
-        declaration_text = f"{entity.kind}{scoped} {entity.name}{bases}"
-        if entity.template:
-            declaration_text = f"{entity.template}\n{declaration_text}"
-    elif entity.language == "python" and entity.kind in {"class", "protocol"}:
-        bases = f"({', '.join(entity.bases)})" if entity.bases else ""
-        declaration_text = f"class {entity.name}{bases}"
-    elif entity.language == "rust" and entity.kind in {"struct", "enum", "trait"}:
-        prefix = "pub " if "pub" in entity.properties else ""
-        declaration_text = f"{prefix}{entity.kind} {entity.name}"
-    else:
-        declaration_text = _entity_declaration(entity)
+    display_entity = dataclasses.replace(entity, qualified_name=entity.name)
+    declaration_text = _entity_declaration(display_entity)
     declaration = _highlight_declaration(
         declaration_text, entity.language, entity=entity, graph=graph, document_path=document
     )
@@ -784,7 +728,7 @@ def _record_page(
             href = html.escape(_entity_href(document, other, graph))
             body.append(
                 '<div class="api-member-row">'
-                + _kind_badge(other.kind)
+                + _kind_badge(other.kind, other.language)
                 + f'<code>{prefix} <a href="{href}">{html.escape(other.name)}</a></code>'
                 + (
                     '<div class="api-member-doc">'
@@ -797,18 +741,11 @@ def _record_page(
             )
         body.append("</div></section>")
 
-    grouped = {
-        "Public Types": [
-            child for child in children if child.kind in _TYPE_KINDS or child.kind in {"type_alias"}
-        ],
-        "Public Functions": [
-            child
-            for child in children
-            if child.kind in _FUNCTION_KINDS and child.kind != "deduction_guide"
-        ],
-        "Deduction Guides": [child for child in children if child.kind == "deduction_guide"],
-        "Public Members": [child for child in children if child.kind in _MEMBER_VALUE_KINDS],
-    }
+    grouped: dict[str, list[ApiEntity]] = {}
+    for child in children:
+        heading = rendering_for(child.language).member_group(child)
+        if heading is not None:
+            grouped.setdefault(heading, []).append(child)
     for heading, values in grouped.items():
         if not values:
             continue
@@ -819,13 +756,13 @@ def _record_page(
         toc.append((heading, section_anchor, 1))
         body.append('<div class="api-record-members">')
         for child in values:
-            if child.kind in _FUNCTION_KINDS and child.signatures:
+            if _is_function(child) and child.signatures:
                 for index, signature in enumerate(child.signatures):
                     anchor = _member_anchor_for_signature(child, index)
                     label = _compact_signature_label(child, signature)
                     toc.append((label, anchor, 2))
                     body.append(_signature_card(child, signature, graph, document, anchor=anchor))
-            elif child.kind in _MEMBER_VALUE_KINDS:
+            elif heading == "Public Members":
                 anchor = _member_anchor(child)
                 toc.append((child.name, anchor, 2))
                 summary = _member_summary_spelling(child)
@@ -834,7 +771,7 @@ def _record_page(
                 )
                 body.append(
                     f'<div class="api-member-row" id="{html.escape(anchor)}">'
-                    + _kind_badge(child.kind)
+                    + _kind_badge(child.kind, child.language)
                     + f"<code>{highlighted}</code>"
                     + (
                         '<div class="api-member-doc">'
@@ -850,7 +787,7 @@ def _record_page(
                 toc.append((child.name, anchor, 2))
                 body.append(
                     f'<div class="api-member-row" id="{html.escape(anchor)}">'
-                    + _kind_badge(child.kind)
+                    + _kind_badge(child.kind, child.language)
                     + f'<a href="{html.escape(_entity_href(document, child, graph))}">{html.escape(child.name)}</a></div>'
                 )
         body.extend(["</div>", "</section>"])
@@ -931,11 +868,11 @@ def _simple_entity_page(
 def _entity_page(
     entity: ApiEntity, graph: ApiGraph, document: Path
 ) -> tuple[str, list[tuple[str, str, int]]]:
-    if entity.kind in _CONTAINER_KINDS:
-        return _namespace_page(entity, graph, document)
-    if entity.kind in _CLASS_LIKE_KINDS or entity.kind == "enum":
+    if _is_container(entity):
+        return _container_page(entity, graph, document)
+    if _is_type_page(entity):
         return _record_page(entity, graph, document)
-    if entity.kind in _FUNCTION_KINDS:
+    if _is_function(entity):
         return _function_page(entity, graph, document)
     return _simple_entity_page(entity, graph, document)
 
@@ -944,7 +881,7 @@ def _hierarchy_entity(entity: ApiEntity, graph: ApiGraph, document: Path) -> str
     children = _visible_outline_children(entity, graph)
     parts = [
         "<li>",
-        _kind_badge(entity.kind),
+        _kind_badge(entity.kind, entity.language),
         f'<a href="{html.escape(_entity_href(document, entity, graph))}">{html.escape(entity.member_label)}</a>',
         _language_badge(entity),
     ]

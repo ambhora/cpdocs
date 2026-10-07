@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .model import (
+from ...model import (
     ApiEntity,
     ApiGraph,
     ApiParameter,

@@ -15,34 +15,23 @@ import dataclasses
 import fnmatch
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from .clang_backend import extract_clang_graph
-from .config import CpdocsConfig, load_config
-from .contract import (
-    ContractError,
-    FeatureSetDeclaration,
-    FeatureSets,
-    Manifest,
-    UnitManifest,
-    read_feature_sets,
-    read_manifest,
-    write_feature_set,
-)
-from .fortran_backend import extract_fortran_graph
-from .html_renderer import render_html_site
+from .config import CpdocsConfig
+from .contract import ContractError, UnitManifest
+from .languages import rendering_for
+from .languages.cpp.extract import extract_clang_graph
+from .languages.fortran.extract import extract_fortran_graph
+from .languages.python.extract import build_python_graph
+from .languages.rust.extract import build_rust_graph
 from .model import ApiGraph, merge_graphs, relative_source_path
-from .python_backend import build_python_graph
-from .rust_backend import build_rust_graph
+from .providers.contract import discover_feature_sets, resolve_manifest
+from .rendering.html import render_html_site
 from .versioning import SelectedRef, current_branch, select_refs
-
-_PLACEHOLDER = re.compile(r"\{\{([a-z][a-z0-9-]*)\}\}")
-_CONTAINER_KINDS = {"namespace", "package", "module"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,113 +58,6 @@ class Layout:
     def work(self, ref: str) -> Path:
         return self.work_root / "work" / ref.replace("/", "__")
 
-
-
-# --------------------------------------------------------------------------------------------------
-# Talking to the build system
-# --------------------------------------------------------------------------------------------------
-
-
-def _expand(command: str, values: dict[str, str], *, allowed: set[str], name: str) -> str:
-    placeholders = set(_PLACEHOLDER.findall(command))
-    unknown = sorted(placeholders - allowed)
-    if unknown:
-        raise RuntimeError(
-            f"cpdocs.yml: build.{name} uses unknown placeholders: {', '.join(unknown)}"
-        )
-    return _PLACEHOLDER.sub(lambda match: values[match.group(1)], command)
-
-
-def _run_command(
-    command: str,
-    *,
-    source: Path,
-    values: dict[str, str],
-    allowed: set[str],
-    name: str,
-    log: Path,
-) -> None:
-    expanded = _expand(command, values, allowed=allowed, name=name)
-    environment = dict(os.environ)
-    # Commands invoked from a source checkout should be able to use cpdocs' own helper CLI just as
-    # they can when cpdocs is installed.  This is only an execution-environment convenience; the
-    # build-system contract itself remains the JSON files and command placeholders.
-    package_root = str(Path(__file__).resolve().parents[1])
-    pythonpath = environment.get("PYTHONPATH")
-    environment["PYTHONPATH"] = package_root + (os.pathsep + pythonpath if pythonpath else "")
-    log.parent.mkdir(parents=True, exist_ok=True)
-    with log.open("w", encoding="utf-8") as stream:
-        stream.write("$ " + expanded + "\n")
-        stream.flush()
-        result = subprocess.run(
-            expanded,
-            cwd=source,
-            shell=True,
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=environment,
-        )
-        stream.write(result.stdout)
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"build-system command failed (build.{name}):\n  {expanded}\n\n"
-            + result.stdout.rstrip()
-        )
-
-
-def discover_feature_sets(command: str, *, source: Path, work: Path) -> FeatureSets:
-    """Run ``build.feature-sets`` and read ``feature-sets.json``."""
-
-    directory = work / "feature-sets"
-    shutil.rmtree(directory, ignore_errors=True)
-    tmpdir = directory / "tmp"
-    tmpdir.mkdir(parents=True)
-    output = directory / "feature-sets.json"
-    _run_command(
-        command,
-        source=source.resolve(),
-        values={
-            "source": str(source.resolve()),
-            "tmpdir": str(tmpdir.resolve()),
-            "output-file": str(output.resolve()),
-            "python": sys.executable,
-        },
-        allowed={"source", "tmpdir", "output-file", "python"},
-        name="feature-sets",
-        log=directory / "log.txt",
-    )
-    return read_feature_sets(output)
-
-
-def resolve_manifest(
-    command: str, feature_set: FeatureSetDeclaration, *, source: Path, work: Path
-) -> Manifest:
-    """Run ``build.build`` once for one concrete feature set and read ``manifest.json``."""
-
-    directory = work / "feature-sets" / feature_set.key
-    shutil.rmtree(directory, ignore_errors=True)
-    tmpdir = directory / "tmp"
-    tmpdir.mkdir(parents=True)
-    feature_set_file = directory / "feature-set.json"
-    output = directory / "manifest.json"
-    write_feature_set(feature_set_file, feature_set)
-    _run_command(
-        command,
-        source=source.resolve(),
-        values={
-            "source": str(source.resolve()),
-            "tmpdir": str(tmpdir.resolve()),
-            "feature-set": str(feature_set_file.resolve()),
-            "output-file": str(output.resolve()),
-            "python": sys.executable,
-        },
-        allowed={"source", "tmpdir", "feature-set", "output-file", "python"},
-        name="build",
-        log=directory / "log.txt",
-    )
-    return read_manifest(output, source=source.resolve())
 
 
 # --------------------------------------------------------------------------------------------------
@@ -441,7 +323,8 @@ def _check_undocumented(graph: ApiGraph, level: str) -> None:
     missing = sorted(
         entity.qualified_name
         for entity in graph.entities.values()
-        if entity.kind not in _CONTAINER_KINDS and not entity.documentation.strip()
+        if entity.kind not in rendering_for(entity.language).container_kinds
+        and not entity.documentation.strip()
     )
     if not missing:
         return
@@ -764,7 +647,6 @@ __all__ = [
     "build_current",
     "build_graph",
     "build_versions",
-    "cmake_module",
     "discover_feature_sets",
     "recorded_default_version",
     "resolve_manifest",

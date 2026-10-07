@@ -12,8 +12,7 @@ from conftest import require
 from cpdocs.build import build_current
 from cpdocs.config import load_config
 from cpdocs.model import stable_entity_id
-from cpdocs.render import entity_document
-
+from cpdocs.rendering.common import entity_document
 
 PROVIDER = r'''
 import json, pathlib, sys

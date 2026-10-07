@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .model import ApiEntity, ApiGraph, ApiParameter, ApiSignature, SourceLocation, stable_entity_id
+from ...model import ApiEntity, ApiGraph, ApiParameter, ApiSignature, SourceLocation, stable_entity_id
 
 _KIND_MAP = {
     "module": "module",

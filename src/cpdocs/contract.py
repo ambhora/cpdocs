@@ -173,16 +173,16 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
                 )
             )
 
-        def paths(field: str) -> tuple[Path, ...]:
+        def paths(field: str, *, data: dict[str, Any], where: str) -> tuple[Path, ...]:
             return tuple(
                 _path(item, source)
                 for item in _string_tuple(data.get(field, []), f"{where}.{field}", path)
             )
 
-        headers = paths("headers")
-        sources = paths("sources")
-        modules = paths("modules")
-        executables = paths("executables")
+        headers = paths("headers", data=data, where=where)
+        sources = paths("sources", data=data, where=where)
+        modules = paths("modules", data=data, where=where)
+        executables = paths("executables", data=data, where=where)
         generated = bool(data.get("generated", False))
 
         parse: ParseOptions | None = None

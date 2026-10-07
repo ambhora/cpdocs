@@ -9,7 +9,7 @@ from pathlib import Path
 
 from cpdocs.cli import main
 from cpdocs.contract import read_feature_sets
-from cpdocs.rust_manifest import _feature_sets
+from cpdocs.providers.cargo import _feature_sets
 
 
 def _fake_cargo(path: Path) -> Path:
@@ -179,7 +179,7 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(
 
 def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_path: Path) -> None:
     from cpdocs.model import stable_entity_id
-    from cpdocs.rust_backend import build_rust_graph
+    from cpdocs.languages.rust.extract import build_rust_graph
 
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(
@@ -240,7 +240,7 @@ def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_p
 
 def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path: Path) -> None:
     from cpdocs.model import stable_entity_id
-    from cpdocs.rust_backend import build_rust_graph
+    from cpdocs.languages.rust.extract import build_rust_graph
 
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(

@@ -8,7 +8,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from .contract import CONTRACT_VERSION, read_feature_set
+from ..contract import CONTRACT_VERSION, read_feature_set
 
 
 def _project(source: Path) -> dict[str, object]:

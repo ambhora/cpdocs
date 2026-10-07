@@ -29,7 +29,7 @@ Source = "https://github.com/ambhora/cpdocs"
 cpdocs = "cpdocs.cli:main"
 
 [project.entry-points."properdocs.plugins"]
-cpdocs = "cpdocs.properdocs_plugin:CpdocsPlugin"
+cpdocs = "cpdocs.plugins.properdocs.plugin:CpdocsPlugin"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.8", "properdocs>=1.6.7", "mkdocs-materialx"]

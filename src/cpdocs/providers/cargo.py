@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .contract import CONTRACT_VERSION, read_feature_set
+from ..contract import CONTRACT_VERSION, read_feature_set
 
 
 def _cargo_command(toolchain: str | None) -> list[str]:

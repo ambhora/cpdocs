@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: Apache-2.0
 """Language-neutral semantic API documentation generator."""
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"

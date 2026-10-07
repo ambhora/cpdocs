@@ -25,10 +25,19 @@ class ApiParameter:
 
 
 @dataclass(frozen=True)
+class ApiAttribute:
+    """One source-level attribute attached to an API declaration."""
+
+    name: str
+    spelling: str = ""
+
+
+@dataclass(frozen=True)
 class ApiSignature:
     parameters: tuple[ApiParameter, ...] = ()
     returns: str = ""
     qualifiers: tuple[str, ...] = ()
+    attributes: tuple[ApiAttribute, ...] = ()
     spelling: str = ""
     template: str = ""
     # Documentation and location of this overload; not part of its identity.

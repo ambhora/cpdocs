@@ -36,7 +36,7 @@ from .contract import (
 )
 from .fortran_backend import extract_fortran_graph
 from .html_renderer import render_html_site
-from .model import ApiGraph, merge_graphs
+from .model import ApiGraph, merge_graphs, relative_source_path
 from .python_backend import build_python_graph
 from .rust_backend import build_rust_graph
 from .versioning import SelectedRef, current_branch, select_refs
@@ -199,8 +199,8 @@ def _browse_logical_path(
     try:
         return path.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
-        # Generated files live outside the source checkout. Give them a stable logical home rather
-        # than leaking profile/build-directory paths into the published file hierarchy.
+        # Keep a stable internal key for files outside the checkout. This path is not presented to
+        # readers; rendering uses the semantic layout recorded in ``source_display_paths``.
         base = Path("_generated") / unit.id / category
         try:
             relative = (
@@ -211,11 +211,69 @@ def _browse_logical_path(
         return (base / relative).as_posix()
 
 
+def _semantic_display_path(path: Path, *, root: Path, generated: bool) -> str:
+    """Return the compiler-facing layout path shown in the file browser.
+
+    Manifest roots are semantic roots. A file below ``.../src/cuda/include`` is therefore shown
+    below ``include`` and a file below ``.../src/cuda/lib`` below ``lib``. Build-generated roots
+    use the same flattened layout under one ``_generated`` prefix.
+    """
+
+    try:
+        if root.is_dir():
+            relative = path.resolve().relative_to(root.resolve())
+            root_name = root.name
+        else:
+            relative = Path(path.name)
+            root_name = root.parent.name
+    except (OSError, ValueError):
+        relative = Path(path.name)
+        root_name = root.name if root.name != path.name else root.parent.name
+
+    base = Path("_generated") if generated else Path()
+    if root_name:
+        base /= root_name
+    return (base / relative).as_posix()
+
+
+def _api_display_paths(
+    unit: UnitManifest, graph: ApiGraph, *, project_root: Path
+) -> dict[str, str]:
+    """Map API source keys to their semantic include/module layout."""
+
+    values: dict[str, str] = {}
+    for api_root in unit.api:
+        root = api_root.path
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            try:
+                root_relative = path.resolve().relative_to(root.resolve()).as_posix()
+            except (OSError, ValueError):
+                root_relative = path.name
+            project_relative = relative_source_path(path, project_root)
+            logical = next(
+                (candidate for candidate in (root_relative, project_relative) if candidate in graph.sources),
+                None,
+            )
+            if logical is not None:
+                values.setdefault(
+                    logical,
+                    _semantic_display_path(
+                        path, root=root, generated=unit.generated or api_root.generated
+                    ),
+                )
+    return values
+
+
 def _collect_browse_files(
     unit: UnitManifest, *, project_root: Path
-) -> tuple[dict[str, str], list[str]]:
+) -> tuple[dict[str, str], list[str], dict[str, str]]:
     files: dict[str, str] = {}
     generated: list[str] = []
+    display_paths: dict[str, str] = {}
     # Public headers are already present in ``graph.sources`` after API extraction.  These roots
     # add implementation-only material without duplicating public headers in the file hierarchy.
     groups = (
@@ -242,9 +300,13 @@ def _collect_browse_files(
                     path, project_root=project_root, unit=unit, category=category, root=root
                 )
                 files.setdefault(logical, content)
+                display_paths.setdefault(
+                    logical,
+                    _semantic_display_path(path, root=root, generated=unit.generated),
+                )
                 if unit.generated and logical not in generated:
                     generated.append(logical)
-    return files, generated
+    return files, generated, display_paths
 
 
 def _generated_sources(unit: UnitManifest, graph: ApiGraph) -> list[str]:
@@ -325,6 +387,11 @@ def _merge_metadata(target: dict[str, object], source: dict[str, object]) -> Non
             existing = target.setdefault(key, [])
             assert isinstance(existing, list)
             existing.extend(item for item in value if item not in existing)
+        elif isinstance(value, dict):
+            existing = target.setdefault(key, {})
+            assert isinstance(existing, dict)
+            for item_key, item_value in value.items():
+                existing.setdefault(item_key, item_value)
         else:
             target.setdefault(key, value)
 
@@ -427,9 +494,18 @@ def build_graph(
                 work=work / "feature-sets" / feature_set.key,
                 config=config,
             )
-            browse_files, generated_files = _collect_browse_files(unit, project_root=source)
+            display_paths = unit_graph.metadata.setdefault("source_display_paths", {})
+            assert isinstance(display_paths, dict)
+            for path, display in _api_display_paths(unit, unit_graph, project_root=source).items():
+                display_paths.setdefault(path, display)
+
+            browse_files, generated_files, browse_display_paths = _collect_browse_files(
+                unit, project_root=source
+            )
             for path, content in browse_files.items():
                 unit_graph.files.setdefault(path, content)
+            for path, display in browse_display_paths.items():
+                display_paths.setdefault(path, display)
             if generated_files:
                 existing = unit_graph.metadata.setdefault("generated_files", [])
                 assert isinstance(existing, list)

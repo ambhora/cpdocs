@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from conftest import fake_project, git, init_repository
-from cpdocs.build import build_current, build_versions
+from cpdocs.build import _semantic_display_path, build_current, build_versions
 from cpdocs.cli import main
 from cpdocs.config import load_config
 from cpdocs.model import stable_entity_id
@@ -25,6 +25,28 @@ def _no_ci_branch(monkeypatch: pytest.MonkeyPatch) -> None:
         "GITHUB_REF_TYPE",
     ):
         monkeypatch.delenv(variable, raising=False)
+
+
+def test_semantic_file_layout_flattens_manifest_roots(tmp_path: Path) -> None:
+    include = tmp_path / "src" / "cuda" / "include"
+    library = tmp_path / "src" / "cuda" / "lib"
+    header = include / "kprof" / "cuda.hpp"
+    source = library / "kprof" / "synchronize.cu"
+    header.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    header.write_text("#pragma once\n", encoding="utf-8")
+    source.write_text("// source\n", encoding="utf-8")
+
+    assert _semantic_display_path(header, root=include, generated=False) == "include/kprof/cuda.hpp"
+    assert _semantic_display_path(source, root=library, generated=False) == "lib/kprof/synchronize.cu"
+    assert (
+        _semantic_display_path(header, root=include, generated=True)
+        == "_generated/include/kprof/cuda.hpp"
+    )
+    assert (
+        _semantic_display_path(source, root=library, generated=True)
+        == "_generated/lib/kprof/synchronize.cu"
+    )
 
 
 def test_build_runs_feature_sets_once_then_build_once_per_feature_set(tmp_path: Path) -> None:

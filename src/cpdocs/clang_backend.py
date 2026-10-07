@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .contract import ParseOptions
 from .model import (
+    ApiAttribute,
     ApiEntity,
     ApiGraph,
     ApiParameter,
@@ -351,10 +352,79 @@ def _qualifiers(node: dict[str, object]) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _signature(node: dict[str, object]) -> ApiSignature:
+_ATTRIBUTE_NAMES = {
+    "WarnUnusedResultAttr": "nodiscard",
+    "DeprecatedAttr": "deprecated",
+    "UnusedAttr": "maybe_unused",
+    "CXX11NoReturnAttr": "noreturn",
+    "NoUniqueAddressAttr": "no_unique_address",
+    "CarriesDependencyAttr": "carries_dependency",
+    "LikelyAttr": "likely",
+    "UnlikelyAttr": "unlikely",
+}
+
+
+def _attribute_name(node: dict[str, object]) -> str:
+    kind = str(node.get("kind", ""))
+    if kind in _ATTRIBUTE_NAMES:
+        return _ATTRIBUTE_NAMES[kind]
+    if not kind.endswith("Attr"):
+        return ""
+    stem = kind[:-4]
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", stem).lower()
+
+
+def _attribute_spelling(node: dict[str, object], path: Path | None) -> str:
+    """Recover the complete ``[[...]]`` specifier containing one Clang Attr node."""
+
+    if path is None:
+        return ""
+    offsets = _range_offsets(node)
+    if offsets is None:
+        return ""
+    data = _SOURCE_BYTES.get(path)
+    if data is None:
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return ""
+        _SOURCE_BYTES[path] = data
+    start, stop = offsets
+    left = data.rfind(b"[[", max(0, start - 2048), start + 1)
+    if left < 0:
+        return ""
+    right = data.find(b"]]", left + 2, min(len(data), stop + 2048))
+    if right < 0 or not (left <= start and stop <= right + 2):
+        return ""
+    return re.sub(r"\s+", " ", data[left : right + 2].decode("utf-8", errors="replace")).strip()
+
+
+def _attributes(node: dict[str, object], path: Path | None) -> tuple[ApiAttribute, ...]:
+    children = node.get("inner")
+    if not isinstance(children, list):
+        return ()
+    values: list[ApiAttribute] = []
+    for child in children:
+        if not isinstance(child, dict) or not str(child.get("kind", "")).endswith("Attr"):
+            continue
+        name = _attribute_name(child)
+        if not name:
+            continue
+        attribute = ApiAttribute(name=name, spelling=_attribute_spelling(child, path))
+        if attribute not in values:
+            values.append(attribute)
+    return tuple(values)
+
+
+def _signature(node: dict[str, object], path: Path | None) -> ApiSignature:
     parameters = _parameters(node)
     qualifiers = _qualifiers(node)
-    return ApiSignature(parameters=parameters, returns=_return_type(node), qualifiers=qualifiers)
+    return ApiSignature(
+        parameters=parameters,
+        returns=_return_type(node),
+        qualifiers=qualifiers,
+        attributes=_attributes(node, path),
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -704,7 +774,7 @@ def _walk_ast(
             parent=parent_entity.id if parent_entity else None,
             signatures=[
                 replace(
-                    _signature(node),
+                    _signature(node, path),
                     template=template_header,
                     documentation=_attached_comment(node),
                     source=_location(node, path, project_root, public_roots),

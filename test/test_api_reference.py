@@ -13,6 +13,7 @@ from cpdocs.clang_backend import extract_clang_graph
 from cpdocs.contract import ParseOptions
 from cpdocs.html_renderer import render_html_site
 from cpdocs.model import (
+    ApiAttribute,
     ApiEntity,
     ApiGraph,
     ApiParameter,
@@ -37,11 +38,11 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
 #ifdef USE_CUDA
 /// Active backend.
 #define DICE_BACKEND \"cuda\"
-namespace dice { struct cuda_view {}; void foo(cuda_view); }
+namespace dice { struct cuda_view {}; void foo(cuda_view); [[nodiscard]] int backend_name(); }
 #else
 /// Active backend.
 #define DICE_BACKEND \"cpu\"
-namespace dice { struct cpu_view {}; void foo(cpu_view); }
+namespace dice { struct cpu_view {}; void foo(cpu_view); [[nodiscard]] int backend_name(); }
 #endif
 class visible { public: void yes(); private: void no(); };
 """,
@@ -76,6 +77,10 @@ class visible { public: void yes(); private: void no(); };
     foo = merged.entities[stable_entity_id("cpp", "function", "dice::foo")]
     assert {signature.compact for signature in foo.signatures} == {"(cpu_view)", "(cuda_view)"}
     assert set(foo.feature_sets) == {"cpu", "cuda"}
+    backend_name = merged.entities[stable_entity_id("cpp", "function", "dice::backend_name")]
+    assert backend_name.signatures[0].attributes == (
+        ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),
+    )
     assert stable_entity_id("cpp", "method", "visible::yes") in merged.entities
     assert stable_entity_id("cpp", "method", "visible::no") not in merged.entities
 
@@ -206,7 +211,11 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
         qualified_name="dice::foo",
         parent=namespace.id,
         signatures=[
-            ApiSignature(parameters=(ApiParameter("value", "int"),), returns="void"),
+            ApiSignature(
+                parameters=(ApiParameter("value", "int"),),
+                returns="void",
+                attributes=(ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),),
+            ),
             ApiSignature(parameters=(ApiParameter("value", "float"),), returns="void"),
         ],
         documentation=(
@@ -315,6 +324,8 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     page = html_page(entity_document(function)).read_text(encoding="utf-8")
     assert '<article class="api-signature-card"' in page
     assert "foo(int)" in page
+    assert page.count("nodiscard") >= 2
+    assert "<span>nodiscard</span>" in page
     assert "Available in feature sets" in page
     assert "<code>cpu</code>" in page
     assert "<strong>Related:</strong>" in page

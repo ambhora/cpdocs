@@ -137,7 +137,13 @@ def _entity_href(source: Path, entity: ApiEntity, graph: ApiGraph) -> str:
 
 
 def _display_source_path(source_path: str, graph: ApiGraph) -> str:
-    """Return the source path shown to readers while preserving the real repository path for links."""
+    """Return the semantic path shown to readers while preserving internal source keys for links."""
+    display_paths = graph.metadata.get("source_display_paths", {})
+    if isinstance(display_paths, dict):
+        value = display_paths.get(source_path)
+        if isinstance(value, str) and value:
+            return value
+
     source_root = str(graph.metadata.get("source_root") or "").strip("/")
     logical = PurePosixPath(source_path)
     if not source_root:
@@ -610,7 +616,15 @@ def _signature_card(
     declaration = _highlight_declaration(
         spelling, entity.language, entity=entity, graph=graph, document_path=document
     )
-    properties = list(dict.fromkeys([*entity.properties, *signature.qualifiers]))
+    properties = list(
+        dict.fromkeys(
+            [
+                *entity.properties,
+                *signature.qualifiers,
+                *(attribute.name for attribute in signature.attributes),
+            ]
+        )
+    )
     rows = []
     if properties:
         rows.append(

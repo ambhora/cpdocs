@@ -631,8 +631,12 @@ def _signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
 
 
 def _plain_signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
+    attribute_spellings = list(
+        dict.fromkeys(attribute.spelling for attribute in signature.attributes if attribute.spelling)
+    )
+    attribute_prefix = " ".join(attribute_spellings)
     if signature.spelling:
-        return signature.spelling
+        return f"{attribute_prefix} {signature.spelling}".strip()
     parameters = _parameter_spelling(signature, entity.language)
     if entity.language == "python":
         prefix = "async def" if "async" in signature.qualifiers else "def"
@@ -656,7 +660,8 @@ def _plain_signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str
     result = (signature.returns + " ") if signature.returns else ""
     suffix_values = [value for value in signature.qualifiers if value not in prefix_values]
     suffix = (" " + " ".join(suffix_values)) if suffix_values else ""
-    return f"{prefix}{result}{entity.qualified_name}({parameters}){suffix}".strip()
+    declaration = f"{prefix}{result}{entity.qualified_name}({parameters}){suffix}".strip()
+    return f"{attribute_prefix} {declaration}".strip()
 
 
 def _entity_declaration(entity: ApiEntity) -> str:

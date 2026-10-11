@@ -1,6 +1,7 @@
-// SPDX-FileCopyrightText: 2026 cpdocs developers
+// --------------------------------------------------------------------------------------------------
 // SPDX-License-Identifier: Apache-2.0
-
+// SPDX-FileCopyrightText: 2026 cpdocs developers
+// --------------------------------------------------------------------------------------------------
 use crate::geometry::Vector3;
 
 // Implementation-only helper. It is browseable in the file hierarchy but is not public API.

@@ -1,8 +1,8 @@
 # --------------------------------------------------------------------------------------------------
-# SPDX-FileCopyrightText: 2026 cpdocs developers
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.3)
 project(fortran_geometry VERSION 1.0.0 LANGUAGES NONE)
 
 if(CPDOCS_FEATURE_SETS_OUTPUT)

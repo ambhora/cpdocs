@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Built-in Cargo/rustdoc provider for the cpdocs build-system contract."""
 
 from __future__ import annotations

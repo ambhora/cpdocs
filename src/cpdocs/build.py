@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Build operations: enumerate feature sets, build each one, extract, merge and render.
 
 Output layout below ``<output>/cpdocs``::
@@ -351,9 +353,12 @@ def build_graph(
     metadata: dict[str, object] = {}
     languages: set[str] = set()
     units: dict[tuple[str, str], None] = {}
+    configuration_options: dict[str, list[dict[str, object]]] = {}
 
     for feature_set in feature_sets.feature_sets:
         manifest = resolve_manifest(config.build, feature_set, source=source, work=work)
+        if manifest.options:
+            configuration_options[feature_set.key] = [dict(option) for option in manifest.options]
         languages.update(unit.language for unit in manifest.units if unit.language is not None)
         for unit in manifest.units:
             units[(unit.id, unit.language)] = None
@@ -422,6 +427,8 @@ def build_graph(
     metadata["units"] = [
         {"id": unit_id, "language": unit_language} for unit_id, unit_language in sorted_units
     ]
+    if configuration_options:
+        metadata["configuration_options"] = configuration_options
     metadata["generator"] = feature_sets.generator
     metadata["project_version"] = feature_sets.version
     merged.metadata = metadata

@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # The same project documented through tools/minibuild.py instead of CMake:
 #   cpdocs build --config docs/cpdocs-minibuild.yml
 contract: 3

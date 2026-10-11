@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """C-family presentation rules for C, C++, CUDA and HIP."""
 
 from __future__ import annotations

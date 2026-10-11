@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Contract provider for a plain ``pyproject.toml`` Python project."""
 
 from __future__ import annotations

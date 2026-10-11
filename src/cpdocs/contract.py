@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """The JSON boundary between cpdocs and a project's build system.
 
 cpdocs only needs to enumerate concrete feature sets and build one selected feature set at a time.
@@ -147,6 +149,8 @@ class UnitManifest:
 @dataclass(frozen=True)
 class Manifest:
     units: tuple[UnitManifest, ...]
+    # Optional BESA metadata; feature-set enumeration depends only on features.
+    options: tuple[dict[str, Any], ...] = ()
 
 
 def read_manifest(path: Path, *, source: Path) -> Manifest:
@@ -155,6 +159,9 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
     raw = _load_json(path, "manifest")
     if raw.get("cpdocs-manifest") != CONTRACT_VERSION:
         raise ContractError(f"{path}: unsupported cpdocs-manifest {raw.get('cpdocs-manifest')!r}")
+    option_metadata = raw.get("options", [])
+    if not isinstance(option_metadata, list) or any(not isinstance(x, dict) for x in option_metadata):
+        raise ContractError(f"{path}: options must be a list of objects")
     declarations = _units(raw.get("units"), path)
     units: list[UnitManifest] = []
     for declaration, value in zip(declarations, raw["units"], strict=True):
@@ -251,7 +258,7 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
             )
         )
 
-    return Manifest(units=tuple(units))
+    return Manifest(units=tuple(units), options=tuple(option_metadata))
 
 
 @dataclass(frozen=True)

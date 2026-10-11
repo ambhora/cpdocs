@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
-#
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Shared rendering helpers for cpdocs' code-oriented API layout."""
 
 from __future__ import annotations

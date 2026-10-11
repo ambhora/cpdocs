@@ -1,8 +1,8 @@
 # --------------------------------------------------------------------------------------------------
-# SPDX-FileCopyrightText: 2026 cpdocs developers
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.3)
 project(demo-solver VERSION 1.2.0 LANGUAGES CXX)
 
 set(PROJECT_FEATURES "none" CACHE STRING "Optional features: none, mpi, cuda, or all")

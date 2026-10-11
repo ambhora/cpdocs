@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
-#
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Standalone HTML renderer for cpdocs API references.
 
 The project documentation is rendered by ProperDocs, but API references have different navigation
@@ -1045,6 +1046,27 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
             + '</td></tr>'
         )
     body.append("</tbody></table></section>")
+    # Option metadata are documentation of each resolved build, not extra feature axes.
+    # Display the first build as the default reference; retain all sets in graph metadata.
+    configurations = graph.metadata.get("configuration_options", {})
+    if isinstance(configurations, dict) and configurations:
+        first = next(iter(graph.feature_sets), None)
+        options = configurations.get(first, [])
+        if isinstance(options, list) and options:
+            body.extend([
+                '<section id="configuration-options" class="api-section">',
+                "<h2>Configuration options</h2>",
+                "<p>Effective CMake cache values from the first documented feature set. "
+                "Only project features determine the feature-set combinations above.</p>",
+                '<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>',
+            ])
+            for option in options:
+                if not isinstance(option, dict):
+                    continue
+                cells = [str(option.get(field, "")) for field in ("group", "name", "value", "description")]
+                body.append("<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in cells) + "</tr>")
+            body.append("</tbody></table></section>")
+            toc.append(("Configuration options", "configuration-options", 1))
     return "".join(body), toc
 
 

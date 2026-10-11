@@ -1,6 +1,7 @@
-// SPDX-FileCopyrightText: 2026 cpdocs developers
+// --------------------------------------------------------------------------------------------------
 // SPDX-License-Identifier: Apache-2.0
-
+// SPDX-FileCopyrightText: 2026 cpdocs developers
+// --------------------------------------------------------------------------------------------------
 /// A three-dimensional vector.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector3 {

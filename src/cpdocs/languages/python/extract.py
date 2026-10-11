@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
-#
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """Static Python API backend.
 
 This backend deliberately avoids importing the documented package.  It uses the standard AST as a

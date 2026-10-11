@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 """A deliberately tiny build system implementing the cpdocs JSON contract.
 
 It exists to show that cpdocs is not tied to CMake. The first command writes all feature sets; the

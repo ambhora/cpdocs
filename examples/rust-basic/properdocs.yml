@@ -1,5 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 site_name: Rust cpdocs example
 site_description: A minimal Cargo/Rust API rendered from nightly rustdoc JSON by cpdocs.
 docs_dir: docs

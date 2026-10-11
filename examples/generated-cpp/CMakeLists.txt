@@ -1,8 +1,8 @@
 # --------------------------------------------------------------------------------------------------
-# SPDX-FileCopyrightText: 2026 cpdocs developers
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 4.3)
 project(cpdocs-generated-example VERSION 1.0.0 LANGUAGES CXX)
 
 set(GENERATED_INCLUDE ${CMAKE_BINARY_DIR}/generated/include)

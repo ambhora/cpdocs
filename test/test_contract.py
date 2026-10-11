@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 # SPDX-License-Identifier: Apache-2.0
-
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
 from __future__ import annotations
 
 import json
@@ -184,3 +185,18 @@ def test_browse_only_unit_may_have_no_language(tmp_path: Path) -> None:
     unit = read_manifest(_write(tmp_path / "m.json", value), source=tmp_path).units[0]
     assert unit.language is None
     assert unit.sources == (tmp_path / "bin",)
+
+
+def test_besa_options_metadata_does_not_affect_feature_selection(tmp_path):
+    import json
+    from cpdocs.contract import read_manifest
+
+    manifest_path = tmp_path / "besa.json"
+    manifest_path.write_text(json.dumps({
+        "cpdocs-manifest": 1,
+        "units": [{"id": "python", "language": "python", "api": [{"path": "."}], "package": "fixture"}],
+        "options": [{"name": "BUILD_WARNINGS", "group": "build", "value": "extra;werror"}],
+    }))
+    manifest = read_manifest(manifest_path, source=tmp_path)
+    assert len(manifest.units) == 1
+    assert manifest.options[0]["value"] == "extra;werror"

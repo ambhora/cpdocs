@@ -149,7 +149,7 @@ class UnitManifest:
 @dataclass(frozen=True)
 class Manifest:
     units: tuple[UnitManifest, ...]
-    # Optional BESA metadata; feature-set enumeration depends only on features.
+    # Optional build-system metadata; feature-set enumeration depends only on features.
     options: tuple[dict[str, Any], ...] = ()
 
 

@@ -35,7 +35,7 @@ _ROUTINE = re.compile(
 _END_ROUTINE = re.compile(r"^\s*end\s*(?:function|subroutine)\b", re.IGNORECASE)
 _VISIBILITY = re.compile(r"^\s*(public|private)\s*(?:::\s*(.*))?$", re.IGNORECASE)
 _DECL = re.compile(r"^\s*([^!]+?)\s*::\s*(.+)$")
-_DOC = re.compile(r"^\s*!+[>]?[ ]?(.*)$")
+_DOC = re.compile(r"^\s*(?:!>|!!)[ ]?(.*)$")
 
 
 def _source_files(roots: list[Path]) -> list[Path]:

@@ -16,6 +16,7 @@ import pytest
 from conftest import EXAMPLES, REPOSITORY, copy_example, git, init_repository, require
 from cpdocs.build import build_current
 from cpdocs.config import load_config
+from cpdocs.languages.fortran.extract import extract_fortran_graph
 from cpdocs.model import stable_entity_id
 
 
@@ -148,6 +149,30 @@ def test_mixed_example_merges_cpp_and_python_units(tmp_path: Path) -> None:
         ("simd",)
     }
     assert stable_entity_id("python", "function", "pygeom.dot") in graph.entities
+
+
+def test_fortran_doc_comments_ignore_license_preamble(tmp_path: Path) -> None:
+    source = tmp_path / "geometry.f90"
+    source.write_text(
+        "! --------------------------------------------------\n"
+        "! SPDX-License-Identifier: Apache-2.0\n"
+        "! SPDX-FileCopyrightText: 2026 cpdocs developers\n"
+        "! --------------------------------------------------\n"
+        "!> Geometry primitives.\n"
+        "!! Additional detail.\n"
+        "module geometry\n"
+        "end module geometry\n",
+        encoding="utf-8",
+    )
+    graph = extract_fortran_graph(
+        project="example",
+        version="0",
+        project_root=tmp_path,
+        api_roots=[source],
+        feature_set="default",
+    )
+    module = graph.entities[stable_entity_id("fortran", "module", "geometry")]
+    assert module.documentation == "Geometry primitives.\nAdditional detail."
 
 
 def test_fortran_example_and_implementation_file_browser(tmp_path: Path) -> None:

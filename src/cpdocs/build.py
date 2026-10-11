@@ -46,7 +46,7 @@ class Layout:
     @classmethod
     def for_output(cls, output: Path, *, tmp_directory: Path | None = None) -> Layout:
         root = (output / "cpdocs").resolve()
-        work_root = (tmp_directory.resolve() / "cpdocs" if tmp_directory else root)
+        work_root = tmp_directory.resolve() / "cpdocs" if tmp_directory else root
         return cls(root=root, work_root=work_root)
 
     @property
@@ -59,7 +59,6 @@ class Layout:
 
     def work(self, ref: str) -> Path:
         return self.work_root / "work" / ref.replace("/", "__")
-
 
 
 # --------------------------------------------------------------------------------------------------
@@ -139,7 +138,11 @@ def _api_display_paths(
                 root_relative = path.name
             project_relative = relative_source_path(path, project_root)
             logical = next(
-                (candidate for candidate in (root_relative, project_relative) if candidate in graph.sources),
+                (
+                    candidate
+                    for candidate in (root_relative, project_relative)
+                    if candidate in graph.sources
+                ),
                 None,
             )
             if logical is not None:
@@ -619,9 +622,7 @@ def build_versions(
                 )
             ref_config = _config_for_checkout(config, checkout) if ref.checkout else config
             work = layout.work(ref.name)
-            graph = build_graph(
-                ref_config, source=checkout, work=work, version=ref.name
-            )
+            graph = build_graph(ref_config, source=checkout, work=work, version=ref.name)
             _render(
                 graph,
                 ref_config,

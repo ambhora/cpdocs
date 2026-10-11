@@ -45,7 +45,9 @@ def entity_declaration(entity: ApiEntity) -> str:
 
 def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
     attribute_spellings = list(
-        dict.fromkeys(attribute.spelling for attribute in signature.attributes if attribute.spelling)
+        dict.fromkeys(
+            attribute.spelling for attribute in signature.attributes if attribute.spelling
+        )
     )
     attribute_prefix = " ".join(attribute_spellings)
     if signature.spelling:

@@ -81,10 +81,22 @@ checks:
         ("build:\n  feature-sets: make\n  build: make\n", "contract must be 3"),
         ("contract: 3\n", "build.feature-sets"),
         ("contract: 3\nbuild:\n  feature-sets: [make]\n  build: make\n", "command string"),
-        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\n  manifest: make\n", "unknown build keys"),
-        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: {tags: all}\n", "versions must be a list"),
-        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: [main, main]\n", "duplicates"),
-        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: []\n", "at least one version"),
+        (
+            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\n  manifest: make\n",
+            "unknown build keys",
+        ),
+        (
+            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: {tags: all}\n",
+            "versions must be a list",
+        ),
+        (
+            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: [main, main]\n",
+            "duplicates",
+        ),
+        (
+            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: []\n",
+            "at least one version",
+        ),
     ],
 )
 def test_invalid_configs_are_rejected(tmp_path: Path, text: str, message: str) -> None:

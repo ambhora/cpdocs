@@ -52,6 +52,7 @@ def split_qualified(name: str, separator: str) -> list[str]:
 def _segments(entity: ApiEntity) -> list[str]:
     return split_qualified(entity.qualified_name, rendering_for(entity.language).separator)
 
+
 # Operator names as words, longest spelling first, so that ``operator<<`` is not read as ``<``.
 _OPERATOR_WORDS = (
     ("<=>", "spaceship"),
@@ -482,7 +483,8 @@ def _preferred_type_target(name: str, entity: ApiEntity, graph: ApiGraph) -> Api
     candidates = [
         candidate
         for candidate in graph.entities.values()
-        if candidate.kind in rendering_for(candidate.language).type_like_kinds and candidate.name == name
+        if candidate.kind in rendering_for(candidate.language).type_like_kinds
+        and candidate.name == name
     ]
     if not candidates:
         return None

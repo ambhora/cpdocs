@@ -249,6 +249,7 @@ def _ownership(index: dict[str, object]) -> tuple[dict[str, str], set[str], set[
 
     return owners, inherent_impl_items, trait_impl_items
 
+
 def build_rust_graph(
     *, rustdoc_json: Path, project: str, version: str = "main", project_root: Path | None = None
 ) -> ApiGraph:

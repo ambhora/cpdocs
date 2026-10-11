@@ -55,7 +55,9 @@ def _parser() -> argparse.ArgumentParser:
     python_feature_sets = phases.add_parser("feature-sets", help="write feature-sets.json")
     python_feature_sets.add_argument("--source", type=_path, required=True)
     python_feature_sets.add_argument("--output", type=_path, required=True)
-    python_manifest = phases.add_parser("build", help="build one feature set and write manifest.json")
+    python_manifest = phases.add_parser(
+        "build", help="build one feature set and write manifest.json"
+    )
     python_manifest.add_argument("--source", type=_path, required=True)
     python_manifest.add_argument("--feature-set", type=_path, required=True)
     python_manifest.add_argument("--output", type=_path, required=True)

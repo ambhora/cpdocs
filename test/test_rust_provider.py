@@ -130,16 +130,19 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(
     monkeypatch.setenv("CPDOCS_CARGO", str(cargo))
 
     feature_sets_file = tmp_path / "feature-sets.json"
-    assert main(
-        [
-            "rust",
-            "feature-sets",
-            "--source",
-            str(source),
-            "--output",
-            str(feature_sets_file),
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "rust",
+                "feature-sets",
+                "--source",
+                str(source),
+                "--output",
+                str(feature_sets_file),
+            ]
+        )
+        == 0
+    )
     feature_sets = read_feature_sets(feature_sets_file)
     assert [item.features for item in feature_sets.feature_sets] == [("batch",), ("checked",)]
 
@@ -148,18 +151,21 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(
         json.dumps({"cpdocs-feature-set": 1, "features": ["batch"]}), encoding="utf-8"
     )
     manifest_file = tmp_path / "manifest.json"
-    assert main(
-        [
-            "rust",
-            "build",
-            "--source",
-            str(source),
-            "--feature-set",
-            str(selected),
-            "--output",
-            str(manifest_file),
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "rust",
+                "build",
+                "--source",
+                str(source),
+                "--feature-set",
+                str(selected),
+                "--output",
+                str(manifest_file),
+            ]
+        )
+        == 0
+    )
 
     manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
     unit = manifest["units"][0]
@@ -343,7 +349,9 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                         "crate_id": 0,
                         "name": "clone",
                         "visibility": "default",
-                        "inner": {"function": {"sig": {"inputs": [], "output": None}, "header": {}}},
+                        "inner": {
+                            "function": {"sig": {"inputs": [], "output": None}, "header": {}}
+                        },
                     },
                 },
                 # Deliberately flat field/method paths reproduce the nightly rustdoc shape that

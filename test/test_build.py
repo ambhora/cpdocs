@@ -40,7 +40,9 @@ def test_semantic_file_layout_flattens_manifest_roots(tmp_path: Path) -> None:
     source.write_text("// source\n", encoding="utf-8")
 
     assert _semantic_display_path(header, root=include, generated=False) == "include/kprof/cuda.hpp"
-    assert _semantic_display_path(source, root=library, generated=False) == "lib/kprof/synchronize.cu"
+    assert (
+        _semantic_display_path(source, root=library, generated=False) == "lib/kprof/synchronize.cu"
+    )
     assert (
         _semantic_display_path(header, root=include, generated=True)
         == "_generated/include/kprof/cuda.hpp"
@@ -86,7 +88,7 @@ def test_failing_build_command_reports_its_output(tmp_path: Path) -> None:
     (project / "docs" / "cpdocs.yml").write_text(
         "contract: 3\nbuild:\n"
         "  feature-sets: >-\n    python -c \"import sys; print('boom'); sys.exit(3)\"\n"
-        "  build: \"true\"\n",
+        '  build: "true"\n',
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="boom"):

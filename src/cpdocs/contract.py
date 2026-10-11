@@ -160,7 +160,9 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
     if raw.get("cpdocs-manifest") != CONTRACT_VERSION:
         raise ContractError(f"{path}: unsupported cpdocs-manifest {raw.get('cpdocs-manifest')!r}")
     option_metadata = raw.get("options", [])
-    if not isinstance(option_metadata, list) or any(not isinstance(x, dict) for x in option_metadata):
+    if not isinstance(option_metadata, list) or any(
+        not isinstance(x, dict) for x in option_metadata
+    ):
         raise ContractError(f"{path}: options must be a list of objects")
     declarations = _units(raw.get("units"), path)
     units: list[UnitManifest] = []
@@ -202,8 +204,7 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
                 )
             options = _mapping(data.get("parse", {}), f"{where}.parse", path)
             parser_language = str(
-                options.get("language")
-                or ("c" if declaration.language == "c" else "cpp")
+                options.get("language") or ("c" if declaration.language == "c" else "cpp")
             )
             if parser_language not in PARSER_LANGUAGES:
                 raise ContractError(
@@ -238,9 +239,7 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
             # Fortran modules carry their public declarations in source files rather than headers.
             # Build-system manifests expose module roots through the semantic ``modules`` field.
             if not api and not modules:
-                raise ContractError(
-                    f"{path}: {where}: a Fortran unit needs an API or modules root"
-                )
+                raise ContractError(f"{path}: {where}: a Fortran unit needs an API or modules root")
 
         units.append(
             UnitManifest(

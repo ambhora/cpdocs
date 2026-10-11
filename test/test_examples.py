@@ -50,14 +50,17 @@ def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> Non
         return {tuple(graph.feature_sets[key]["features"]) for key in entity.feature_sets}
 
     assert feature_sets("struct", "demo::settings") == {(), ("mpi",), ("mpi", "cuda")}
-    assert feature_sets("struct", "demo::communicator") == {( "mpi",), ("mpi", "cuda")}
-    assert feature_sets("struct", "demo::device") == {( "mpi", "cuda")}
+    assert feature_sets("struct", "demo::communicator") == {("mpi",), ("mpi", "cuda")}
+    assert feature_sets("struct", "demo::device") == {("mpi", "cuda")}
     solve = graph.entities[stable_entity_id("cpp", "function", "demo::solve")]
     assert len(solve.signatures) == 3
     by_parameters = {
         signature.compact: (set(feature_sets), signature.documentation)
-        for signature, feature_sets in zip(solve.signatures, solve.signature_feature_sets, strict=True)
+        for signature, feature_sets in zip(
+            solve.signatures, solve.signature_feature_sets, strict=True
+        )
     }
+
     def resolved(keys: set[str]) -> set[tuple[str, ...]]:
         return {tuple(graph.feature_sets[key]["features"]) for key in keys}
 
@@ -74,13 +77,7 @@ def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> Non
 
     feature_sets = json.loads(
         (
-            project
-            / "build"
-            / "cpdocs"
-            / "work"
-            / "current"
-            / "feature-sets"
-            / "feature-sets.json"
+            project / "build" / "cpdocs" / "work" / "current" / "feature-sets" / "feature-sets.json"
         ).read_text()
     )
     selected = [item["features"] for item in feature_sets["feature-sets"]]
@@ -202,14 +199,7 @@ def test_cpp_file_hierarchy_includes_implementation_sources(tmp_path: Path) -> N
     project, graph = _build(tmp_path, "basic-cpp")
     assert "src/math.cpp" in graph.files
     implementation = (
-        project
-        / "build"
-        / "cpdocs"
-        / "current"
-        / "_sources"
-        / "src"
-        / "math.cpp"
-        / "index.html"
+        project / "build" / "cpdocs" / "current" / "_sources" / "src" / "math.cpp" / "index.html"
     )
     assert implementation.is_file()
     assert "File: src/math.cpp" in implementation.read_text(encoding="utf-8")

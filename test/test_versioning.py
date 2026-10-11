@@ -14,7 +14,12 @@ from cpdocs.versioning import select_refs
 
 @pytest.fixture
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH", "GITHUB_REF_TYPE"):
+    for variable in (
+        "CPDOCS_CURRENT_BRANCH",
+        "GITHUB_HEAD_REF",
+        "CI_COMMIT_BRANCH",
+        "GITHUB_REF_TYPE",
+    ):
         monkeypatch.delenv(variable, raising=False)
     root = tmp_path / "project"
     root.mkdir()

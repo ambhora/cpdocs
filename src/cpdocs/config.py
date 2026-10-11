@@ -66,7 +66,6 @@ def _strings(value: object, name: str, *, default: tuple[str, ...] = ()) -> tupl
     return result
 
 
-
 def _versions(value: object) -> tuple[str, ...]:
     versions = _strings(value, "versions", default=("main",))
     if not versions:

@@ -16,7 +16,7 @@ from cpdocs.config import load_config
 from cpdocs.model import stable_entity_id
 from cpdocs.rendering.common import entity_document
 
-PROVIDER = r'''
+PROVIDER = r"""
 import json, pathlib, sys
 
 command = sys.argv[1]
@@ -48,7 +48,7 @@ else:
     }
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(value), encoding="utf-8")
-'''
+"""
 
 
 def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None:

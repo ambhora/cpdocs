@@ -259,7 +259,9 @@ def extract_fortran_graph(
                         for value in arguments
                     )
                     kind = "function" if kind_text.casefold() == "function" else "subroutine"
-                    returns = _declaration_type(prefix) if kind_text.casefold() == "function" else ""
+                    returns = (
+                        _declaration_type(prefix) if kind_text.casefold() == "function" else ""
+                    )
                     qualified = f"{module_name}::{name}"
                     signature = ApiSignature(
                         parameters=parameters,

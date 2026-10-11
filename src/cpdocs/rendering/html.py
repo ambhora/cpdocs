@@ -176,7 +176,9 @@ def _kind_label(kind: str, language: str | None = None) -> str:
 
 def _kind_badge(kind: str, language: str | None = None) -> str:
     marker = html.escape(_kind_marker(kind, language))
-    return f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
+    return (
+        f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
+    )
 
 
 def _language_label(language: str) -> str:
@@ -209,7 +211,7 @@ def _feature_set_inline(graph: ApiGraph, key: str) -> str:
     features = _feature_set_features(graph, key)
     if not features:
         return '<span class="api-feature-set-empty">default (no features enabled)</span>'
-    return " ".join(f'<code>{html.escape(feature)}</code>' for feature in features)
+    return " ".join(f"<code>{html.escape(feature)}</code>" for feature in features)
 
 
 def _legend(graph: ApiGraph) -> str:
@@ -522,9 +524,7 @@ def _availability(
         )
     return (
         '<div class="api-availability"><strong>Available in feature sets</strong>'
-        '<ul class="api-availability-list">'
-        + "".join(rows)
-        + "</ul></div>"
+        '<ul class="api-availability-list">' + "".join(rows) + "</ul></div>"
     )
 
 
@@ -1030,19 +1030,20 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
             "</tbody></table></section>",
             '<section id="feature-sets" class="api-section"><h2>Feature Sets</h2>',
             '<table class="api-feature-set-table">',
-            '<thead><tr><th>Feature set</th><th>Enabled features</th></tr></thead>',
-            '<tbody>',
+            "<thead><tr><th>Feature set</th><th>Enabled features</th></tr></thead>",
+            "<tbody>",
         ]
     )
-    toc: list[tuple[str, str, int]] = [("Overview", "overview", 1), ("Feature Sets", "feature-sets", 1)]
+    toc: list[tuple[str, str, int]] = [
+        ("Overview", "overview", 1),
+        ("Feature Sets", "feature-sets", 1),
+    ]
     for index, key in enumerate(graph.feature_sets, 1):
         anchor = _feature_set_anchor(key)
         body.append(
             f'<tr id="{html.escape(anchor)}">'
             f'<th scope="row">{index}</th>'
-            '<td>'
-            + _feature_set_inline(graph, key)
-            + '</td></tr>'
+            "<td>" + _feature_set_inline(graph, key) + "</td></tr>"
         )
     body.append("</tbody></table></section>")
     # Option metadata are documentation of each resolved build, not extra feature axes.
@@ -1052,18 +1053,25 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
         first = next(iter(graph.feature_sets), None)
         options = configurations.get(first, [])
         if isinstance(options, list) and options:
-            body.extend([
-                '<section id="configuration-options" class="api-section">',
-                "<h2>Configuration options</h2>",
-                "<p>Effective CMake cache values from the first documented feature set. "
-                "Only project features determine the feature-set combinations above.</p>",
-                '<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>',
-            ])
+            body.extend(
+                [
+                    '<section id="configuration-options" class="api-section">',
+                    "<h2>Configuration options</h2>",
+                    "<p>Effective CMake cache values from the first documented feature set. "
+                    "Only project features determine the feature-set combinations above.</p>",
+                    "<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>",
+                ]
+            )
             for option in options:
                 if not isinstance(option, dict):
                     continue
-                cells = [str(option.get(field, "")) for field in ("group", "name", "value", "description")]
-                body.append("<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in cells) + "</tr>")
+                cells = [
+                    str(option.get(field, ""))
+                    for field in ("group", "name", "value", "description")
+                ]
+                body.append(
+                    "<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in cells) + "</tr>"
+                )
             body.append("</tbody></table></section>")
             toc.append(("Configuration options", "configuration-options", 1))
     return "".join(body), toc
@@ -1100,9 +1108,8 @@ def _source_page(
     display_path = _display_source_path(source_path, graph)
     generated_sources = graph.metadata.get("generated_sources", [])
     generated_files = graph.metadata.get("generated_files", [])
-    generated = (
-        (isinstance(generated_sources, list) and source_path in generated_sources)
-        or (isinstance(generated_files, list) and source_path in generated_files)
+    generated = (isinstance(generated_sources, list) and source_path in generated_sources) or (
+        isinstance(generated_files, list) and source_path in generated_files
     )
     note = (
         '<p class="api-section-intro">Generated by the build; not part of the repository.</p>'

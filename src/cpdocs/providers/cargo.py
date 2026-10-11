@@ -75,7 +75,9 @@ def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dic
     if package:
         matches = [item for item in packages if item.get("name") == package]
         if len(matches) != 1:
-            raise RuntimeError(f"cpdocs rust: Cargo package {package!r} is not unique in the workspace")
+            raise RuntimeError(
+                f"cpdocs rust: Cargo package {package!r} is not unique in the workspace"
+            )
         return matches[0]
 
     root_manifest = (source / "Cargo.toml").resolve()
@@ -186,8 +188,10 @@ def _browse_roots(source: Path, package: dict[str, Any], target: dict[str, Any])
     src_path = target.get("src_path")
     if isinstance(src_path, str):
         src = Path(src_path)
-        if src.exists() and src not in roots and not any(
-            root.is_dir() and root in src.parents for root in roots
+        if (
+            src.exists()
+            and src not in roots
+            and not any(root.is_dir() and root in src.parents for root in roots)
         ):
             roots.append(src)
     return [_relative_or_absolute(root, source) for root in roots]
@@ -261,7 +265,7 @@ def write_manifest(
     rustdoc_json = target_dir / "doc" / f"{target_name}.json"
     if not rustdoc_json.is_file():
         raise RuntimeError(
-            "cpdocs rust: cargo rustdoc succeeded but did not produce " f"{rustdoc_json}"
+            f"cpdocs rust: cargo rustdoc succeeded but did not produce {rustdoc_json}"
         )
 
     manifest = {

@@ -293,7 +293,10 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     graph.add(package)
     graph.add(macro)
     graph.sources["dice/version.hpp"] = "#pragma once\nnamespace dice { namespace meta {} }\n"
-    graph.feature_sets["feature-set-001"] = {"features": ["cpu"], "selection": {"features": ["cpu"]}}
+    graph.feature_sets["feature-set-001"] = {
+        "features": ["cpu"],
+        "selection": {"features": ["cpu"]},
+    }
     graph.metadata = {
         "units": [{"id": "dice", "language": "cpp"}],
         "generator": "test",
@@ -395,7 +398,10 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert "grid-template-columns: 1.45rem minmax(0, 1fr) auto auto" in css
     assert ".api-outline-language { min-width: 0; justify-self: end; overflow: hidden; }" in css
     assert "text-overflow: ellipsis" in css
-    assert '<span class="api-outline-language"><span class="api-language-badge">C++</span></span>' in home_page
+    assert (
+        '<span class="api-outline-language"><span class="api-language-badge">C++</span></span>'
+        in home_page
+    )
     assert "border: 1px solid var(--api-border)" in css
     assert '"dice::foo"' in (site / "symbols.json").read_text(encoding="utf-8")
 

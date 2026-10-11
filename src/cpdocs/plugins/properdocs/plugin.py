@@ -164,9 +164,7 @@ class CpdocsPlugin(BasePlugin):
     def _fingerprint(self) -> _Fingerprint:
         return self._fingerprint_paths(self._watched_files())
 
-    def _subsite_fingerprint(
-        self, project: Path, watched_files: list[Path]
-    ) -> _Fingerprint:
+    def _subsite_fingerprint(self, project: Path, watched_files: list[Path]) -> _Fingerprint:
         """Fingerprint one subsite and cpdocs itself, but not unrelated project docs."""
 
         assert self._project_root is not None
@@ -367,8 +365,7 @@ class CpdocsPlugin(BasePlugin):
         )
         if result.returncode != 0:
             raise PluginError(
-                f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n"
-                f"{result.stdout}"
+                f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n{result.stdout}"
             )
         _LOG.info("Built ProperDocs subsite %s", mount.as_posix())
 

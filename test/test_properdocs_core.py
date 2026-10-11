@@ -135,9 +135,7 @@ def test_serve_reuses_cached_subsites_until_their_inputs_change(
         del project_arg, mount, strict
         builds.append(destination)
         destination.mkdir(parents=True, exist_ok=True)
-        (destination / "index.html").write_text(
-            f"build {len(builds)}\n", encoding="utf-8"
-        )
+        (destination / "index.html").write_text(f"build {len(builds)}\n", encoding="utf-8")
 
     monkeypatch.setattr(plugin, "_run_subsite_build", fake_build)
 

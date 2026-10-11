@@ -110,7 +110,9 @@ class ApiGraph:
             existing.signature_feature_sets.append([])
         for index, signature in enumerate(entity.signatures):
             incoming = (
-                entity.signature_feature_sets[index] if index < len(entity.signature_feature_sets) else []
+                entity.signature_feature_sets[index]
+                if index < len(entity.signature_feature_sets)
+                else []
             )
             if signature not in existing.signatures:
                 existing.signatures.append(signature)

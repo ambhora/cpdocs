@@ -10,9 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from cpdocs.languages.cpp.extract import extract_clang_graph
 from cpdocs.contract import ParseOptions
-from cpdocs.rendering.html import render_html_site
+from cpdocs.languages.cpp.extract import extract_clang_graph
+from cpdocs.languages.python.extract import build_python_graph
+from cpdocs.languages.rust.extract import build_rust_graph
 from cpdocs.model import (
     ApiAttribute,
     ApiEntity,
@@ -22,9 +23,8 @@ from cpdocs.model import (
     merge_graphs,
     stable_entity_id,
 )
-from cpdocs.languages.python.extract import build_python_graph
 from cpdocs.rendering.common import entity_document
-from cpdocs.languages.rust.extract import build_rust_graph
+from cpdocs.rendering.html import render_html_site
 
 
 def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:

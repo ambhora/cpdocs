@@ -15,7 +15,14 @@ import ast
 import inspect
 from pathlib import Path
 
-from ...model import ApiEntity, ApiGraph, ApiParameter, ApiSignature, SourceLocation, stable_entity_id
+from ...model import (
+    ApiEntity,
+    ApiGraph,
+    ApiParameter,
+    ApiSignature,
+    SourceLocation,
+    stable_entity_id,
+)
 
 
 def _annotation(node: ast.expr | None) -> str:

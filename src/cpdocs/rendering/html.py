@@ -49,7 +49,6 @@ from .common import (
     entity_document,
 )
 
-
 _INLINE_DOCUMENTATION = re.compile(
     r"`(?P<code>[^`]+)`"
     r"|\*\*(?P<strong>[^*\n]+?)\*\*"

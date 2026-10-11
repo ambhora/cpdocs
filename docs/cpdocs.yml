@@ -13,7 +13,7 @@ build:
     --source "{{source}}" --feature-set "{{feature-set}}" --output "{{output-file}}"
     --package cpdocs --package-source src/cpdocs
 
-versions: [main]
+versions: [main, 0.3.7, 0.0.1]
 
 site:
   copyright: Copyright © cpdocs developers · Apache-2.0

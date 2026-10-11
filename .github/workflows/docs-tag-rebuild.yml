@@ -1,0 +1,59 @@
+# --------------------------------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
+name: historical tag documentation rebuild
+
+# GitHub loads push workflows from the pushed tag. Older tags carry the original
+# documentation workflow, which attempts to run the old cpdocs implementation
+# against the current branch. This workflow lives on the default branch and is
+# triggered when an old documentation run completes, even if that run failed.
+on:
+  workflow_run:
+    workflows: [documentation]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    if: github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Detect legacy tag workflow
+        id: legacy
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          # A branch push (or a PR) must not trigger another docs build.
+          if ! git tag --points-at "$HEAD_SHA" | grep -q .; then
+            exit 0
+          fi
+
+          # Current tagged workflows already dispatch a default-branch build.
+          # Avoid dispatching a duplicate for those tags.
+          if git show "$HEAD_SHA:.github/workflows/docs.yml" 2>/dev/null \
+              | grep -q 'rebuild-for-tag:'; then
+            exit 0
+          fi
+
+          echo 'rebuild=true' >> "$GITHUB_OUTPUT"
+
+      - name: Build tagged API from the current documentation tool
+        if: steps.legacy.outputs.rebuild == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh workflow run docs.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$DEFAULT_BRANCH"

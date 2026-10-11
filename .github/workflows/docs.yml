@@ -43,7 +43,15 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - name: Install toolchain for the C and C++ examples
-        run: sudo apt-get install -y --no-install-recommends clang cmake ninja-build
+        run: sudo apt-get install -y --no-install-recommends clang ninja-build
+      - name: Install CMake 4.3
+        run: |
+          uv tool install --python 3.12 cmake==4.3.4
+          echo "$(uv tool dir --bin)" >> "$GITHUB_PATH"
+      - name: Verify CMake version
+        run: |
+          cmake --version
+          test "$(cmake --version | head -n 1)" = "cmake version 4.3.4"
       - name: Install toolchain for the Rust example
         run: rustup toolchain install nightly-2026-10-01 --profile minimal
       - name: Build documentation

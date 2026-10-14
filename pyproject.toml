@@ -18,10 +18,8 @@ dependencies = [
   "markdown-it-py>=3",
   "Pygments>=2.17",
   "PyYAML>=6",
+  "keyso"
 ]
-
-[project.optional-dependencies]
-properdocs = ["properdocs>=1.6.7"]
 
 [project.urls]
 Source = "https://github.com/ambhora/cpdocs"

@@ -31,7 +31,11 @@ from .languages.fortran.extract import extract_fortran_graph
 from .languages.python.extract import build_python_graph
 from .languages.rust.extract import build_rust_graph
 from .model import ApiGraph, merge_graphs, relative_source_path
-from .providers.contract import discover_feature_sets, resolve_manifest
+from .providers.contract import (
+    discover_feature_sets,
+    language_template_values,
+    resolve_manifest,
+)
 from .rendering.html import render_html_site
 from .versioning import SelectedRef, current_branch, select_refs
 
@@ -348,72 +352,114 @@ def build_graph(
     work: Path,
     version: str,
 ) -> ApiGraph:
-    """Discover every feature set, build each one independently, and merge the API graphs."""
-
-    feature_sets = discover_feature_sets(config.feature_sets, source=source, work=work)
+    """Build every allowed language configuration and its discovered feature sets."""
 
     per_feature_set: list[tuple[str, ApiGraph]] = []
     metadata: dict[str, object] = {}
     languages: set[str] = set()
     units: dict[tuple[str, str], None] = {}
     configuration_options: dict[str, list[dict[str, object]]] = {}
+    all_feature_selections: list[dict[str, object]] = []
+    project: str | None = None
+    project_version = ""
+    generator = ""
+    multiple_languages = len(config.language_configurations) > 1
 
-    for feature_set in feature_sets.feature_sets:
-        manifest = resolve_manifest(config.build, feature_set, source=source, work=work)
-        if manifest.options:
-            configuration_options[feature_set.key] = [dict(option) for option in manifest.options]
-        languages.update(unit.language for unit in manifest.units if unit.language is not None)
-        for unit in manifest.units:
-            units[(unit.id, unit.language)] = None
-        feature_set_language_values = sorted(
-            {unit.language for unit in manifest.units if unit.language is not None}
+    for index, configuration in enumerate(config.language_configurations, 1):
+        template_values = language_template_values(configuration)
+        # Preserve the existing work directory layout for projects with a single configuration.
+        language_work = (
+            work / "language-configurations" / f"language-{index:03d}"
+            if multiple_languages
+            else work
         )
-        if len(feature_set_language_values) == 1:
-            feature_set_language = feature_set_language_values[0]
-        elif feature_set_language_values:
-            feature_set_language = "mixed"
-        else:
-            feature_set_language = "none"
-        unit_graphs = []
-        for unit in manifest.units:
-            unit_graph = extract_unit(
-                unit,
+        feature_sets = discover_feature_sets(
+            config.feature_sets,
+            source=source,
+            work=language_work,
+            template_values=template_values,
+        )
+        if project is None:
+            project = feature_sets.project
+            project_version = feature_sets.version
+            generator = feature_sets.generator
+        elif project != feature_sets.project:
+            raise RuntimeError(
+                f"build.feature-sets returned inconsistent projects: "
+                f"{project!r} and {feature_sets.project!r}"
+            )
+
+        for feature_set in feature_sets.feature_sets:
+            key = (
+                f"language-{index:03d}--{feature_set.key}"
+                if multiple_languages
+                else feature_set.key
+            )
+            manifest = resolve_manifest(
+                config.build,
+                feature_set,
+                source=source,
+                work=language_work,
+                template_values=template_values,
+            )
+            if manifest.options:
+                configuration_options[key] = [dict(option) for option in manifest.options]
+            languages.update(unit.language for unit in manifest.units if unit.language is not None)
+            for unit in manifest.units:
+                units[(unit.id, unit.language)] = None
+            feature_set_language_values = sorted(
+                {unit.language for unit in manifest.units if unit.language is not None}
+            )
+            if len(feature_set_language_values) == 1:
+                feature_set_language = feature_set_language_values[0]
+            elif feature_set_language_values:
+                feature_set_language = "mixed"
+            else:
+                feature_set_language = "none"
+            unit_graphs = []
+            for unit in manifest.units:
+                unit_graph = extract_unit(
+                    unit,
+                    project=feature_sets.project,
+                    version=version,
+                    project_root=source,
+                    feature_set=key,
+                    work=language_work / "feature-sets" / feature_set.key,
+                    config=config,
+                )
+                display_paths = unit_graph.metadata.setdefault("source_display_paths", {})
+                assert isinstance(display_paths, dict)
+                for path, display in _api_display_paths(
+                    unit, unit_graph, project_root=source
+                ).items():
+                    display_paths.setdefault(path, display)
+
+                browse_files, generated_files, browse_display_paths = _collect_browse_files(
+                    unit, project_root=source
+                )
+                for path, content in browse_files.items():
+                    unit_graph.files.setdefault(path, content)
+                for path, display in browse_display_paths.items():
+                    display_paths.setdefault(path, display)
+                if generated_files:
+                    existing = unit_graph.metadata.setdefault("generated_files", [])
+                    assert isinstance(existing, list)
+                    existing.extend(path for path in generated_files if path not in existing)
+                unit_graphs.append(unit_graph)
+            graph = _combine(
+                unit_graphs,
                 project=feature_sets.project,
                 version=version,
-                project_root=source,
-                feature_set=feature_set.key,
-                work=work / "feature-sets" / feature_set.key,
-                config=config,
+                language=feature_set_language,
             )
-            display_paths = unit_graph.metadata.setdefault("source_display_paths", {})
-            assert isinstance(display_paths, dict)
-            for path, display in _api_display_paths(unit, unit_graph, project_root=source).items():
-                display_paths.setdefault(path, display)
-
-            browse_files, generated_files, browse_display_paths = _collect_browse_files(
-                unit, project_root=source
-            )
-            for path, content in browse_files.items():
-                unit_graph.files.setdefault(path, content)
-            for path, display in browse_display_paths.items():
-                display_paths.setdefault(path, display)
-            if generated_files:
-                existing = unit_graph.metadata.setdefault("generated_files", [])
-                assert isinstance(existing, list)
-                existing.extend(path for path in generated_files if path not in existing)
-            unit_graphs.append(unit_graph)
-        graph = _combine(
-            unit_graphs,
-            project=feature_sets.project,
-            version=version,
-            language=feature_set_language,
-        )
-        graph.feature_sets[feature_set.key] = {
-            "features": list(feature_set.features),
-            "selection": feature_set.selection,
-        }
-        _merge_metadata(metadata, graph.metadata)
-        per_feature_set.append((feature_set.key, graph))
+            graph.feature_sets[key] = {
+                "features": list(feature_set.features),
+                "selection": feature_set.selection,
+                "languages": configuration,
+            }
+            _merge_metadata(metadata, graph.metadata)
+            per_feature_set.append((key, graph))
+            all_feature_selections.append(feature_set.selection)
 
     language_values = sorted(languages)
     if len(language_values) == 1:
@@ -423,17 +469,18 @@ def build_graph(
     else:
         language = "none"
     merged = merge_graphs(
-        per_feature_set, project=feature_sets.project, version=version, language=language
+        per_feature_set, project=project or "", version=version, language=language
     )
-    metadata["feature_sets"] = [feature_set.selection for feature_set in feature_sets.feature_sets]
+    metadata["feature_sets"] = all_feature_selections
+    metadata["language_configurations"] = list(config.language_configurations)
     sorted_units = sorted(units, key=lambda value: (value[0], value[1] or ""))
     metadata["units"] = [
         {"id": unit_id, "language": unit_language} for unit_id, unit_language in sorted_units
     ]
     if configuration_options:
         metadata["configuration_options"] = configuration_options
-    metadata["generator"] = feature_sets.generator
-    metadata["project_version"] = feature_sets.version
+    metadata["generator"] = generator
+    metadata["project_version"] = project_version
     merged.metadata = metadata
 
     _apply_visibility(merged, config)

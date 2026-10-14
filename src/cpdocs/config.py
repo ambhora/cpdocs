@@ -28,6 +28,7 @@ class CpdocsConfig:
     project_root: Path
     feature_sets: str
     build: str
+    language_configurations: tuple[dict[str, Any], ...]
     versions: tuple[str, ...]
     index: Path | None
     copyright: str | None
@@ -86,6 +87,27 @@ def _command(value: object, name: str) -> str:
     return value.strip()
 
 
+def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """Expand the optional Keyso language space, preserving the original default build."""
+
+    if "languages" not in raw:
+        return ({},)
+    expression = _mapping(raw["languages"], "languages")
+    try:
+        import keyso
+    except ImportError as error:
+        raise RuntimeError("cpdocs.yml: languages requires the keyso package") from error
+    try:
+        configurations = keyso.expand(expression)
+    except Exception as error:
+        raise RuntimeError(f"cpdocs.yml: invalid languages Keyso space: {error}") from error
+    if not configurations:
+        raise RuntimeError("cpdocs.yml: languages must expand to at least one configuration")
+    if not all(isinstance(configuration, dict) for configuration in configurations):
+        raise RuntimeError("cpdocs.yml: languages must expand to dictionaries")
+    return tuple(configurations)
+
+
 def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
     config_file = Path(path).expanduser().resolve()
     if not config_file.is_file():
@@ -97,7 +119,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
         raise RuntimeError(
             f"cpdocs.yml: contract must be {CONTRACT_VERSION}, found {raw.get('contract')!r}"
         )
-    known = {"contract", "build", "versions", "site", "api", "checks"}
+    known = {"contract", "build", "languages", "versions", "site", "api", "checks"}
     unknown = sorted(set(raw) - known)
     if unknown:
         raise RuntimeError(f"cpdocs.yml: unknown top-level keys: {', '.join(unknown)}")
@@ -123,6 +145,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
         project_root=root,
         feature_sets=_command(build.get("feature-sets"), "build.feature-sets"),
         build=_command(build.get("build"), "build.build"),
+        language_configurations=_language_configurations(raw),
         versions=_versions(raw.get("versions")),
         index=index if index.is_file() else None,
         copyright=str(copyright_value) if copyright_value is not None else None,

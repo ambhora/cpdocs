@@ -22,7 +22,34 @@ from ..contract import (
     write_feature_set,
 )
 
-_PLACEHOLDER = re.compile(r"\{\{([a-z][a-z0-9-]*)\}\}")
+_PLACEHOLDER = re.compile(r"\{\{\s*([a-z][a-z0-9_.-]*)\s*\}\}")
+
+
+def language_template_values(configuration: dict[str, object]) -> dict[str, str]:
+    """Flatten concrete Keyso values into dotted command-template placeholders."""
+
+    result: dict[str, str] = {}
+
+    def visit(path: str, value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if not isinstance(key, str) or not re.fullmatch(r"[a-z][a-z0-9_-]*", key):
+                    raise RuntimeError(f"cpdocs.yml: invalid language property {key!r}")
+                visit(f"{path}.{key}" if path else key, child)
+        elif isinstance(value, (str, int, float, bool)) and not isinstance(value, complex):
+            if not path:
+                raise RuntimeError("cpdocs.yml: language configuration needs a property name")
+            if path in {"source", "tmpdir", "output-file", "feature-set", "python"}:
+                raise RuntimeError(f"cpdocs.yml: language property {path!r} is reserved")
+            result[path] = str(value).lower() if isinstance(value, bool) else str(value)
+        else:
+            raise RuntimeError(
+                f"cpdocs.yml: language property {path!r} must be a scalar value"
+            )
+
+    visit("", configuration)
+    return result
+
 
 
 def _expand(command: str, values: dict[str, str], *, allowed: set[str], name: str) -> str:
@@ -71,7 +98,9 @@ def _run_command(
         )
 
 
-def discover_feature_sets(command: str, *, source: Path, work: Path) -> FeatureSets:
+def discover_feature_sets(
+    command: str, *, source: Path, work: Path, template_values: dict[str, str] | None = None
+) -> FeatureSets:
     """Run ``build.feature-sets`` and read ``feature-sets.json``."""
 
     directory = work / "feature-sets"
@@ -87,8 +116,9 @@ def discover_feature_sets(command: str, *, source: Path, work: Path) -> FeatureS
             "tmpdir": str(tmpdir.resolve()),
             "output-file": str(output.resolve()),
             "python": sys.executable,
+            **(template_values or {}),
         },
-        allowed={"source", "tmpdir", "output-file", "python"},
+        allowed={"source", "tmpdir", "output-file", "python"} | set(template_values or {}),
         name="feature-sets",
         log=directory / "log.txt",
     )
@@ -96,7 +126,12 @@ def discover_feature_sets(command: str, *, source: Path, work: Path) -> FeatureS
 
 
 def resolve_manifest(
-    command: str, feature_set: FeatureSetDeclaration, *, source: Path, work: Path
+    command: str,
+    feature_set: FeatureSetDeclaration,
+    *,
+    source: Path,
+    work: Path,
+    template_values: dict[str, str] | None = None,
 ) -> Manifest:
     """Run ``build.build`` for one feature set and read ``manifest.json``."""
 
@@ -116,8 +151,10 @@ def resolve_manifest(
             "feature-set": str(feature_set_file.resolve()),
             "output-file": str(output.resolve()),
             "python": sys.executable,
+            **(template_values or {}),
         },
-        allowed={"source", "tmpdir", "feature-set", "output-file", "python"},
+        allowed={"source", "tmpdir", "feature-set", "output-file", "python"}
+        | set(template_values or {}),
         name="build",
         log=directory / "log.txt",
     )

@@ -202,6 +202,24 @@ def _feature_set_features(graph: ApiGraph, key: str) -> tuple[str, ...]:
     return tuple(str(feature) for feature in features)
 
 
+def _language_configuration_inline(graph: ApiGraph, key: str) -> str:
+    configuration = graph.feature_sets.get(key, {}).get("languages", {})
+    if not isinstance(configuration, dict) or not configuration:
+        return ""
+
+    def entries(value: dict[str, object], prefix: str = "") -> list[str]:
+        results = []
+        for name, item in sorted(value.items()):
+            path = f"{prefix}.{name}" if prefix else name
+            if isinstance(item, dict):
+                results.extend(entries(item, path))
+            else:
+                results.append(f"{path}={item}")
+        return results
+
+    return " ".join(f"<code>{html.escape(item)}</code>" for item in entries(configuration))
+
+
 def _feature_set_text(graph: ApiGraph, key: str) -> str:
     features = _feature_set_features(graph, key)
     return ", ".join(features) if features else "default"
@@ -515,11 +533,13 @@ def _availability(
     rows = []
     for key in keys:
         href = _page_href(document, Path("feature-sets.md"), _feature_set_anchor(key))
+        language_configuration = _language_configuration_inline(graph, key)
         rows.append(
             '<li><a href="'
             + html.escape(href)
             + '">'
             + _feature_set_inline(graph, key)
+            + (" · " + language_configuration if language_configuration else "")
             + "</a></li>"
         )
     return (
@@ -1010,11 +1030,14 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
         for unit in units
         if isinstance(unit, dict)
     )
+    has_language_configurations = any(
+        _language_configuration_inline(graph, key) for key in graph.feature_sets
+    )
     body = [
         "<h1>Feature Sets</h1>",
-        "<p>The project's build system enumerates concrete feature sets. cpdocs builds each set "
-        "independently. Feature sets have no names: each row below is simply the list of project "
-        "features enabled for that build.</p>",
+        "<p>cpdocs builds each selected language configuration and its discovered project "
+        "feature sets independently. Feature sets have no names: they describe concrete "
+        "build-system selections.</p>",
         '<section id="overview" class="api-section"><h2>Overview</h2>',
         "<table><tbody>",
         f"<tr><th>Project</th><td><code>{html.escape(graph.project)}</code></td></tr>",
@@ -1030,7 +1053,9 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
             "</tbody></table></section>",
             '<section id="feature-sets" class="api-section"><h2>Feature Sets</h2>',
             '<table class="api-feature-set-table">',
-            "<thead><tr><th>Feature set</th><th>Enabled features</th></tr></thead>",
+            "<thead><tr><th>Feature set</th><th>Enabled features</th>"
+            + ("<th>Language configuration</th>" if has_language_configurations else "")
+            + "</tr></thead>",
             "<tbody>",
         ]
     )
@@ -1040,10 +1065,16 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
     ]
     for index, key in enumerate(graph.feature_sets, 1):
         anchor = _feature_set_anchor(key)
+        configuration_column = (
+            "<td>" + (_language_configuration_inline(graph, key) or "default") + "</td>"
+            if has_language_configurations
+            else ""
+        )
         body.append(
             f'<tr id="{html.escape(anchor)}">'
             f'<th scope="row">{index}</th>'
-            "<td>" + _feature_set_inline(graph, key) + "</td></tr>"
+            "<td>" + _feature_set_inline(graph, key) + "</td>"
+            + configuration_column + "</tr>"
         )
     body.append("</tbody></table></section>")
     # Option metadata are documentation of each resolved build, not extra feature axes.
@@ -1057,8 +1088,8 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
                 [
                     '<section id="configuration-options" class="api-section">',
                     "<h2>Configuration options</h2>",
-                    "<p>Effective CMake cache values from the first documented feature set. "
-                    "Only project features determine the feature-set combinations above.</p>",
+                    "<p>Effective CMake cache values from the first documented build. "
+                    "Feature sets are discovered separately for each language configuration.</p>",
                     "<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>",
                 ]
             )

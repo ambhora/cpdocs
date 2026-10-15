@@ -39,6 +39,7 @@ plugins:
         - examples/basic-cpp
         - examples/cpp-templates
         - examples/cpp-features
+        - examples/cpp-standards
         - examples/generated-cpp
         - examples/c-basic
         - examples/mixed

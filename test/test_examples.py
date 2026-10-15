@@ -385,6 +385,7 @@ def test_root_properdocs_config_mounts_example_sites() -> None:
         "examples/basic-cpp",
         "examples/cpp-templates",
         "examples/cpp-features",
+        "examples/cpp-standards",
         "examples/generated-cpp",
         "examples/c-basic",
         "examples/mixed",
@@ -392,6 +393,23 @@ def test_root_properdocs_config_mounts_example_sites() -> None:
         "examples/python-basic",
         "examples/rust-basic",
     ]
+    # Keep the root site's subsite registry and examples index synchronized with
+    # the standalone projects. Otherwise an example can pass its own API tests
+    # but never appear on the published documentation website.
+    configured_subsites = set(cpdocs_plugin["subsites"])
+    example_projects = {
+        f"examples/{project.name}"
+        for project in EXAMPLES.iterdir()
+        if project.is_dir() and (project / "properdocs.yml").is_file()
+    }
+    assert configured_subsites == example_projects
+
+    examples_index = (REPOSITORY / "docs/web/examples/index.md").read_text(encoding="utf-8")
+    for subsite in configured_subsites:
+        name = Path(subsite).name
+        assert f"| `{name}` |" in examples_index
+        assert f"[{name}]({name}/)" in examples_index
+
     assert not (REPOSITORY / "tools" / "build_example_sites.py").exists()
 
 

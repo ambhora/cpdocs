@@ -43,13 +43,10 @@ def language_template_values(configuration: dict[str, object]) -> dict[str, str]
                 raise RuntimeError(f"cpdocs.yml: language property {path!r} is reserved")
             result[path] = str(value).lower() if isinstance(value, bool) else str(value)
         else:
-            raise RuntimeError(
-                f"cpdocs.yml: language property {path!r} must be a scalar value"
-            )
+            raise RuntimeError(f"cpdocs.yml: language property {path!r} must be a scalar value")
 
     visit("", configuration)
     return result
-
 
 
 def _expand(command: str, values: dict[str, str], *, allowed: set[str], name: str) -> str:

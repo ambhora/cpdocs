@@ -1073,8 +1073,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
         body.append(
             f'<tr id="{html.escape(anchor)}">'
             f'<th scope="row">{index}</th>'
-            "<td>" + _feature_set_inline(graph, key) + "</td>"
-            + configuration_column + "</tr>"
+            "<td>" + _feature_set_inline(graph, key) + "</td>" + configuration_column + "</tr>"
         )
     body.append("</tbody></table></section>")
     # Option metadata are documentation of each resolved build, not extra feature axes.

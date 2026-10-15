@@ -68,13 +68,14 @@ Path(output).write_text(json.dumps(data), encoding='utf-8')
 """,
         encoding="utf-8",
     )
-    command = shlex.quote(sys.executable) + ' language_provider.py'
+    command = shlex.quote(sys.executable) + " language_provider.py"
     (project / "docs" / "cpdocs.yml").write_text(
-        "contract: 3\nlanguages:\n" + expression
+        "contract: 3\nlanguages:\n"
+        + expression
         + "build:\n"
-        + f'  feature-sets: >-\n    {command} feature-sets '
+        + f"  feature-sets: >-\n    {command} feature-sets "
         + '"{{cxx.standard}}" "{{python.version}}" "{{output-file}}"\n'
-        + f'  build: >-\n    {command} build '
+        + f"  build: >-\n    {command} build "
         + '"{{cxx.standard}}" "{{python.version}}" "{{output-file}}" "{{feature-set}}"\n',
         encoding="utf-8",
     )
@@ -91,18 +92,22 @@ def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> N
     )
     graph = build_current(load_config(project / "docs/cpdocs.yml"), output=project / "build")
     assert len(graph.feature_sets) == 3  # one feature set for C++17, two for C++23
-    records = [json.loads(line) for line in (project / "build-records.jsonl").read_text().splitlines()]
-    assert {(item["cxx"], item["python"]) for item in records} == {
-        ("17", "3.11"), ("23", "3.12")
-    }
+    records = [
+        json.loads(line) for line in (project / "build-records.jsonl").read_text().splitlines()
+    ]
+    assert {(item["cxx"], item["python"]) for item in records} == {("17", "3.11"), ("23", "3.12")}
     assert len([item for item in records if item["phase"] == "feature-sets"]) == 2
     assert len([item for item in records if item["phase"] == "build"]) == 3
     configurations = {key: data["languages"] for key, data in graph.feature_sets.items()}
     assert {entry["cxx"]["standard"] for entry in configurations.values()} == {17, 23}
     assert len({key for key in graph.feature_sets}) == 3
     for language in ("language-001", "language-002"):
-        assert (project / "build/cpdocs/work/current/language-configurations" / language
-                / "feature-sets/feature-sets.json").exists()
+        assert (
+            project
+            / "build/cpdocs/work/current/language-configurations"
+            / language
+            / "feature-sets/feature-sets.json"
+        ).exists()
     feature_page = (project / "build/cpdocs/current/feature-sets/index.html").read_text()
     assert "cxx.standard=17" in feature_page
     assert "cxx.standard=23" in feature_page

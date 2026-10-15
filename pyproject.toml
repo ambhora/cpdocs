@@ -40,7 +40,7 @@ path = "src/cpdocs/__init__.py"
 packages = ["src/cpdocs"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/cpdocs/share" = "cpdocs/share"
+"share" = "share"
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tools"]

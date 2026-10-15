@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -96,6 +97,73 @@ def test_a_different_build_system_gives_the_same_reference(tmp_path: Path) -> No
     assert [value["features"] for value in with_cmake.feature_sets.values()] == [
         value["features"] for value in with_minibuild.feature_sets.values()
     ]
+
+
+
+def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
+    """Build real C++17/20/23 libraries and check function/overload availability."""
+
+    pytest.importorskip("keyso")
+    _cmake_toolchain()
+    project, graph = _build(tmp_path, "cpp-standards")
+    assert graph.project == "cpdocs-cxx-standards"
+    assert len(graph.feature_sets) == 3
+
+    def standards(keys: list[str]) -> set[int]:
+        return {
+            graph.feature_sets[key]["languages"]["cxx"]["standard"] for key in keys
+        }
+
+    expected = {
+        "demo::always": {17, 20, 23},
+        "demo::legacy_only": {17},
+        "demo::cxx20_only": {20, 23},
+        "demo::cxx23_only": {23},
+    }
+    for name, available in expected.items():
+        entity = graph.entities[stable_entity_id("cpp", "function", name)]
+        assert standards(entity.feature_sets) == available
+
+    overloads = graph.entities[stable_entity_id("cpp", "function", "demo::convert")]
+    by_signature = {
+        signature.compact: standards(feature_sets)
+        for signature, feature_sets in zip(
+            overloads.signatures, overloads.signature_feature_sets, strict=True
+        )
+    }
+    assert by_signature == {
+        "(int)": {17, 20, 23},
+        "(double)": {20, 23},
+        "(long double)": {23},
+    }
+
+    site = project / "build/cpdocs/current"
+    for name, available in expected.items():
+        page = site / "api/demo" / ("function-" + name.split("::")[-1]) / "index.html"
+        html = page.read_text(encoding="utf-8")
+        availability = re.search(
+            r"<strong>Language versions / standards</strong><ul[^>]*>(.*?)</ul>",
+            html,
+        )
+        assert availability is not None
+        for standard in (17, 20, 23):
+            assert (f"C++{standard}" in availability.group(1)) == (standard in available)
+
+    convert_html = (site / "api/demo/function-convert/index.html").read_text(
+        encoding="utf-8"
+    )
+    assert convert_html.count("Language versions / standards") == 3
+    for standard in (17, 20, 23):
+        assert f"C++{standard}" in convert_html
+
+    # The parser must receive the same standard used for the compiled library.
+    for index, standard in enumerate((17, 20, 23), 1):
+        path = (
+            project / "build/cpdocs/work/current/language-configurations"
+            / f"language-{index:03d}/feature-sets/feature-set-001/manifest.json"
+        )
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        assert manifest["units"][0]["parse"]["standard"] == f"c++{standard}"
 
 
 def test_basic_cpp_example(tmp_path: Path) -> None:

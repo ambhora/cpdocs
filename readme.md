@@ -94,19 +94,24 @@ function and overload, with links to the exact combinations of the two. Only con
 actually analyzed are shown: `C++20` and `C++23` do **not** imply `C++20+`, and API presence
 does not assert that functionality was tested.
 
+See [`examples/cpp-standards`](examples/cpp-standards/readme.md) for a runnable
+CMake example building C++17, C++20, and C++23 from one Keyso configuration. It includes
+functions added and removed between standards and standard-dependent overloads, with
+an end-to-end test for their generated availability documentation.
+
 The configuration lives in `docs/cpdocs.yml`, the API introduction in `docs/api/index.md` and the
 ProperDocs pages in `docs/web`. The documentation starts at `docs/web/index.md`; the `examples/`
 directory holds standalone projects that the test suite builds.
 
 ## API renderer resources
 
-The standalone API renderer keeps its nontrivial static content under `src/cpdocs/share/api/`:
+The standalone API renderer keeps its nontrivial static content under the repository-level `share/cpdocs/api/`:
 HTML page and redirect templates (`layout.html`, `redirect.html`, `versions-redirect.html`),
 the default `index.md` introduction, reusable page fragments, `cpdocs-api.css`, and
 `cpdocs-api.js` plus the early-loading `cpdocs-api-init.js`. Python loads these using the
 shared `cpdocs.resources.shared_text` and `shared_template` helpers (based on
 `importlib.resources`), without relying on a source checkout. The wheel configuration
-explicitly includes `src/cpdocs/share/`.
+force-includes `share/` at the wheel root (`"share" = "share"`), so unrelated programs can also read the files through the shared `share` namespace. The `cpdocs/` prefix avoids collisions with resources owned by other programs.
 
 Browser assets are copied into the published site's `assets/` directory with content-derived
 cache keys. Small dynamically assembled HTML fragments and Python docstrings remain in code;

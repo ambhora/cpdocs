@@ -427,7 +427,7 @@ def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
     assert '<main class="api-main">' in page
     assert "<script>document.documentElement" not in page
 
-    resource_root = resources.files("cpdocs").joinpath("share", "api")
+    resource_root = resources.files("share").joinpath("cpdocs", "api")
     init = page.index('src="assets/cpdocs-api-init.js?v=')
     stylesheet = page.index('href="assets/cpdocs-api.css?v=')
     assert init < stylesheet  # Apply saved theme/width before the stylesheet is painted.

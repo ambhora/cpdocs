@@ -28,6 +28,7 @@ from ..languages import kind_label as language_kind_label
 from ..languages import language_label as semantic_language_label
 from ..languages import rendering_for
 from ..model import ApiEntity, ApiGraph, ApiSignature, entity_sort_key
+from ..resources import resource, shared_template, shared_text
 from .common import (
     _documentation_blocks,
     _embedded_member_parent,
@@ -718,12 +719,10 @@ def _container_page(
         )
     else:
         body.append(
-            '<div class="api-namespace-doc api-namespace-doc-generated">'
-            f"<p>The <code>{html.escape(entity.qualified_name)}</code> {_kind_label(entity.kind, entity.language)} groups the public API "
-            "declared in this scope. The hierarchy below expands nested containers through their "
-            "public types and callable families; members of record-like types remain documented "
-            "on their corresponding type pages.</p>"
-            "</div>"
+            shared_template("api/namespace-description.html").substitute(
+                qualified_name=html.escape(entity.qualified_name),
+                kind=html.escape(_kind_label(entity.kind, entity.language)),
+            )
         )
     body.extend(
         [
@@ -1040,16 +1039,7 @@ def _home_page(
         key=entity_sort_key,
     )
     if introduction is None:
-        introduction = (
-            "# API Documentation Home\n\n"
-            "This site is the generated API reference for this version of `{{ project }}`. "
-            "For tutorials, how-to guides, explanations, and general project information, see the "
-            "[main project documentation](projectdocs:).\n\n"
-            "cpdocs extracts semantic declarations into a language-neutral API graph and renders this "
-            "versioned reference directly as a code-oriented site.\n\n"
-            "The [feature sets](feature-sets/) page shows the concrete project configurations "
-            "whose APIs were merged into this reference.\n"
-        )
+        introduction = shared_text("api/index.md")
     body = [
         _render_markdown(introduction, graph),
         '<section id="api-hierarchy" class="api-section"><h2>API hierarchy</h2>',
@@ -1095,9 +1085,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
     )
     body = [
         "<h1>Feature Sets</h1>",
-        "<p>cpdocs builds each selected language configuration and its discovered project "
-        "feature sets independently. Feature sets have no names: they describe concrete "
-        "build-system selections.</p>",
+        shared_text("api/feature-sets-intro.html"),
         '<section id="overview" class="api-section"><h2>Overview</h2>',
         "<table><tbody>",
         f"<tr><th>Project</th><td><code>{html.escape(graph.project)}</code></td></tr>",
@@ -1147,8 +1135,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
                 [
                     '<section id="configuration-options" class="api-section">',
                     "<h2>Configuration options</h2>",
-                    "<p>Effective CMake cache values from the first documented build. "
-                    "Feature sets are discovered separately for each language configuration.</p>",
+                    shared_text("api/configuration-options-intro.html"),
                     "<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>",
                 ]
             )
@@ -1260,8 +1247,18 @@ def _layout(
     body = _resolve_projectdocs_links(body, document, project_docs_url)
     # The version query changes whenever the asset does, so a browser never pairs new pages with a
     # stylesheet or script it cached from an older cpdocs.
-    stylesheet = _root_relative(document, "assets/cpdocs-api.css") + f"?v={_asset_version('css')}"
-    script = _root_relative(document, "assets/cpdocs-api.js") + f"?v={_asset_version('js')}"
+    stylesheet = (
+        _root_relative(document, "assets/cpdocs-api.css")
+        + f"?v={_asset_version('cpdocs-api.css')}"
+    )
+    script = (
+        _root_relative(document, "assets/cpdocs-api.js")
+        + f"?v={_asset_version('cpdocs-api.js')}"
+    )
+    init_script = (
+        _root_relative(document, "assets/cpdocs-api-init.js")
+        + f"?v={_asset_version('cpdocs-api-init.js')}"
+    )
     home = _page_href(document, Path("index.md"))
     project_docs = _project_docs_href(document, project_docs_url)
     version_root = _root_relative(document, ".")
@@ -1273,404 +1270,36 @@ def _layout(
     current_route = _output_directory(document).as_posix().strip(".")
     if current_route and not current_route.endswith("/"):
         current_route += "/"
-    return f'''<!doctype html>
-<html lang="en" data-theme="light">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<script>document.documentElement.classList.add("js");try{{for(const k of ["sidebar","toc"]){{const v=localStorage.getItem("cpdocs-api-"+k+"-width");if(v)document.documentElement.style.setProperty("--api-"+k+"-width",v+"px")}}}}catch(e){{}}try{{const t=localStorage.getItem("cpdocs-api-theme");document.documentElement.dataset.theme=t==="dark"||t==="light"?t:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}}catch(e){{}}</script>
-<title>{html.escape(_page_title(current, graph, special))}</title>
-<link rel="stylesheet" href="{html.escape(stylesheet)}">
-</head>
-<body data-version-root="{html.escape(version_root)}" data-api-root="{html.escape(api_root)}" data-current-route="{html.escape(current_route)}">
-<header class="api-topbar">
-  <a class="api-brand" href="{html.escape(home)}">{html.escape(graph.project)} API documentation</a>
-  <div class="api-topbar-actions">
-    <div class="api-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search" aria-label="Search API"><div class="api-search-results" hidden></div></div>
-    <a class="api-project-docs" href="{html.escape(project_docs)}" title="Project documentation"><span aria-hidden="true">←</span><span class="api-long"> Project documentation</span><span class="api-short"> Docs</span></a>
-    <select class="api-version" aria-label="API version"><option>{html.escape(graph.version)}</option></select>
-    <button class="api-theme" type="button" aria-label="Toggle color theme">◐</button>
-  </div>
-</header>
-<div class="api-shell">
-  <aside class="api-sidebar">{_outline(graph, document, current, current_special=special)}</aside>
-  <main class="api-main">{body}</main>
-  {_toc(toc)}
-  <div class="api-resizer api-resizer-sidebar" data-resize="sidebar" role="separator" aria-orientation="vertical" aria-label="Resize the outline" title="Drag to resize, double-click to reset" tabindex="0"></div>
-  <div class="api-resizer api-resizer-toc" data-resize="toc" role="separator" aria-orientation="vertical" aria-label="Resize the page contents" title="Drag to resize, double-click to reset" tabindex="0"></div>
-</div>
-<footer class="api-footer"><span>{html.escape(copyright_text)}</span><span>Generated by cpdocs.</span></footer>
-<script src="{html.escape(script)}"></script>
-</body>
-</html>
-'''
+    return shared_template("api/layout.html").substitute(
+        page_title=html.escape(_page_title(current, graph, special)),
+        stylesheet=html.escape(stylesheet),
+        init_script=html.escape(init_script),
+        version_root=html.escape(version_root),
+        api_root=html.escape(api_root),
+        current_route=html.escape(current_route),
+        home=html.escape(home),
+        project=html.escape(graph.project),
+        project_docs=html.escape(project_docs),
+        version=html.escape(graph.version),
+        outline=_outline(graph, document, current, current_special=special),
+        body=body,
+        toc=_toc(toc),
+        copyright=html.escape(copyright_text),
+        script=html.escape(script),
+    )
 
 
-_CSS = r"""
-:root {
-  --api-accent: #2f62b5;
-  --api-accent-2: #168b98;
-  --api-bg: #ffffff;
-  --api-fg: #20242a;
-  --api-muted: #66707c;
-  --api-border: #d8dde3;
-  --api-soft: #f5f6f8;
-  --api-selected: #eef1fb;
-  --api-code: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --api-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --api-tree-indent: 2.45rem;
-}
-html[data-theme="dark"] {
-  --api-accent: #83b7ff;
-  --api-accent-2: #68d3dd;
-  --api-bg: #17191c;
-  --api-fg: #e8eaf0;
-  --api-muted: #a9b1bc;
-  --api-border: #3b4048;
-  --api-soft: #22262b;
-  --api-selected: #29334a;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--api-bg); color: var(--api-fg); font-family: var(--api-ui); }
-a { color: var(--api-accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-code, pre { font-family: var(--api-code); }
-.api-topbar { height: 3rem; position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 .9rem; border-bottom: 1px solid var(--api-border); background: var(--api-bg); }
-.api-brand { color: var(--api-fg); font-weight: 650; white-space: nowrap; }
-.api-topbar-actions { display: flex; align-items: center; gap: .7rem; margin-left: auto; }
-.api-search { position: relative; display: flex; align-items: center; gap: .4rem; border: 1px solid var(--api-border); border-radius: .4rem; padding: .25rem .55rem; min-width: 12rem; }
-.api-search input { border: 0; outline: 0; background: transparent; color: var(--api-fg); width: 100%; }
-.api-search-results { position: absolute; top: calc(100% + .3rem); right: 0; width: 26rem; max-height: 24rem; overflow: auto; background: var(--api-bg); border: 1px solid var(--api-border); border-radius: .35rem; box-shadow: 0 .4rem 1rem #0002; padding: .25rem; }
-.api-search-results a { display: block; padding: .35rem .45rem; border-radius: .25rem; }
-.api-search-results a:hover { background: var(--api-soft); text-decoration: none; }
-.api-project-docs .api-short { display: none; }
-.api-outline-panel-toggle { display: none; }
-.api-version { min-width: 6.5rem; }
-.api-feature-axis th { padding-top: .8rem; color: var(--api-muted); font-weight: 650; text-align: left; }
-tbody th[scope="row"] { font-weight: 400; text-align: left; }
-.api-doc-field { margin-top: .9rem; }
-.api-description .api-doc-field-title { margin: 0 0 .35rem; color: var(--api-muted); font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.api-doc-field dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .3rem 1.1rem; margin: 0; }
-.api-doc-field dt { margin: 0; font-weight: 700; }
-.api-doc-field dt code { color: var(--api-accent); }
-.api-doc-field dd { margin: 0; }
-.api-doc-field > p:not(.api-doc-field-title) { margin: 0; }
-.api-feature-set-tag { margin-left: .45rem; padding: .02rem .38rem; border: 1px solid var(--api-border); border-radius: .7rem; color: var(--api-muted); font-size: .72rem; white-space: nowrap; }
-.api-project-docs { color: #fff; background: var(--api-accent); border-radius: .25rem; padding: .38rem .65rem; font-weight: 650; white-space: nowrap; }
-.api-version, .api-theme { height: 2rem; border: 1px solid var(--api-border); border-radius: .3rem; background: var(--api-bg); color: var(--api-fg); }
-.api-theme { width: 2rem; cursor: pointer; }
-:root { --api-sidebar-default: 20.5rem; --api-toc-default: 24rem; }
-.api-shell { position: relative; display: grid; grid-template-columns: var(--api-sidebar-width, var(--api-sidebar-default)) minmax(0, 1fr) var(--api-toc-width, var(--api-toc-default)); min-height: calc(100vh - 5rem); }
-.api-resizer { position: absolute; top: 0; bottom: 0; z-index: 15; width: 9px; cursor: col-resize; touch-action: none; outline: none; }
-.api-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 3px; background: transparent; transition: background .12s; }
-.api-resizer:hover::after, .api-resizer:focus-visible::after, .is-resizing .api-resizer::after { background: var(--api-accent); }
-.api-resizer-sidebar { left: calc(var(--api-sidebar-width, var(--api-sidebar-default)) - 5px); }
-.api-resizer-toc { right: calc(var(--api-toc-width, var(--api-toc-default)) - 5px); }
-html.is-resizing, html.is-resizing * { cursor: col-resize !important; user-select: none; }
-.api-sidebar, .api-toc { position: sticky; top: 3rem; align-self: start; height: calc(100vh - 3rem); overflow: auto; padding: 1.15rem .8rem 2rem; }
-.api-sidebar { border-right: 1px solid var(--api-border); }
-.api-toc { border-left: 1px solid var(--api-border); }
-.api-main { width: min(80%, 80rem); min-width: 0; justify-self: center; padding: 1.45rem 0 4rem; }
-.api-main h1 { font-size: 1.75rem; line-height: 1.15; border-bottom: 2px solid var(--api-accent); padding-bottom: .25rem; margin: 0 0 .65rem; }
-.api-main h2 { font-size: 1.28rem; line-height: 1.2; border-left: .28rem solid var(--api-accent-2); padding-left: .55rem; margin: 1.2rem 0 .55rem; }
-.api-main h3 { font-size: 1.04rem; margin: .85rem 0 .35rem; }
-.api-main p, .api-main li, .api-main td, .api-main th { line-height: 1.34; }
-.api-main p { margin: .4rem 0; }
-.api-defined { margin: -.1rem 0 .75rem !important; }
-.api-sidebar h2, .api-toc h2 { font-size: 1.18rem; margin: .15rem 0 .65rem; }
-.api-outline-root, .api-outline-children { list-style: none; margin: 0; padding: 0; }
-.api-outline-root > li { margin: 0; }
-.api-outline-row { display: grid; grid-template-columns: 1.45rem minmax(0, 1fr) auto auto; column-gap: .68rem; align-items: center; width: 100%; min-width: 0; min-height: 1.72rem; overflow: hidden; }
-.api-outline-row.is-current { background: var(--api-selected); border-radius: .25rem; padding-right: .18rem; }
-.api-outline-link { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--api-fg); padding: .1rem 0; white-space: nowrap; }
-.api-outline-language { min-width: 0; justify-self: end; overflow: hidden; }
-.api-outline-language:empty { display: none; }
-.api-outline-language .api-language-badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.api-outline-row.is-current .api-outline-link { color: var(--api-accent); font-weight: 650; }
-.api-outline-root > li > .api-outline-row .api-outline-link { font-weight: 500; }
-.api-outline-root > li > .api-outline-row .api-outline-link[href*="api/"] { font-weight: 700; }
-.api-outline-children { margin: .08rem 0 .12rem var(--api-tree-indent); padding-left: 1.15rem; }
-.api-outline-children > li { position: relative; }
-.api-outline-children > li::before { content: ""; position: absolute; left: -1.15rem; top: -.08rem; bottom: -.12rem; border-left: 1px solid var(--api-border); }
-.api-outline-children > li::after { content: ""; position: absolute; left: -1.15rem; top: .85rem; width: 1rem; border-top: 1px solid var(--api-border); }
-.api-outline-children > li:last-child::before { bottom: auto; height: .94rem; }
-.api-kind { display: inline-grid; place-items: center; min-width: 1.42rem; height: 1.25rem; padding: 0 .22rem; border: 1px solid var(--api-border); border-radius: .23rem; color: var(--api-muted); font-family: var(--api-code); font-size: .68rem; line-height: 1; font-weight: 950; }
-.api-kind-empty { border-color: transparent; }
-.api-outline-toggle { position: relative; width: 1.4rem; height: 1.4rem; border: 1px solid var(--api-border); border-radius: .25rem; background: transparent; color: var(--api-muted); font: 800 1rem/1 var(--api-code); cursor: pointer; }
-.api-outline-toggle::before { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; }
-.api-outline-toggle[aria-expanded="true"]::before { content: "−"; }
-.api-outline-toggle:hover { color: var(--api-accent); border-color: var(--api-accent); }
-.api-outline-children[hidden] { display: none; }
-.api-toc ul { list-style: none; padding: 0; margin: 0; }
-.api-toc li { margin: .34rem 0; }
-.api-toc .toc-level-2 { padding-left: .85rem; font-size: .9rem; }
-.api-toc a { color: var(--api-muted); }
-.api-toc a:hover { color: var(--api-accent); }
-.api-section { margin-top: 1rem; }
-.api-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .28rem; margin: .25rem 0 .55rem; font-size: .83rem; }
-.api-legend-entry { display: inline-flex; align-items: center; gap: .28rem; }
-.api-legend-separator { color: var(--api-muted); }
-.api-member-list, .api-hierarchy, .api-hierarchy ul, .api-file-tree { list-style: none; margin: .25rem 0; padding-left: 1.25rem; }
-.api-member-list { padding-left: 0; }
-.api-member-list li { display: flex; align-items: center; gap: .55rem; padding: .24rem 0; border-bottom: 1px solid var(--api-border); }
-.api-namespace-tree, .api-namespace-tree ul { list-style: none; margin: .2rem 0; padding-left: 0; }
-.api-namespace-tree ul { margin-left: 2.35rem; padding-left: 1.05rem; border-left: 1px solid var(--api-border); }
-.api-namespace-tree li { margin: 0; }
-.api-namespace-tree-row { display: flex; align-items: center; gap: .52rem; min-height: 1.72rem; border-bottom: 1px solid var(--api-border); }
-.api-namespace-tree ul > li > .api-namespace-tree-row { position: relative; }
-.api-namespace-tree ul > li > .api-namespace-tree-row::before { content: ""; position: absolute; left: -1.05rem; width: .8rem; border-top: 1px solid var(--api-border); }
-.api-hierarchy li, .api-file-tree li { margin: .18rem 0; }
-/* Give the in-page API and file hierarchies the same tree connectors as the primary outline. */
-.api-hierarchy ul,
-.api-file-tree .api-file-tree {
-  margin-left: .35rem;
-  padding-left: 1.15rem;
-}
-.api-hierarchy ul > li,
-.api-file-tree .api-file-tree > li {
-  position: relative;
-}
-.api-hierarchy ul > li::before,
-.api-file-tree .api-file-tree > li::before {
-  border-left: 1px solid var(--api-border);
-  bottom: -.18rem;
-  content: "";
-  left: -1.15rem;
-  position: absolute;
-  top: -.18rem;
-}
-.api-hierarchy ul > li::after,
-.api-file-tree .api-file-tree > li::after {
-  border-top: 1px solid var(--api-border);
-  content: "";
-  left: -1.15rem;
-  position: absolute;
-  top: .72rem;
-  width: .9rem;
-}
-.api-hierarchy ul > li:last-child::before,
-.api-file-tree .api-file-tree > li:last-child::before {
-  bottom: auto;
-  height: .9rem;
-}
-.api-hierarchy .api-kind { margin-right: .35rem; }
-.api-file-tree .api-kind { margin-right: .35rem; }
-.api-entity-card, .api-signature-card { border: 1px solid var(--api-border); border-top: .22rem solid var(--api-accent); border-radius: .45rem; padding: .7rem .85rem .8rem; margin: .55rem 0 .9rem; }
-.api-signature { margin: 0; padding: 0 0 .55rem; background: transparent; border-bottom: 1px solid var(--api-border); overflow-x: auto; font-size: .87rem; line-height: 1.35; font-weight: 650; }
-.api-signature code { padding: 0; }
-.api-signature-name { font-weight: 800; }
-.api-meta-row { display: flex; align-items: baseline; gap: .65rem; margin-top: .42rem; font-size: .78rem; }
-.api-meta-row > strong { flex: 0 0 5rem; }
-.api-badges { display: flex; flex-wrap: wrap; gap: .3rem; }
-.api-badges > span { border: 1px solid color-mix(in srgb, var(--api-accent) 32%, var(--api-border)); border-radius: 999px; background: color-mix(in srgb, var(--api-accent) 8%, transparent); padding: .08rem .36rem; font: 650 .72rem var(--api-code); }
-.api-language-badge { display: inline-flex; align-items: center; border: 1px solid color-mix(in srgb, var(--api-accent) 32%, var(--api-border)); border-radius: 999px; background: color-mix(in srgb, var(--api-accent) 8%, transparent); padding: .08rem .38rem; font: 650 .68rem var(--api-code); white-space: nowrap; vertical-align: middle; }
-.api-entity-title .api-language-badge { margin-left: .35rem; transform: translateY(-.08rem); }
-.api-description { border-top: 1px solid var(--api-border); margin-top: .55rem; padding-top: .45rem; }
-.api-related { margin-top: .45rem !important; }
-.api-availability { border-top: 1px solid var(--api-border); margin-top: .55rem; padding-top: .48rem; font-size: .82rem; }
-.api-availability-dimension + .api-availability-dimension { margin-top: .6rem; }
-.api-availability-list, .api-feature-set-list { margin: .35rem 0 0; padding-left: 1.25rem; }
-.api-availability-list li, .api-feature-set-row { margin: .2rem 0; }
-.api-availability-list a { text-decoration: none; }
-.api-feature-set-empty { color: var(--api-muted); font-style: italic; }
-.api-record-members { border-top: 1px solid var(--api-border); }
-.api-member-row { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr); align-items: baseline; gap: .55rem; border-bottom: 1px solid var(--api-border); padding: .34rem .08rem; }
-.api-member-row code { font-weight: 600; }
-.api-member-doc { grid-column: 2; color: var(--api-muted); }
-.api-namespace-doc { margin: .4rem 0 .8rem; }
-table { width: 100%; border-collapse: collapse; margin: .4rem 0 .8rem; }
-th, td { text-align: left; padding: .45rem .55rem; border-bottom: 1px solid var(--api-border); }
-thead th { border-bottom: 2px solid var(--api-accent); }
-tbody tr:nth-child(odd) { background: var(--api-soft); }
-.table-scroll { overflow-x: auto; }
-.api-section-intro { color: var(--api-muted); max-width: 70rem; }
-.api-feature-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: .75rem; margin: .7rem 0 1rem; }
-.api-feature-set-card { border: 1px solid var(--api-border); border-top: .2rem solid var(--api-accent-2); border-radius: .45rem; background: color-mix(in srgb, var(--api-soft) 55%, transparent); overflow: hidden; }
-.api-feature-set-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .62rem .75rem .5rem; border-bottom: 1px solid var(--api-border); }
-.api-feature-set-card h3 { margin: 0; font-size: 1rem; }
-.api-feature-set-card-label { color: var(--api-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
-.api-feature-set-card dl { margin: 0; padding: .2rem .75rem .65rem; }
-.api-feature-set-card dl > div { padding: .45rem 0; }
-.api-feature-set-card dl > div + div { border-top: 1px solid var(--api-border); }
-.api-feature-set-card dt { font-size: .76rem; font-weight: 700; color: var(--api-muted); margin-bottom: .22rem; }
-.api-feature-set-card dd { margin: 0; display: flex; flex-wrap: wrap; gap: .28rem; }
-.api-chip { display: inline-block; border: 1px solid var(--api-border); border-radius: .25rem; background: var(--api-bg); padding: .08rem .32rem; }
-.api-none { color: var(--api-muted); font-style: italic; }
-.api-source { background: var(--api-soft); border: 1px solid var(--api-border); border-radius: .4rem; padding: .75rem 0; overflow: auto; font-size: .82rem; line-height: 1.35; }
-.source-line { display: grid; grid-template-columns: 4.2rem minmax(max-content, 1fr); min-height: 1.1rem; }
-.source-line:target { background: color-mix(in srgb, var(--api-accent) 12%, transparent); }
-.source-number { user-select: none; text-align: right; padding-right: 1rem; color: var(--api-muted); }
-.source-code { white-space: pre; padding-right: 1rem; }
-.cpdocs-syntax-keyword { color: #005cc5; font-weight: 650; }
-.cpdocs-syntax-comment { color: #6a737d; font-style: italic; }
-.cpdocs-syntax-string { color: #032f62; }
-.cpdocs-syntax-number { color: #005cc5; }
-.cpdocs-syntax-preprocessor { color: #6f42c1; }
-html[data-theme="dark"] .cpdocs-syntax-keyword { color: #79b8ff; }
-html[data-theme="dark"] .cpdocs-syntax-comment { color: #8b949e; }
-html[data-theme="dark"] .cpdocs-syntax-string { color: #9ecbff; }
-html[data-theme="dark"] .cpdocs-syntax-number { color: #79b8ff; }
-html[data-theme="dark"] .cpdocs-syntax-preprocessor { color: #d2a8ff; }
-.api-footer { min-height: 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--api-border); padding: .45rem 1rem; font-size: .72rem; color: var(--api-muted); }
-@media (max-width: 1400px) { :root { --api-sidebar-default: 19rem; --api-toc-default: 20rem; } .api-main { width: 88%; } }
-@media (max-width: 1100px) { :root { --api-sidebar-default: 18rem; } .api-shell { grid-template-columns: var(--api-sidebar-width, var(--api-sidebar-default)) minmax(0, 1fr); } .api-toc, .api-resizer-toc { display: none; } .api-main { width: 92%; } }
-@media (max-width: 760px) { .api-shell { display: block; } .api-resizer { display: none; } .api-sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--api-border); } .api-topbar-actions { gap: .35rem; } .api-search { min-width: 7rem; } .api-project-docs { padding: .38rem .5rem; } .api-project-docs .api-long { display: none; } .api-project-docs .api-short { display: inline; } .api-topbar { height: auto; min-height: 3rem; flex-wrap: wrap; row-gap: .4rem; padding: .45rem .9rem; } .api-brand { white-space: normal; } .api-main { width: auto; padding: 1rem; } .api-sidebar { padding: .5rem .8rem; } .api-sidebar h2 { display: none; } .api-outline-panel-toggle { display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 2.4rem; padding: .35rem .6rem; border: 1px solid var(--api-border); border-radius: .35rem; background: var(--api-soft); color: var(--api-fg); font: inherit; font-weight: 650; cursor: pointer; text-align: left; } .api-outline-panel-toggle::after { content: "▾"; margin-left: auto; transition: transform .15s; } .api-outline-panel-toggle[aria-expanded="true"]::after { transform: rotate(180deg); } .api-outline-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--api-muted); font-weight: 500; } .js .api-sidebar:not(.is-open) .api-outline-root { display: none; } .api-sidebar.is-open .api-outline-root { max-height: 60vh; overflow: auto; margin-top: .5rem; } }
-"""
+_ASSET_FILES = ("cpdocs-api.css", "cpdocs-api.js", "cpdocs-api-init.js")
 
 
-_JS = r"""
-(() => {
-  const root = document.documentElement;
-
-  // Keep the sidebar where the reader left it; a full page load otherwise jumps it to the top.
-  const sidebar = document.querySelector(".api-sidebar");
-  const panelToggle = document.querySelector(".api-outline-panel-toggle");
-  panelToggle?.addEventListener("click", () => {
-    const open = sidebar?.classList.toggle("is-open") ?? false;
-    panelToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    if (open) sidebar?.querySelector(".is-current")?.scrollIntoView({block: "nearest"});
-  });
-  if (sidebar) {
-    try {
-      const saved = sessionStorage.getItem("cpdocs-api-sidebar");
-      if (saved !== null) sidebar.scrollTop = Number(saved);
-    } catch {}
-    const currentRow = sidebar.querySelector(".is-current");
-    if (currentRow) {
-      const box = sidebar.getBoundingClientRect();
-      const row = currentRow.getBoundingClientRect();
-      if (row.top < box.top || row.bottom > box.bottom) currentRow.scrollIntoView({block: "center"});
-    }
-    addEventListener("pagehide", () => {
-      try { sessionStorage.setItem("cpdocs-api-sidebar", String(sidebar.scrollTop)); } catch {}
-    });
-  }
-
-  document.querySelector(".api-theme")?.addEventListener("click", () => {
-    const next = root.dataset.theme === "dark" ? "light" : "dark";
-    root.dataset.theme = next;
-    localStorage.setItem("cpdocs-api-theme", next);
-  });
-
-  // Drag the border of the outline or of the page contents to resize it; the width is kept for
-  // later visits. Arrow keys resize a focused handle, double-click restores the default.
-  for (const handle of document.querySelectorAll(".api-resizer")) {
-    const side = handle.dataset.resize;
-    const panel = document.querySelector(side === "sidebar" ? ".api-sidebar" : ".api-toc");
-    const shell = handle.closest(".api-shell");
-    if (!panel || !shell) continue;
-    const property = `--api-${side}-width`;
-    const key = `cpdocs-api-${side}-width`;
-    const clamp = value => Math.round(Math.min(Math.max(value, 160), window.innerWidth * 0.45));
-    const apply = width => root.style.setProperty(property, `${width}px`);
-    const save = () => {
-      try { localStorage.setItem(key, String(Math.round(panel.getBoundingClientRect().width))); } catch {}
-    };
-    handle.addEventListener("pointerdown", event => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      handle.setPointerCapture(event.pointerId);
-      root.classList.add("is-resizing");
-      const box = shell.getBoundingClientRect();
-      const move = moving => apply(clamp(side === "sidebar" ? moving.clientX - box.left : box.right - moving.clientX));
-      const stop = () => {
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", stop);
-        handle.removeEventListener("pointercancel", stop);
-        root.classList.remove("is-resizing");
-        save();
-      };
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", stop);
-      handle.addEventListener("pointercancel", stop);
-    });
-    handle.addEventListener("keydown", event => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      const step = (event.shiftKey ? 64 : 16) * (event.key === "ArrowRight" ? 1 : -1);
-      apply(clamp(panel.getBoundingClientRect().width + (side === "sidebar" ? step : -step)));
-      save();
-    });
-    handle.addEventListener("dblclick", () => {
-      root.style.removeProperty(property);
-      try { localStorage.removeItem(key); } catch {}
-    });
-  }
-
-  for (const button of document.querySelectorAll(".api-outline-toggle")) {
-    const row = button.closest(".api-outline-row");
-    const children = row?.nextElementSibling;
-    if (!children?.classList.contains("api-outline-children")) continue;
-    button.addEventListener("click", () => {
-      const expanded = button.getAttribute("aria-expanded") === "true";
-      button.setAttribute("aria-expanded", expanded ? "false" : "true");
-      children.hidden = expanded;
-    });
-  }
-
-  const version = document.querySelector(".api-version");
-  const apiRoot = document.body.dataset.apiRoot || "../";
-  const route = document.body.dataset.currentRoute || "";
-  if (version) {
-    fetch(apiRoot + "versions.json")
-      .then(response => response.ok ? response.json() : null)
-      .then(data => {
-        if (!data?.versions) return;
-        version.replaceChildren();
-        for (const item of data.versions) {
-          const option = document.createElement("option");
-          option.value = item.name;
-          option.textContent = item.name;
-          option.selected = item.name === document.querySelector(".api-version")?.dataset.current;
-          version.appendChild(option);
-        }
-        const current = location.pathname.split("/").filter(Boolean).at(-1);
-        for (const option of version.options) {
-          if (location.pathname.includes(`/${option.value}/`)) option.selected = true;
-        }
-        version.addEventListener("change", () => {
-          location.href = apiRoot + version.value + "/" + route;
-        });
-      }).catch(() => {});
-  }
-
-  const search = document.querySelector(".api-search input");
-  const results = document.querySelector(".api-search-results");
-  const versionRoot = document.body.dataset.versionRoot || "./";
-  let index = null;
-  function showResults(values) {
-    if (!results) return;
-    results.replaceChildren();
-    for (const item of values.slice(0, 20)) {
-      const link = document.createElement("a");
-      link.href = versionRoot + item.url;
-      link.innerHTML = `<strong>${item.label}</strong><br><small>${item.kind} · ${item.qualified}</small>`;
-      results.appendChild(link);
-    }
-    results.hidden = values.length === 0;
-  }
-  search?.addEventListener("input", async () => {
-    const query = search.value.trim().toLowerCase();
-    if (!query) { if (results) results.hidden = true; return; }
-    if (index === null) {
-      try { index = await (await fetch(versionRoot + "search-index.json")).json(); }
-      catch { index = []; }
-    }
-    const values = index.filter(item => `${item.label} ${item.qualified}`.toLowerCase().includes(query));
-    showResults(values);
-  });
-  document.addEventListener("click", event => {
-    if (!event.target.closest(".api-search") && results) results.hidden = true;
-  });
-})();
-"""
+def _asset_resource(name: str):
+    """Return a packaged API-rendering resource (also works outside a source checkout)."""
+    return resource("api", name)
 
 
 @functools.cache
-def _asset_version(kind: str) -> str:
-    text = _CSS if kind == "css" else _JS
-    return hashlib.sha1(text.strip().encode("utf-8")).hexdigest()[:10]
+def _asset_version(name: str) -> str:
+    return hashlib.sha1(_asset_resource(name).read_bytes().strip()).hexdigest()[:10]
 
 
 def _write_page(
@@ -1706,10 +1335,9 @@ def _redirect(output: Path, document: Path, target: str) -> None:
     path = output / _output_file(document)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url='
-        + html.escape(target, quote=True)
-        + '">'
-        "<script>location.replace(" + json.dumps(target) + ")</script>",
+        shared_template("api/redirect.html").substitute(
+            target=html.escape(target, quote=True), target_json=json.dumps(target)
+        ),
         encoding="utf-8",
     )
 
@@ -1750,8 +1378,8 @@ def render_html_site(
     output.mkdir(parents=True, exist_ok=True)
     assets = output / "assets"
     assets.mkdir(parents=True, exist_ok=True)
-    (assets / "cpdocs-api.css").write_text(_CSS.strip() + "\n", encoding="utf-8")
-    (assets / "cpdocs-api.js").write_text(_JS.strip() + "\n", encoding="utf-8")
+    for name in _ASSET_FILES:
+        (assets / name).write_bytes(_asset_resource(name).read_bytes())
 
     home_document = Path("index.md")
     introduction = None

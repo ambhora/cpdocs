@@ -12,7 +12,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -71,30 +70,13 @@ def copy_example(tmp_path: Path, name: str) -> Path:
     return project
 
 
+def fixture_text(name: str) -> str:
+    """Load a self-contained fixture from test/share, never from runtime package assets."""
+    return (Path(__file__).parent / "share" / name).read_text(encoding="utf-8")
+
+
 # A tiny build-system provider used by orchestration tests.
-FAKE_BUILD = textwrap.dedent(
-    """
-    import json, sys
-    spec = json.load(open("fake-build.json"))
-    if sys.argv[1] == "feature-sets":
-        manifest = {
-            "cpdocs-feature-sets": 1, "generator": "fake",
-            "project": {"name": spec["name"], "version": "1.0"},
-            "feature-sets": [{"features": features} for features in spec["feature_sets"]],
-        }
-        output = sys.argv[2]
-    else:
-        selected = json.load(open(sys.argv[2]))
-        assert isinstance(selected["features"], list)
-        manifest = {
-            "cpdocs-manifest": 1,
-            "units": [{"id": "pkg", "language": "python", "package": "pkg",
-                       "api": [{"path": "src/pkg"}]}],
-        }
-        output = sys.argv[3]
-    json.dump(manifest, open(output, "w"))
-    """
-)
+FAKE_BUILD = fixture_text("fake-build.py")
 
 
 def fake_project(

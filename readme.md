@@ -98,6 +98,22 @@ The configuration lives in `docs/cpdocs.yml`, the API introduction in `docs/api/
 ProperDocs pages in `docs/web`. The documentation starts at `docs/web/index.md`; the `examples/`
 directory holds standalone projects that the test suite builds.
 
+## API renderer resources
+
+The standalone API renderer keeps its nontrivial static content under `src/cpdocs/share/api/`:
+HTML page and redirect templates (`layout.html`, `redirect.html`, `versions-redirect.html`),
+the default `index.md` introduction, reusable page fragments, `cpdocs-api.css`, and
+`cpdocs-api.js` plus the early-loading `cpdocs-api-init.js`. Python loads these using the
+shared `cpdocs.resources.shared_text` and `shared_template` helpers (based on
+`importlib.resources`), without relying on a source checkout. The wheel configuration
+explicitly includes `src/cpdocs/share/`.
+
+Browser assets are copied into the published site's `assets/` directory with content-derived
+cache keys. Small dynamically assembled HTML fragments and Python docstrings remain in code;
+static, substantive prose, templates, stylesheets, and scripts should be file-backed rather
+than embedded as multiline Python string literals. Test-only example source and fake-provider
+scripts live separately in `test/share/` so they are not installed with the runtime package.
+
 ## Development
 
 ```console

@@ -14,6 +14,7 @@ Output layout below ``<output>/cpdocs``::
 from __future__ import annotations
 
 import dataclasses
+import html
 import fnmatch
 import json
 import os
@@ -38,6 +39,7 @@ from .providers.contract import (
     resolve_manifest,
 )
 from .rendering.html import render_html_site
+from .resources import shared_template
 from .versioning import SelectedRef, current_branch, select_refs
 
 
@@ -567,11 +569,8 @@ def _html_pages(root: Path) -> list[str]:
 
 
 def _redirect_page(target: str) -> str:
-    return (
-        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
-        f'<meta http-equiv="refresh" content="0; url={target}">'
-        f'<link rel="canonical" href="{target}"></head>'
-        f'<body><a href="{target}">{target}</a></body></html>\n'
+    return shared_template("api/versions-redirect.html").substitute(
+        target=html.escape(target, quote=True)
     )
 
 

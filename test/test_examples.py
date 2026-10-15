@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import EXAMPLES, REPOSITORY, copy_example, git, init_repository, require
+from conftest import EXAMPLES, REPOSITORY, copy_example, fixture_text, git, init_repository, require
 from cpdocs.build import build_current
 from cpdocs.config import load_config
 from cpdocs.languages.fortran.extract import extract_fortran_graph
@@ -154,14 +154,7 @@ def test_mixed_example_merges_cpp_and_python_units(tmp_path: Path) -> None:
 def test_fortran_doc_comments_ignore_license_preamble(tmp_path: Path) -> None:
     source = tmp_path / "geometry.f90"
     source.write_text(
-        "! --------------------------------------------------\n"
-        "! SPDX-License-Identifier: Apache-2.0\n"
-        "! SPDX-FileCopyrightText: 2026 cpdocs developers\n"
-        "! --------------------------------------------------\n"
-        "!> Geometry primitives.\n"
-        "!! Additional detail.\n"
-        "module geometry\n"
-        "end module geometry\n",
+        fixture_text("fortran-license-preamble.f90"),
         encoding="utf-8",
     )
     graph = extract_fortran_graph(
@@ -370,15 +363,21 @@ def test_templates_are_shown_as_written(tmp_path: Path) -> None:
 def test_introduction_license_header_is_not_rendered(tmp_path: Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     home = (project / "build" / "cpdocs" / "current" / "index.html").read_text(encoding="utf-8")
-    assert "SPDX" not in home
-    assert "&lt;!--" not in home
+    # The document shell may carry a REUSE license comment; the rendered introduction must not.
+    rendered_content = home.split('<main class="api-main">', 1)[1].split("</main>", 1)[0]
+    assert "SPDX" not in rendered_content
+    assert "&lt;!--" not in rendered_content
 
 
 def test_api_pages_work_on_small_screens_and_keep_the_theme(tmp_path: Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     home = (project / "build" / "cpdocs" / "current" / "index.html").read_text(encoding="utf-8")
     head = home[: home.index("</head>")]
-    assert "cpdocs-api-theme" in head  # the theme is chosen before the first paint
+    assert 'src="assets/cpdocs-api-init.js?v=' in head  # early script before first paint
+    initializer = (
+        project / "build" / "cpdocs" / "current" / "assets" / "cpdocs-api-init.js"
+    ).read_text(encoding="utf-8")
+    assert "cpdocs-api-theme" in initializer
     assert 'class="api-short"' in home  # the project documentation link stays on phones
     css = (project / "build" / "cpdocs" / "current" / "assets" / "cpdocs-api.css").read_text()
     assert ".api-project-docs { display: none; }" not in css
@@ -458,7 +457,8 @@ def test_outline_collapses_on_small_screens(tmp_path: Path) -> None:
     assert 'class="api-outline-panel-toggle"' in page
     assert 'aria-controls="api-outline-tree"' in page and 'id="api-outline-tree"' in page
     assert '<span class="api-outline-current">Die</span>' in page
-    assert 'classList.add("js")' in page[: page.index("</head>")]
+    assert 'cpdocs-api-init.js?v=' in page[: page.index("</head>")]
+    assert 'classList.add("js")' in (site / "assets" / "cpdocs-api-init.js").read_text()
     css = (site / "assets" / "cpdocs-api.css").read_text(encoding="utf-8")
     assert ".js .api-sidebar:not(.is-open) .api-outline-root { display: none; }" in css
 

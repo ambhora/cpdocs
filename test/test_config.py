@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import fixture_text
 from cpdocs.config import load_config
 
 
@@ -51,22 +52,7 @@ def test_full_config(tmp_path: Path) -> None:
     config = load_config(
         _write(
             tmp_path / "docs" / "cpdocs.yml",
-            """contract: 3
-build:
-  feature-sets: cmake -S "{{source}}" -B "{{tmpdir}}" -DOUT="{{output-file}}"
-  build: cmake -S "{{source}}" -B "{{tmpdir}}" -DFEATURES="{{feature-set}}" -DOUT="{{output-file}}"
-versions: [main, v2.0.0, v1.0.0]
-site:
-  copyright: Copyright
-  project-docs: https://example.org/
-api:
-  hide:
-    cpp-namespaces: ["*::detail"]
-    python-modules: none
-checks:
-  undocumented: fail
-  broken-references: ignore
-""",
+            fixture_text("complete-cpdocs.yml"),
         )
     )
     assert config.versions == ("main", "v2.0.0", "v1.0.0")

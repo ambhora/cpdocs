@@ -10,45 +10,13 @@ import shlex
 import sys
 from pathlib import Path
 
-from conftest import require
+from conftest import fixture_text, require
 from cpdocs.build import build_current
 from cpdocs.config import load_config
 from cpdocs.model import stable_entity_id
 from cpdocs.rendering.common import entity_document
 
-PROVIDER = r"""
-import json, pathlib, sys
-
-command = sys.argv[1]
-if command == "feature-sets":
-    output = pathlib.Path(sys.argv[2])
-    value = {
-        "cpdocs-feature-sets": 1,
-        "generator": "test-provider",
-        "project": {"name": "backend-api", "version": "1.0"},
-        "feature-sets": [
-            {"features": ["host"]},
-            {"features": ["gpu"]},
-            {"features": ["gpu", "mpi"]},
-        ],
-    }
-else:
-    selected = json.load(open(sys.argv[2], encoding="utf-8"))
-    features = selected["features"]
-    gpu = "gpu" in features
-    output = pathlib.Path(sys.argv[3])
-    value = {
-        "cpdocs-manifest": 1,
-        "units": [{
-            "id": "backend",
-            "language": "cuda" if gpu else "cpp",
-            "api": [{"path": "api/cuda" if gpu else "api/cpp"}],
-            "parse": {"language": "cpp", "standard": "c++20"},
-        }],
-    }
-output.parent.mkdir(parents=True, exist_ok=True)
-output.write_text(json.dumps(value), encoding="utf-8")
-"""
+PROVIDER = fixture_text("feature-set-provider.py")
 
 
 def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None:

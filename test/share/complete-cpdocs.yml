@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+contract: 3
+build:
+  feature-sets: cmake -S "{{source}}" -B "{{tmpdir}}" -DOUT="{{output-file}}"
+  build: cmake -S "{{source}}" -B "{{tmpdir}}" -DFEATURES="{{feature-set}}" -DOUT="{{output-file}}"
+versions: [main, v2.0.0, v1.0.0]
+site:
+  copyright: Copyright
+  project-docs: https://example.org/
+api:
+  hide:
+    cpp-namespaces: ["*::detail"]
+    python-modules: none
+checks:
+  undocumented: fail
+  broken-references: ignore

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import fake_project
+from conftest import fake_project, fixture_text
 from cpdocs.build import build_current
 from cpdocs.config import load_config
 from cpdocs.languages.python.extract import build_python_graph
@@ -32,30 +32,7 @@ def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Pat
     package = tmp_path / "src" / "pkg"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text(
-        '''import sys as runtime
-from sys import version_info as vi
-
-if runtime.version_info >= (3, 12):
-    def new_api(value: str) -> int:
-        """New interface."""
-        return 1
-elif vi[:2] == (3, 11):
-    def old_api(value: int) -> int:
-        """Old interface."""
-        return 1
-
-if runtime.version_info < (3, 12) or vi.major == 3 and vi.minor == 11:
-    LEGACY = 42
-
-class Service:
-    if runtime.version_info >= (3, 12):
-        def run(self, value: str) -> str: ...
-    else:
-        def run(self, value: int) -> int: ...
-
-if SOME_OTHER_CONDITION:
-    def undecidable(): ...
-''', encoding="utf-8"
+        fixture_text("python-version-guards.py"), encoding="utf-8"
     )
     older = build_python_graph(
         project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11)
@@ -113,22 +90,7 @@ else:
     assert "Python 3.11" not in _page(site, modern)
 
 
-CPP_PROVIDER = r'''
-import json, pathlib, sys
-phase, standard, output = sys.argv[1:4]
-if phase == "discover":
-    value = {"cpdocs-feature-sets": 1, "generator": "test",
-             "project": {"name": "demo", "version": "1"},
-             "feature-sets": [{"features": []}, {"features": ["mpi"]}]}
-else:
-    selection = json.loads(pathlib.Path(sys.argv[4]).read_text())
-    flags = ["MPI_ENABLED=1"] if "mpi" in selection["features"] else []
-    value = {"cpdocs-manifest": 1, "units": [{
-        "id": "demo", "language": "cpp", "api": [{"path": "include"}],
-        "parse": {"language": "cpp", "standard": "c++" + standard, "define": flags}
-    }]}
-pathlib.Path(output).write_text(json.dumps(value), encoding="utf-8")
-'''
+CPP_PROVIDER = fixture_text("cpp-version-provider.py")
 
 
 def test_cpp_standard_and_feature_intersection_for_overloads(tmp_path: Path) -> None:

@@ -4,12 +4,16 @@
 # --------------------------------------------------------------------------------------------------
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import shutil
+from importlib import resources
 from pathlib import Path
 
 import pytest
 
+from conftest import fixture_text
 from cpdocs.contract import ParseOptions
 from cpdocs.languages.cpp.extract import extract_clang_graph
 from cpdocs.languages.python.extract import build_python_graph
@@ -35,18 +39,7 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
     include = tmp_path / "include"
     include.mkdir()
     (include / "dice.hpp").write_text(
-        """#pragma once
-#ifdef USE_CUDA
-/// Active backend.
-#define DICE_BACKEND \"cuda\"
-namespace dice { struct cuda_view {}; void foo(cuda_view); [[nodiscard]] int backend_name(); }
-#else
-/// Active backend.
-#define DICE_BACKEND \"cpu\"
-namespace dice { struct cpu_view {}; void foo(cpu_view); [[nodiscard]] int backend_name(); }
-#endif
-class visible { public: void yes(); private: void no(); };
-""",
+        fixture_text("conditional-api.hpp"),
         encoding="utf-8",
     )
 
@@ -98,21 +91,7 @@ def test_python_backend_uses_same_graph_model(tmp_path: Path) -> None:
         '"""Dice package."""\nfrom .core import Solver\n__all__ = ["Solver"]\n', encoding="utf-8"
     )
     (package / "core.py").write_text(
-        """from typing import Protocol, overload
-
-class Reader(Protocol):
-    def read(self, path: str, /, *, binary: bool = False) -> bytes: ...
-
-class Solver:
-    def __init__(self, value: int):
-        self.value = value
-
-    @overload
-    def solve(self, value: int) -> int: ...
-
-    @overload
-    def solve(self, value: float) -> float: ...
-""",
+        fixture_text("python-public-api.py"),
         encoding="utf-8",
     )
 
@@ -434,3 +413,30 @@ def test_feature_set_page_shows_opaque_selection(tmp_path: Path) -> None:
     assert "Feature Sets" in page
     assert "Feature sets have no names" in page
     assert "<code>base</code> <code>gpu</code>" in page
+
+
+def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
+    graph = ApiGraph(project="demo", version="main", language="cpp")
+    site = tmp_path / "site"
+    render_html_site(
+        graph, output_directory=site, project_docs_url="../", copyright_text="c"
+    )
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert page.startswith("<!doctype html>")
+    assert "demo API documentation" in page
+    assert '<main class="api-main">' in page
+    assert "<script>document.documentElement" not in page
+
+    resource_root = resources.files("cpdocs").joinpath("share", "api")
+    init = page.index('src="assets/cpdocs-api-init.js?v=')
+    stylesheet = page.index('href="assets/cpdocs-api.css?v=')
+    assert init < stylesheet  # Apply saved theme/width before the stylesheet is painted.
+    for name in ("cpdocs-api.css", "cpdocs-api.js", "cpdocs-api-init.js"):
+        contents = resource_root.joinpath(name).read_bytes()
+        assert (site / "assets" / name).read_bytes() == contents
+        digest = hashlib.sha1(contents.strip()).hexdigest()[:10]
+        assert re.search(rf"assets/{re.escape(name)}\?v={digest}", page)
+
+    # Redirect markup is a file-backed template too.
+    assert resource_root.joinpath("redirect.html").is_file()
+    assert (site / "assets" / "cpdocs-api-init.js").is_file()

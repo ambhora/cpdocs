@@ -17,6 +17,7 @@ import dataclasses
 import fnmatch
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -222,6 +223,7 @@ def extract_unit(
     feature_set: str,
     work: Path,
     config: CpdocsConfig,
+    language_configuration: dict[str, object] | None = None,
 ) -> ApiGraph:
     if unit.language is None:
         return ApiGraph(project=project, version=version, language="none")
@@ -254,12 +256,23 @@ def extract_unit(
         )
     if unit.language == "python":
         assert unit.package is not None
+        target_version = None
+        if language_configuration is not None:
+            python_config = language_configuration.get("python")
+            if isinstance(python_config, dict) and "version" in python_config:
+                value = str(python_config["version"])
+                if not re.fullmatch(r"[0-9]+\.[0-9]+", value):
+                    raise RuntimeError(
+                        f"cpdocs.yml: python.version must be MAJOR.MINOR, found {value!r}"
+                    )
+                target_version = tuple(int(part) for part in value.split("."))
         return build_python_graph(
             project_root=project_root,
             package_root=unit.api[0].path,
             package=unit.package,
             version=version,
             include_private=not config.hide_private_python,
+            python_version=target_version,
         )
     if unit.language == "rust":
         assert unit.rustdoc_json is not None
@@ -426,6 +439,7 @@ def build_graph(
                     feature_set=key,
                     work=language_work / "feature-sets" / feature_set.key,
                     config=config,
+                    language_configuration=configuration,
                 )
                 display_paths = unit_graph.metadata.setdefault("source_display_paths", {})
                 assert isinstance(display_paths, dict)

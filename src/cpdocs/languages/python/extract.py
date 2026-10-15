@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import inspect
 from pathlib import Path
+from typing import Any
 
 from ...model import (
     ApiEntity,
@@ -23,6 +24,155 @@ from ...model import (
     SourceLocation,
     stable_entity_id,
 )
+
+
+def _version_imports(tree: ast.Module) -> tuple[set[str], set[str]]:
+    """Find straightforward aliases without executing source code."""
+
+    sys_names = {"sys"}  # Standard spelling, even if imports are outside the current module.
+    version_names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "sys":
+                    sys_names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module == "sys" and node.level == 0:
+            for alias in node.names:
+                if alias.name == "version_info":
+                    version_names.add(alias.asname or alias.name)
+    return sys_names, version_names
+
+
+def _guard_value(
+    node: ast.expr,
+    version: tuple[int, int],
+    sys_names: set[str],
+    version_names: set[str],
+) -> Any:
+    """Evaluate only literals and standard Python interpreter-version references."""
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, str, bool)):
+        return node.value
+    if isinstance(node, ast.Tuple):
+        items = [_guard_value(item, version, sys_names, version_names) for item in node.elts]
+        if any(item is None for item in items):
+            return None
+        return tuple(items)
+    is_version_info = (isinstance(node, ast.Name) and node.id in version_names) or (
+        isinstance(node, ast.Attribute)
+        and node.attr == "version_info"
+        and isinstance(node.value, ast.Name)
+        and node.value.id in sys_names
+    )
+    if is_version_info:
+        # Python's sys.version_info tuple has five entries; comparisons against shorter
+        # tuples use normal tuple ordering. A stable release is our explicit assumption.
+        return (*version, 0, "final", 0)
+    if isinstance(node, ast.Subscript):
+        value = _guard_value(node.value, version, sys_names, version_names)
+        if not isinstance(value, tuple):
+            return None
+        if isinstance(node.slice, ast.Slice):
+            bounds = (node.slice.lower, node.slice.upper, node.slice.step)
+            if any(bound is not None and not isinstance(bound, ast.Constant) for bound in bounds):
+                return None
+            args = [bound.value if bound is not None else None for bound in bounds]
+            if not all(arg is None or type(arg) is int for arg in args):
+                return None
+            return value[slice(*args)]
+        index = _guard_value(node.slice, version, sys_names, version_names)
+        if type(index) is int and -len(value) <= index < len(value):
+            return value[index]
+    if isinstance(node, ast.Attribute) and node.attr in {"major", "minor", "micro"}:
+        value = _guard_value(node.value, version, sys_names, version_names)
+        if isinstance(value, tuple) and len(value) == 5:
+            return value[{"major": 0, "minor": 1, "micro": 2}[node.attr]]
+    return None
+
+
+def _version_guard(
+    node: ast.expr,
+    version: tuple[int, int] | None,
+    sys_names: set[str],
+    version_names: set[str],
+) -> bool | None:
+    """Resolve safe native version tests; unknown conditions remain undecidable."""
+
+    if version is None:
+        return None
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        result = _version_guard(node.operand, version, sys_names, version_names)
+        return None if result is None else not result
+    if isinstance(node, ast.BoolOp):
+        results = [
+            _version_guard(value, version, sys_names, version_names) for value in node.values
+        ]
+        if isinstance(node.op, ast.And):
+            if False in results:
+                return False
+            return True if all(value is True for value in results) else None
+        if isinstance(node.op, ast.Or):
+            if True in results:
+                return True
+            return False if all(value is False for value in results) else None
+        return None
+    if isinstance(node, ast.Compare):
+        operands = [node.left, *node.comparators]
+        values = [_guard_value(item, version, sys_names, version_names) for item in operands]
+        if any(value is None for value in values):
+            return None
+        for left, operation, right in zip(values[:-1], node.ops, values[1:], strict=True):
+            try:
+                if isinstance(operation, ast.GtE):
+                    result = left >= right
+                elif isinstance(operation, ast.Gt):
+                    result = left > right
+                elif isinstance(operation, ast.LtE):
+                    result = left <= right
+                elif isinstance(operation, ast.Lt):
+                    result = left < right
+                elif isinstance(operation, ast.Eq):
+                    result = left == right
+                elif isinstance(operation, ast.NotEq):
+                    result = left != right
+                else:
+                    return None
+            except TypeError:
+                return None
+            if not result:
+                return False
+        return True
+    return None
+
+
+def _selected_body(
+    body: list[ast.stmt],
+    version: tuple[int, int] | None,
+    sys_names: set[str],
+    version_names: set[str],
+) -> list[ast.stmt]:
+    """Flatten resolvable version branches; omit unknown conditions (legacy behavior).
+
+    Unknown guards are intentionally *not* interpreted as unconditional availability.
+    Providers for projects with dynamic conditional exports should emit their own manifests.
+    """
+
+    selected: list[ast.stmt] = []
+    for node in body:
+        if isinstance(node, ast.If):
+            decision = _version_guard(node.test, version, sys_names, version_names)
+            if decision is not None:
+                selected.extend(
+                    _selected_body(
+                        node.body if decision else node.orelse,
+                        version,
+                        sys_names,
+                        version_names,
+                    )
+                )
+            continue
+        selected.append(node)
+    return selected
 
 
 def _annotation(node: ast.expr | None) -> str:
@@ -119,8 +269,13 @@ def _parent_qualified_name(qualified: str) -> str | None:
     return qualified.rsplit(".", 1)[0] if "." in qualified else None
 
 
-def _public_names(tree: ast.Module) -> set[str] | None:
-    for node in tree.body:
+def _public_names(
+    tree: ast.Module,
+    version: tuple[int, int] | None,
+    sys_names: set[str],
+    version_names: set[str],
+) -> set[str] | None:
+    for node in _selected_body(tree.body, version, sys_names, version_names):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
@@ -161,7 +316,13 @@ def _walk_body(
     parent: ApiEntity,
     scopes: tuple[str, ...],
     explicit_public: set[str] | None = None,
+    python_version: tuple[int, int] | None = None,
+    sys_names: set[str] | None = None,
+    version_names: set[str] | None = None,
 ) -> None:
+    sys_names = sys_names or {"sys"}
+    version_names = version_names or set()
+    body = _selected_body(body, python_version, sys_names, version_names)
     for index, node in enumerate(body):
         entity: ApiEntity | None = None
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -232,6 +393,9 @@ def _walk_body(
                 source_path=source_path,
                 parent=graph.entities[entity.id],
                 scopes=(*scopes, node.name),
+                python_version=python_version,
+                sys_names=sys_names,
+                version_names=version_names,
             )
             continue
 
@@ -350,6 +514,7 @@ def build_python_graph(
     package: str,
     version: str = "main",
     include_private: bool = False,
+    python_version: tuple[int, int] | None = None,
 ) -> ApiGraph:
     """Build a static Python API graph without importing the documented package."""
 
@@ -459,6 +624,7 @@ def build_python_graph(
         )
 
     for _path, tree, qualified, kind, source_path in parsed:
+        sys_names, version_names = _version_imports(tree)
         if qualified == package:
             parent = graph.entities[package_entity.id]
         else:
@@ -470,7 +636,10 @@ def build_python_graph(
             source_path=source_path,
             parent=parent,
             scopes=tuple(qualified.split(".")),
-            explicit_public=_public_names(tree),
+            explicit_public=_public_names(tree, python_version, sys_names, version_names),
+            python_version=python_version,
+            sys_names=sys_names,
+            version_names=version_names,
         )
 
     graph.rebuild_children()

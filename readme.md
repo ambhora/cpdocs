@@ -70,6 +70,30 @@ If `languages` is omitted, cpdocs performs the original single build configurati
 existing `{{source}}`, `{{tmpdir}}`, `{{output-file}}`, `{{feature-set}}`, and `{{python}}`
 placeholders continue to work unchanged.
 
+### Language-version availability
+
+cpdocs determines availability from the public declarations extracted for **each concrete
+language configuration and discovered feature set**. It does not inspect or require any
+cpdocs-specific annotations. C/C++ projects can use their usual `#if __cplusplus` or
+`__STDC_VERSION__` guards; Clang analyzes the resulting declarations using the standard and
+flags supplied by the project's manifest. Rust and Fortran availability likewise follows the
+API that the configured provider extracts.
+
+For Python, the static extractor recognizes native `sys.version_info` comparisons (including
+`sys.version_info[:2]`, `.major`/`.minor`, imported aliases, `elif`/`else`, and simple boolean
+combinations) for a configured `python.version`. It selects those branches without importing
+or executing project code. Guards it cannot evaluate are not interpreted as unconditional
+availability; API definitions nested in such guards are omitted as before. Projects with
+complex dynamic exports should provide a version-specific manifest/provider rather than
+rely on this limited static analysis. Python source parsing uses the host cpdocs interpreter,
+so syntax introduced after that interpreter's release may require running cpdocs with a newer
+interpreter; this is not equivalent to testing the package on each target interpreter.
+
+The generated API displays language versions/standards separately from feature sets for each
+function and overload, with links to the exact combinations of the two. Only configurations
+actually analyzed are shown: `C++20` and `C++23` do **not** imply `C++20+`, and API presence
+does not assert that functionality was tested.
+
 The configuration lives in `docs/cpdocs.yml`, the API introduction in `docs/api/index.md` and the
 ProperDocs pages in `docs/web`. The documentation starts at `docs/web/index.md`; the `examples/`
 directory holds standalone projects that the test suite builds.

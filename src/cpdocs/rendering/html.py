@@ -521,31 +521,90 @@ def _documentation(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
     )
 
 
+def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
+    """Human-facing labels for the *observed* build configuration, not a range claim."""
+
+    configuration = graph.feature_sets.get(key, {}).get("languages", {})
+    if not isinstance(configuration, dict):
+        return []
+    names = {
+        "c": "C", "cxx": "C++", "cpp": "C++", "python": "Python",
+        "fortran": "Fortran", "rust": "Rust", "cuda": "CUDA", "hip": "HIP",
+    }
+    labels: list[str] = []
+
+    def collect(value: dict[str, object], prefix: str = "") -> None:
+        for name, item in sorted(value.items()):
+            path = f"{prefix}.{name}" if prefix else name
+            if isinstance(item, dict):
+                collect(item, path)
+                continue
+            parts = path.split(".")
+            if len(parts) == 2 and parts[0] in names and parts[1] in {
+                "standard", "version", "edition",
+            }:
+                language = names[parts[0]]
+                separator = "" if parts[0] in {"c", "cxx", "cpp"} else " "
+                labels.append(f"{language}{separator}{item}")
+            else:
+                labels.append(f"{path}={item}")
+
+    collect(configuration)
+    return labels
+
+
 def _availability(
     entity: ApiEntity,
     graph: ApiGraph,
     document: Path,
     feature_sets: list[str] | None = None,
 ) -> str:
-    keys = feature_sets if feature_sets else entity.feature_sets
+    # A supplied empty signature list means *no observed build*, not entity-wide availability.
+    keys = list(dict.fromkeys(entity.feature_sets if feature_sets is None else feature_sets))
     if not keys:
         return ""
+
+    def link(key: str, contents: str) -> str:
+        href = _page_href(document, Path("feature-sets.md"), _feature_set_anchor(key))
+        return f'<a href="{html.escape(href)}">{contents}</a>'
+
+    parts = ['<div class="api-availability">']
+    # Group identical language configurations, but retain links to the exact build matrix below.
+    seen: set[str] = set()
+    language_rows: list[str] = []
+    for key in keys:
+        labels = _language_configuration_labels(graph, key)
+        if not labels:
+            continue
+        configuration = graph.feature_sets.get(key, {}).get("languages", {})
+        identity = json.dumps(configuration, sort_keys=True, default=str)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        contents = " · ".join(f"<code>{html.escape(value)}</code>" for value in labels)
+        language_rows.append("<li>" + link(key, contents) + "</li>")
+    if language_rows:
+        parts.append(
+            '<div class="api-availability-dimension"><strong>Language versions / standards</strong>'
+            '<ul class="api-availability-list">' + "".join(language_rows) + "</ul></div>"
+        )
+
     rows = []
     for key in keys:
-        href = _page_href(document, Path("feature-sets.md"), _feature_set_anchor(key))
-        language_configuration = _language_configuration_inline(graph, key)
-        rows.append(
-            '<li><a href="'
-            + html.escape(href)
-            + '">'
-            + _feature_set_inline(graph, key)
-            + (" · " + language_configuration if language_configuration else "")
-            + "</a></li>"
+        labels = _language_configuration_labels(graph, key)
+        # Preserve the exact combinations: e.g. C++20 + MPI can be present even if
+        # C++20 + default is absent. Every row links to that precise build.
+        qualifier = (
+            " · " + " · ".join(f"<code>{html.escape(value)}</code>" for value in labels)
+            if labels else ""
         )
-    return (
-        '<div class="api-availability"><strong>Available in feature sets</strong>'
+        rows.append("<li>" + link(key, _feature_set_inline(graph, key) + qualifier) + "</li>")
+    parts.append(
+        '<div class="api-availability-dimension"><strong>Available in feature sets</strong>'
         '<ul class="api-availability-list">' + "".join(rows) + "</ul></div>"
     )
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def _defined_in(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
@@ -627,7 +686,8 @@ def _signature_feature_sets(entity: ApiEntity, signature: ApiSignature) -> list[
     index = entity.signatures.index(signature)
     if index < len(entity.signature_feature_sets):
         return entity.signature_feature_sets[index]
-    return []
+    # Hand-built/legacy graphs did not record per-signature provenance.
+    return entity.feature_sets
 
 
 def _compact_signature_label(entity: ApiEntity, signature: ApiSignature) -> str:
@@ -1409,6 +1469,7 @@ html.is-resizing, html.is-resizing * { cursor: col-resize !important; user-selec
 .api-description { border-top: 1px solid var(--api-border); margin-top: .55rem; padding-top: .45rem; }
 .api-related { margin-top: .45rem !important; }
 .api-availability { border-top: 1px solid var(--api-border); margin-top: .55rem; padding-top: .48rem; font-size: .82rem; }
+.api-availability-dimension + .api-availability-dimension { margin-top: .6rem; }
 .api-availability-list, .api-feature-set-list { margin: .35rem 0 0; padding-left: 1.25rem; }
 .api-availability-list li, .api-feature-set-row { margin: .2rem 0; }
 .api-availability-list a { text-decoration: none; }

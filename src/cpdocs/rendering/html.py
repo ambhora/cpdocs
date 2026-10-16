@@ -529,8 +529,14 @@ def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
     if not isinstance(configuration, dict):
         return []
     names = {
-        "c": "C", "cxx": "C++", "cpp": "C++", "python": "Python",
-        "fortran": "Fortran", "rust": "Rust", "cuda": "CUDA", "hip": "HIP",
+        "c": "C",
+        "cxx": "C++",
+        "cpp": "C++",
+        "python": "Python",
+        "fortran": "Fortran",
+        "rust": "Rust",
+        "cuda": "CUDA",
+        "hip": "HIP",
     }
     labels: list[str] = []
 
@@ -541,9 +547,16 @@ def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
                 collect(item, path)
                 continue
             parts = path.split(".")
-            if len(parts) == 2 and parts[0] in names and parts[1] in {
-                "standard", "version", "edition",
-            }:
+            if (
+                len(parts) == 2
+                and parts[0] in names
+                and parts[1]
+                in {
+                    "standard",
+                    "version",
+                    "edition",
+                }
+            ):
                 language = names[parts[0]]
                 separator = "" if parts[0] in {"c", "cxx", "cpp"} else " "
                 labels.append(f"{language}{separator}{item}")
@@ -597,7 +610,8 @@ def _availability(
         # C++20 + default is absent. Every row links to that precise build.
         qualifier = (
             " · " + " · ".join(f"<code>{html.escape(value)}</code>" for value in labels)
-            if labels else ""
+            if labels
+            else ""
         )
         rows.append("<li>" + link(key, _feature_set_inline(graph, key) + qualifier) + "</li>")
     parts.append(
@@ -1248,12 +1262,10 @@ def _layout(
     # The version query changes whenever the asset does, so a browser never pairs new pages with a
     # stylesheet or script it cached from an older cpdocs.
     stylesheet = (
-        _root_relative(document, "assets/cpdocs-api.css")
-        + f"?v={_asset_version('cpdocs-api.css')}"
+        _root_relative(document, "assets/cpdocs-api.css") + f"?v={_asset_version('cpdocs-api.css')}"
     )
     script = (
-        _root_relative(document, "assets/cpdocs-api.js")
-        + f"?v={_asset_version('cpdocs-api.js')}"
+        _root_relative(document, "assets/cpdocs-api.js") + f"?v={_asset_version('cpdocs-api.js')}"
     )
     init_script = (
         _root_relative(document, "assets/cpdocs-api-init.js")

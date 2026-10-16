@@ -24,23 +24,28 @@ from cpdocs.rendering.common import _feature_set_anchor, entity_document
 
 def _page(site: Path, entity) -> str:
     path = entity_document(entity)
-    file = site / path.parent / "index.html" if path.name == "index.md" else site / path.with_suffix("") / "index.html"
+    file = (
+        site / path.parent / "index.html"
+        if path.name == "index.md"
+        else site / path.with_suffix("") / "index.html"
+    )
     return file.read_text(encoding="utf-8")
 
 
 def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Path) -> None:
     package = tmp_path / "src" / "pkg"
     package.mkdir(parents=True)
-    (package / "__init__.py").write_text(
-        fixture_text("python-version-guards.py"), encoding="utf-8"
-    )
+    (package / "__init__.py").write_text(fixture_text("python-version-guards.py"), encoding="utf-8")
     older = build_python_graph(
         project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11)
     )
     newer = build_python_graph(
         project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 12)
     )
-    name = lambda kind, value: stable_entity_id("python", kind, "pkg." + value)
+
+    def name(kind, value):
+        return stable_entity_id("python", kind, "pkg." + value)
+
     assert name("function", "old_api") in older.entities
     assert name("function", "old_api") not in newer.entities
     assert name("function", "new_api") in newer.entities
@@ -55,14 +60,15 @@ def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Pat
 def test_python_build_matrix_displays_availability_per_signature(tmp_path: Path) -> None:
     project = fake_project(tmp_path / "project", feature_sets=[[], ["mpi"]])
     (project / "src/pkg/__init__.py").write_text(
-        '''import sys
+        """import sys
 
 if sys.version_info >= (3, 12):
     def shared(value: str): ...
     def modern(): ...
 else:
     def shared(value: int): ...
-''', encoding="utf-8"
+""",
+        encoding="utf-8",
     )
     config = dataclasses.replace(
         load_config(project / "docs/cpdocs.yml"),
@@ -73,8 +79,10 @@ else:
     )
     graph = build_current(config, output=project / "build")
     shared = graph.entities[stable_entity_id("python", "function", "pkg.shared")]
-    signatures = {s.parameters[0].type: set(sets) for s, sets in
-                  zip(shared.signatures, shared.signature_feature_sets, strict=True)}
+    signatures = {
+        s.parameters[0].type: set(sets)
+        for s, sets in zip(shared.signatures, shared.signature_feature_sets, strict=True)
+    }
     assert {"int", "str"} == set(signatures)
     assert {"language-001--feature-set-001", "language-001--feature-set-002"} == signatures["int"]
     assert {"language-002--feature-set-001", "language-002--feature-set-002"} == signatures["str"]
@@ -100,7 +108,7 @@ def test_cpp_standard_and_feature_intersection_for_overloads(tmp_path: Path) -> 
     include = project / "include"
     include.mkdir(parents=True)
     (include / "demo.hpp").write_text(
-        '''#pragma once
+        """#pragma once
 namespace demo {
 void stable(int);
 #if __cplusplus >= 202002L
@@ -111,7 +119,8 @@ void mpi_only();
 #endif
 #endif
 }
-''', encoding="utf-8"
+""",
+        encoding="utf-8",
     )
     (project / "provider.py").write_text(CPP_PROVIDER, encoding="utf-8")
     (project / "docs").mkdir()
@@ -128,11 +137,14 @@ void mpi_only();
     )
     graph = build_current(config, output=project / "site")
     stable = graph.entities[stable_entity_id("cpp", "function", "demo::stable")]
-    signatures = {s.compact: set(ids) for s, ids in
-                  zip(stable.signatures, stable.signature_feature_sets, strict=True)}
+    signatures = {
+        s.compact: set(ids)
+        for s, ids in zip(stable.signatures, stable.signature_feature_sets, strict=True)
+    }
     assert len(signatures["(int)"]) == 4
     assert signatures["(double)"] == {
-        "language-002--feature-set-001", "language-002--feature-set-002"
+        "language-002--feature-set-001",
+        "language-002--feature-set-002",
     }
     mpi = graph.entities[stable_entity_id("cpp", "function", "demo::mpi_only")]
     assert mpi.feature_sets == ["language-002--feature-set-002"]

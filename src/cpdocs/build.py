@@ -14,8 +14,8 @@ Output layout below ``<output>/cpdocs``::
 from __future__ import annotations
 
 import dataclasses
-import html
 import fnmatch
+import html
 import json
 import os
 import re

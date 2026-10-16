@@ -18,6 +18,22 @@ from cpdocs.build import _redirect_page
 from cpdocs.resources import resource, shared_template, shared_text
 
 
+def test_resources_resolve_from_cpdocs_share_not_other_namespaces(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """A second ``share`` directory must not shadow cpdocs' resources."""
+    foreign_share = tmp_path / "share" / "cpdocs" / "api"
+    foreign_share.mkdir(parents=True)
+    (foreign_share / "layout.html").write_text("wrong package", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    repository = Path(__file__).resolve().parents[1]
+    path = resource("api", "layout.html")
+    assert path == repository / "share" / "cpdocs" / "api" / "layout.html"
+    assert "${project}" in path.read_text(encoding="utf-8")
+
+
 def test_packaged_templates_and_assets_are_files() -> None:
     expected = (
         "layout.html",
@@ -37,9 +53,9 @@ def test_packaged_templates_and_assets_are_files() -> None:
     assert "API Documentation Home" in shared_text("api/index.md")
     assert "${project}" in shared_text("api/layout.html")
     assert "${qualified_name}" in shared_text("api/namespace-description.html")
-    assert "<code>demo</code>" in shared_template(
-        "api/namespace-description.html"
-    ).substitute(qualified_name="demo", kind="namespace")
+    assert "<code>demo</code>" in shared_template("api/namespace-description.html").substitute(
+        qualified_name="demo", kind="namespace"
+    )
 
 
 def test_wheel_resource_mapping_and_isolated_loading(tmp_path: Path) -> None:
@@ -92,6 +108,7 @@ def test_source_only_resource_lookup_from_elsewhere(tmp_path: Path) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
 
 def test_version_redirect_uses_a_shared_template_and_escapes_html() -> None:
     text = _redirect_page("v1.2/")

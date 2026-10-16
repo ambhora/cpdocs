@@ -8,7 +8,6 @@ import hashlib
 import json
 import re
 import shutil
-from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -29,6 +28,7 @@ from cpdocs.model import (
 )
 from cpdocs.rendering.common import entity_document
 from cpdocs.rendering.html import render_html_site
+from cpdocs.resources import resource
 
 
 def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
@@ -418,16 +418,14 @@ def test_feature_set_page_shows_opaque_selection(tmp_path: Path) -> None:
 def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
     graph = ApiGraph(project="demo", version="main", language="cpp")
     site = tmp_path / "site"
-    render_html_site(
-        graph, output_directory=site, project_docs_url="../", copyright_text="c"
-    )
+    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
     page = (site / "index.html").read_text(encoding="utf-8")
     assert page.startswith("<!doctype html>")
     assert "demo API documentation" in page
     assert '<main class="api-main">' in page
     assert "<script>document.documentElement" not in page
 
-    resource_root = resources.files("share").joinpath("cpdocs", "api")
+    resource_root = resource("api")
     init = page.index('src="assets/cpdocs-api-init.js?v=')
     stylesheet = page.index('href="assets/cpdocs-api.css?v=')
     assert init < stylesheet  # Apply saved theme/width before the stylesheet is painted.

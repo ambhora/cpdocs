@@ -2,8 +2,10 @@
 # SPDX-FileCopyrightText: 2026 cpdocs developers
 from typing import Protocol, overload
 
+
 class Reader(Protocol):
     def read(self, path: str, /, *, binary: bool = False) -> bytes: ...
+
 
 class Solver:
     def __init__(self, value: int):

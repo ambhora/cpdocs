@@ -7,24 +7,24 @@
 from __future__ import annotations
 
 import functools
-from importlib import resources
 from pathlib import Path
 from string import Template
 
 
-def resource(*parts: str):
-    """Return a resource from the shared, cross-program resource namespace.
+def resource(*parts: str) -> Path:
+    """Locate shared assets in either the source tree or an installed wheel.
 
-    The project root contains ``share/cpdocs``. Hatch installs that directory
-    under the same relative path, so source and wheel layouts agree.
+    The repository stores assets in ``share/cpdocs``; Hatch installs them at
+    ``site-packages/share/cpdocs``. Do not use ``resources.files("share")``:
+    ``share`` is a namespace shared with other directories (including
+    ``test/share``), and its ``MultiplexedPath`` may resolve the wrong root.
     """
-    try:
-        root = resources.files("share")
-    except ModuleNotFoundError:
-        # Editable/source-only usage with PYTHONPATH pointing at src/, but not
-        # the repository root. Installed wheels resolve the shared namespace.
-        root = Path(__file__).resolve().parents[2] / "share"
-    return root.joinpath("cpdocs", *parts)
+    package = Path(__file__).resolve()
+    for parent in (package.parents[1], package.parents[2]):
+        root = parent / "share" / "cpdocs"
+        if root.is_dir():
+            return root.joinpath(*parts)
+    raise FileNotFoundError("cpdocs shared resources are missing from share/cpdocs")
 
 
 @functools.cache

@@ -99,7 +99,6 @@ def test_a_different_build_system_gives_the_same_reference(tmp_path: Path) -> No
     ]
 
 
-
 def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
     """Build real C++17/20/23 libraries and check function/overload availability."""
 
@@ -110,9 +109,7 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
     assert len(graph.feature_sets) == 3
 
     def standards(keys: list[str]) -> set[int]:
-        return {
-            graph.feature_sets[key]["languages"]["cxx"]["standard"] for key in keys
-        }
+        return {graph.feature_sets[key]["languages"]["cxx"]["standard"] for key in keys}
 
     expected = {
         "demo::always": {17, 20, 23},
@@ -149,9 +146,7 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
         for standard in (17, 20, 23):
             assert (f"C++{standard}" in availability.group(1)) == (standard in available)
 
-    convert_html = (site / "api/demo/function-convert/index.html").read_text(
-        encoding="utf-8"
-    )
+    convert_html = (site / "api/demo/function-convert/index.html").read_text(encoding="utf-8")
     assert convert_html.count("Language versions / standards") == 3
     for standard in (17, 20, 23):
         assert f"C++{standard}" in convert_html
@@ -159,7 +154,8 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
     # The parser must receive the same standard used for the compiled library.
     for index, standard in enumerate((17, 20, 23), 1):
         path = (
-            project / "build/cpdocs/work/current/language-configurations"
+            project
+            / "build/cpdocs/work/current/language-configurations"
             / f"language-{index:03d}/feature-sets/feature-set-001/manifest.json"
         )
         manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -543,7 +539,7 @@ def test_outline_collapses_on_small_screens(tmp_path: Path) -> None:
     assert 'class="api-outline-panel-toggle"' in page
     assert 'aria-controls="api-outline-tree"' in page and 'id="api-outline-tree"' in page
     assert '<span class="api-outline-current">Die</span>' in page
-    assert 'cpdocs-api-init.js?v=' in page[: page.index("</head>")]
+    assert "cpdocs-api-init.js?v=" in page[: page.index("</head>")]
     assert 'classList.add("js")' in (site / "assets" / "cpdocs-api-init.js").read_text()
     css = (site / "assets" / "cpdocs-api.css").read_text(encoding="utf-8")
     assert ".js .api-sidebar:not(.is-open) .api-outline-root { display: none; }" in css

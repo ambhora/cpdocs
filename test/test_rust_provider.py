@@ -16,9 +16,7 @@ from cpdocs.providers.cargo import _feature_sets
 
 def _fake_cargo(path: Path) -> Path:
     script = path / "cargo"
-    script.write_text(
-        f"#!{sys.executable}\n" + fixture_text("fake-cargo.py"), encoding="utf-8"
-    )
+    script.write_text(f"#!{sys.executable}\n" + fixture_text("fake-cargo.py"), encoding="utf-8")
     script.chmod(script.stat().st_mode | 0o111)
     return script
 

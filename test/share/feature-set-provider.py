@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 cpdocs developers
-import json, pathlib, sys
+import json
+import pathlib
+import sys
 
 command = sys.argv[1]
 if command == "feature-sets":
@@ -22,12 +24,14 @@ else:
     output = pathlib.Path(sys.argv[3])
     value = {
         "cpdocs-manifest": 1,
-        "units": [{
-            "id": "backend",
-            "language": "cuda" if gpu else "cpp",
-            "api": [{"path": "api/cuda" if gpu else "api/cpp"}],
-            "parse": {"language": "cpp", "standard": "c++20"},
-        }],
+        "units": [
+            {
+                "id": "backend",
+                "language": "cuda" if gpu else "cpp",
+                "api": [{"path": "api/cuda" if gpu else "api/cpp"}],
+                "parse": {"language": "cpp", "standard": "c++20"},
+            }
+        ],
     }
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(value), encoding="utf-8")

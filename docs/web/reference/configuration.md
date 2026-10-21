@@ -42,7 +42,7 @@ version. `build.build` runs once for every feature set returned by the first com
 | `site.theme.stylesheet` | none | CSS file loaded after the cpdocs stylesheet |
 | `site.theme.colors.light`, `site.theme.colors.dark` | cpdocs colours | colours of each scheme, see [Theme](#theme) |
 | `api.hide.cpp-namespaces` | none | glob patterns of C++ namespaces omitted with their contents |
-| `api.hide.python-modules` | `private` | `private` hides modules beginning with `_`; `none` shows them |
+| `api.hide.python-modules` | `private` | `private` hides modules beginning with `_` from the API, while their files stay in the file hierarchy; `none` shows them |
 | `checks.undocumented` | `ignore` | `warn` or `fail` when public entities have no documentation |
 | `checks.broken-references` | `warn` | `ignore`, `warn` or `fail` for unknown `@apidocs` targets |
 

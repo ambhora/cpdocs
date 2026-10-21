@@ -537,27 +537,42 @@ def build_python_graph(
     )
     graph.add(package_entity)
 
-    def public_source(path: Path) -> bool:
+    def package_source(path: Path) -> bool:
         parts = path.relative_to(package_root).parts
-        if any(part.startswith(".") or part == "__pycache__" for part in parts):
-            return False
+        return not any(part.startswith(".") or part == "__pycache__" for part in parts)
+
+    def public_source(path: Path) -> bool:
         if include_private:
             return True
+        parts = path.relative_to(package_root).parts
         # ``__init__`` defines a package's public surface. Other underscore-prefixed modules are
         # implementation details unless ``api.hide.python-modules: none`` opts them in.
         return path.name == "__init__.py" or (
             not path.stem.startswith("_") and all(not part.startswith("_") for part in parts[:-1])
         )
 
-    sources = sorted(
+    every_source = sorted(
         {
             path
             for suffix in ("*.py", "*.pyi")
             for path in package_root.rglob(suffix)
-            if public_source(path)
+            if package_source(path)
         },
         key=lambda path: (path.relative_to(package_root).as_posix(), path.suffix != ".py"),
     )
+    sources = [path for path in every_source if public_source(path)]
+
+    # Hidden modules are not part of the API, but they are files of the package: the file hierarchy
+    # lists them and their source can be read like any other.
+    for path in every_source:
+        if public_source(path):
+            continue
+        try:
+            graph.sources.setdefault(
+                path.relative_to(project_root).as_posix(), path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, ValueError):
+            pass
 
     parsed: list[tuple[Path, ast.Module, str, str, str]] = []
     # Create the module/package hierarchy first so children can always refer to a semantic parent.

@@ -117,6 +117,36 @@ def test_python_backend_uses_same_graph_model(tmp_path: Path) -> None:
     assert {signature.compact for signature in solve.signatures} == {"(int)", "(float)"}
 
 
+def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: Path) -> None:
+    package = tmp_path / "src" / "dice"
+    (package / "_impl").mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        '"""Dice package."""\nfrom ._rng import roll\n', encoding="utf-8"
+    )
+    (package / "_rng.py").write_text('def roll() -> int:\n    """Roll."""\n', encoding="utf-8")
+    (package / "_impl" / "tables.py").write_text("TABLE = 1\n", encoding="utf-8")
+    (package / "__pycache__").mkdir()
+    (package / "__pycache__" / "cached.py").write_text("", encoding="utf-8")
+
+    graph = build_python_graph(
+        project_root=tmp_path, package_root=package, package="dice", version="main"
+    )
+    assert sorted(graph.sources) == [
+        "src/dice/__init__.py",
+        "src/dice/_impl/tables.py",
+        "src/dice/_rng.py",
+    ]
+    # The modules themselves stay out of the API.
+    assert {entity.qualified_name for entity in graph.entities.values()} == {"dice"}
+
+    site = tmp_path / "site"
+    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    home = (site / "index.html").read_text(encoding="utf-8")
+    hierarchy = home[home.index('id="file-hierarchy"') :]
+    for name in ("__init__.py", "_rng.py", "tables.py"):
+        assert f">{name}</a>" in hierarchy
+
+
 def test_rustdoc_backend_normalizes_function_signature(tmp_path: Path) -> None:
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(

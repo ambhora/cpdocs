@@ -24,6 +24,7 @@ from pathlib import Path, PurePosixPath
 
 from markdown_it import MarkdownIt
 
+from ..config import THEME_COLORS, SiteTheme
 from ..languages import kind_label as language_kind_label
 from ..languages import language_label as semantic_language_label
 from ..languages import rendering_for
@@ -1257,6 +1258,7 @@ def _layout(
     special: str,
     project_docs_url: str,
     copyright_text: str,
+    theme: _ThemeAssets,
 ) -> str:
     body = _resolve_projectdocs_links(body, document, project_docs_url)
     # The version query changes whenever the asset does, so a browser never pairs new pages with a
@@ -1285,11 +1287,13 @@ def _layout(
     return shared_template("api/layout.html").substitute(
         page_title=html.escape(_page_title(current, graph, special)),
         stylesheet=html.escape(stylesheet),
+        theme_head=_theme_head(document, theme),
         init_script=html.escape(init_script),
         version_root=html.escape(version_root),
         api_root=html.escape(api_root),
         current_route=html.escape(current_route),
         home=html.escape(home),
+        logo=_theme_logo(document, theme),
         project=html.escape(graph.project),
         project_docs=html.escape(project_docs),
         version=html.escape(graph.version),
@@ -1314,6 +1318,101 @@ def _asset_version(name: str) -> str:
     return hashlib.sha1(_asset_resource(name).read_bytes().strip()).hexdigest()[:10]
 
 
+# The CSS custom property behind each colour of ``site.theme.colors``.
+_THEME_PROPERTIES = {
+    "accent": "--api-accent",
+    "accent-2": "--api-accent-2",
+    "on-accent": "--api-on-accent",
+    "background": "--api-bg",
+    "foreground": "--api-fg",
+    "muted": "--api-muted",
+    "border": "--api-border",
+    "soft": "--api-soft",
+    "selected": "--api-selected",
+}
+assert tuple(_THEME_PROPERTIES) == THEME_COLORS
+
+
+@dataclasses.dataclass(frozen=True)
+class _ThemeAsset:
+    """A theme file in ``assets`` and the version that keeps browsers from caching it stale."""
+
+    name: str
+    version: str
+
+    def href(self, document: Path) -> str:
+        return _root_relative(document, f"assets/{self.name}") + f"?v={self.version}"
+
+
+@dataclasses.dataclass(frozen=True)
+class _ThemeAssets:
+    """The theme files of one rendered site; each is ``None`` when the theme does not set it."""
+
+    stylesheet: _ThemeAsset | None = None
+    logo: _ThemeAsset | None = None
+    favicon: _ThemeAsset | None = None
+
+
+def _theme_stylesheet(theme: SiteTheme) -> str:
+    """The colours of the theme as custom properties, followed by its own stylesheet."""
+
+    blocks: list[str] = []
+    for scheme, colors in theme.colors.items():
+        if not colors:
+            continue
+        lines = [f"  {_THEME_PROPERTIES[name]}: {value};" for name, value in colors.items()]
+        blocks.append(f'html[data-theme="{scheme}"] {{\n' + "\n".join(lines) + "\n}\n")
+    if theme.stylesheet is not None:
+        blocks.append(theme.stylesheet.read_text(encoding="utf-8"))
+    return "\n".join(blocks)
+
+
+def _write_theme_asset(assets: Path, name: str, contents: bytes) -> _ThemeAsset:
+    (assets / name).write_bytes(contents)
+    return _ThemeAsset(name=name, version=hashlib.sha1(contents).hexdigest()[:10])
+
+
+def _write_theme(assets: Path, theme: SiteTheme) -> _ThemeAssets:
+    stylesheet = _theme_stylesheet(theme)
+    return _ThemeAssets(
+        stylesheet=(
+            _write_theme_asset(assets, "cpdocs-theme.css", stylesheet.encode("utf-8"))
+            if stylesheet
+            else None
+        ),
+        logo=(
+            _write_theme_asset(assets, "logo" + theme.logo.suffix.lower(), theme.logo.read_bytes())
+            if theme.logo is not None
+            else None
+        ),
+        favicon=(
+            _write_theme_asset(
+                assets, "favicon" + theme.favicon.suffix.lower(), theme.favicon.read_bytes()
+            )
+            if theme.favicon is not None
+            else None
+        ),
+    )
+
+
+def _theme_head(document: Path, theme: _ThemeAssets) -> str:
+    """Links of the theme in the page head, after the cpdocs stylesheet they override."""
+
+    links = ""
+    if theme.stylesheet is not None:
+        links += f'\n<link rel="stylesheet" href="{html.escape(theme.stylesheet.href(document))}">'
+    if theme.favicon is not None:
+        links += f'\n<link rel="icon" href="{html.escape(theme.favicon.href(document))}">'
+    return links
+
+
+def _theme_logo(document: Path, theme: _ThemeAssets) -> str:
+    if theme.logo is None:
+        return ""
+    # The project name follows the logo, so the image itself is decorative.
+    return f'<img class="api-brand-logo" src="{html.escape(theme.logo.href(document))}" alt="">'
+
+
 def _write_page(
     *,
     output: Path,
@@ -1325,6 +1424,7 @@ def _write_page(
     special: str,
     project_docs_url: str,
     copyright_text: str,
+    theme: _ThemeAssets,
 ) -> None:
     path = output / _output_file(document)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1338,6 +1438,7 @@ def _write_page(
             special=special,
             project_docs_url=project_docs_url,
             copyright_text=copyright_text,
+            theme=theme,
         ),
         encoding="utf-8",
     )
@@ -1381,6 +1482,7 @@ def render_html_site(
     project_docs_url: str,
     copyright_text: str,
     introduction_file: Path | None = None,
+    theme: SiteTheme | None = None,
 ) -> None:
     """Render one API version directly to a standalone HTML site."""
 
@@ -1392,6 +1494,7 @@ def render_html_site(
     assets.mkdir(parents=True, exist_ok=True)
     for name in _ASSET_FILES:
         (assets / name).write_bytes(_asset_resource(name).read_bytes())
+    theme_assets = _write_theme(assets, theme if theme is not None else SiteTheme())
 
     home_document = Path("index.md")
     introduction = None
@@ -1408,6 +1511,7 @@ def render_html_site(
         special="home",
         project_docs_url=project_docs_url,
         copyright_text=copyright_text,
+        theme=theme_assets,
     )
 
     if graph.feature_sets:
@@ -1423,6 +1527,7 @@ def render_html_site(
             special="feature_sets",
             project_docs_url=project_docs_url,
             copyright_text=copyright_text,
+            theme=theme_assets,
         )
 
     if any(entity.kind == "macro" for entity in graph.entities.values()):
@@ -1438,6 +1543,7 @@ def render_html_site(
             special="macros",
             project_docs_url=project_docs_url,
             copyright_text=copyright_text,
+            theme=theme_assets,
         )
 
     for entity in graph.entities.values():
@@ -1455,6 +1561,7 @@ def render_html_site(
             special="entity",
             project_docs_url=project_docs_url,
             copyright_text=copyright_text,
+            theme=theme_assets,
         )
 
     source_pages = dict(graph.files)
@@ -1472,6 +1579,7 @@ def render_html_site(
             special="source",
             project_docs_url=project_docs_url,
             copyright_text=copyright_text,
+            theme=theme_assets,
         )
 
     symbols: dict[str, str] = {}

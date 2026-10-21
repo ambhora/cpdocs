@@ -11,7 +11,8 @@ build system and is communicated through JSON manifests.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,37 @@ import yaml
 CONTRACT_VERSION = 3
 DEFAULT_CONFIG = Path("docs/cpdocs.yml")
 _CHECK_LEVELS = {"ignore", "warn", "fail"}
+
+# The colours a theme may set, one set per colour scheme of the API site.
+THEME_SCHEMES = ("light", "dark")
+THEME_COLORS = (
+    "accent",
+    "accent-2",
+    "on-accent",
+    "background",
+    "foreground",
+    "muted",
+    "border",
+    "soft",
+    "selected",
+)
+_HEX_COLOR = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
+_IMAGE_SUFFIXES = (".svg", ".png", ".ico", ".webp", ".jpg", ".jpeg", ".gif")
+
+
+@dataclass(frozen=True)
+class SiteTheme:
+    """Presentation of the API site: logo, favicon, colours and an extra stylesheet.
+
+    Paths are absolute and point into the current checkout, so every documented version is
+    presented the same way. ``colors`` maps a scheme in ``THEME_SCHEMES`` to the colours it sets,
+    each a name in ``THEME_COLORS`` with a hexadecimal value.
+    """
+
+    logo: Path | None = None
+    favicon: Path | None = None
+    stylesheet: Path | None = None
+    colors: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -33,6 +65,7 @@ class CpdocsConfig:
     index: Path | None
     copyright: str | None
     project_docs: str
+    theme: SiteTheme
     hide_cpp_namespaces: tuple[str, ...]
     hide_private_python: bool
     check_undocumented: str
@@ -85,6 +118,65 @@ def _command(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"cpdocs.yml: {name} must be a non-empty command string")
     return value.strip()
+
+
+def _theme_file(value: object, name: str, root: Path, *, suffixes: tuple[str, ...]) -> Path | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"cpdocs.yml: {name} must be a path relative to the project root")
+    path = (root / value.strip()).resolve()
+    if not path.is_file():
+        raise RuntimeError(f"cpdocs.yml: {name} does not exist: {path}")
+    if path.suffix.lower() not in suffixes:
+        raise RuntimeError(f"cpdocs.yml: {name} must be one of {', '.join(suffixes)} files")
+    return path
+
+
+def _theme_colors(value: object) -> dict[str, dict[str, str]]:
+    schemes = _mapping(value, "site.theme.colors")
+    unknown = sorted(set(schemes) - set(THEME_SCHEMES))
+    if unknown:
+        raise RuntimeError(f"cpdocs.yml: unknown site.theme.colors schemes: {', '.join(unknown)}")
+    result: dict[str, dict[str, str]] = {}
+    for scheme in THEME_SCHEMES:
+        if scheme not in schemes:
+            continue
+        colors = _mapping(schemes[scheme], f"site.theme.colors.{scheme}")
+        unknown = sorted(set(colors) - set(THEME_COLORS))
+        if unknown:
+            raise RuntimeError(
+                f"cpdocs.yml: unknown site.theme.colors.{scheme} colours: {', '.join(unknown)}"
+            )
+        for name, color in colors.items():
+            # An unquoted "#266c7c" is a YAML comment, which leaves the value empty.
+            if not isinstance(color, str) or not _HEX_COLOR.fullmatch(color):
+                raise RuntimeError(
+                    f"cpdocs.yml: site.theme.colors.{scheme}.{name} must be a hexadecimal "
+                    'colour such as "#2f62b5", quoted in YAML'
+                )
+        result[scheme] = {name: colors[name].lower() for name in THEME_COLORS if name in colors}
+    return result
+
+
+def _theme(value: object, root: Path) -> SiteTheme:
+    theme = _mapping(value, "site.theme")
+    unknown = sorted(set(theme) - {"logo", "favicon", "stylesheet", "colors"})
+    if unknown:
+        raise RuntimeError(f"cpdocs.yml: unknown site.theme keys: {', '.join(unknown)}")
+    logo = _theme_file(theme.get("logo"), "site.theme.logo", root, suffixes=_IMAGE_SUFFIXES)
+    favicon = _theme_file(
+        theme.get("favicon"), "site.theme.favicon", root, suffixes=_IMAGE_SUFFIXES
+    )
+    return SiteTheme(
+        logo=logo,
+        # The logo is usually the project's icon, which also serves as its favicon.
+        favicon=favicon if favicon is not None else logo,
+        stylesheet=_theme_file(
+            theme.get("stylesheet"), "site.theme.stylesheet", root, suffixes=(".css",)
+        ),
+        colors=_theme_colors(theme.get("colors")),
+    )
 
 
 def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
@@ -150,6 +242,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
         index=index if index.is_file() else None,
         copyright=str(copyright_value) if copyright_value is not None else None,
         project_docs=str(site.get("project-docs") or "auto"),
+        theme=_theme(site.get("theme"), root),
         hide_cpp_namespaces=_strings(hide.get("cpp-namespaces"), "api.hide.cpp-namespaces"),
         hide_private_python=_choice(
             hide.get("python-modules"), "api.hide.python-modules", {"private", "none"}, "private"

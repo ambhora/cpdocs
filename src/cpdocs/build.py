@@ -530,6 +530,7 @@ def _render(
         project_docs_url=_project_docs_url(graph, config.project_docs, root_depth=root_depth),
         copyright_text=config.copyright or f"Copyright © {graph.project} developers",
         introduction_file=config.index,
+        theme=config.theme,
     )
     (work / "api-graph.json").write_text(_graph_json(graph), encoding="utf-8")
 
@@ -608,7 +609,11 @@ def _git(command: list[str], *, cwd: Path) -> None:
 
 
 def _config_for_checkout(config: CpdocsConfig, checkout: Path) -> CpdocsConfig:
-    """Use the current cpdocs policy against another checkout of the same project."""
+    """Use the current cpdocs policy against another checkout of the same project.
+
+    The introduction is content and comes from the checkout. The theme is presentation and keeps
+    pointing into the current tree, so every version looks like the project does today.
+    """
 
     index = config.index
     if index is not None:

@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from conftest import fixture_text
-from cpdocs.config import load_config
+from cpdocs.build import _config_for_checkout
+from cpdocs.config import SiteTheme, load_config
 
 
 def _write(path: Path, text: str) -> Path:
@@ -35,6 +36,7 @@ def test_minimal_config_has_documented_defaults(tmp_path: Path) -> None:
     assert config.hide_private_python is True
     assert config.check_undocumented == "ignore"
     assert config.check_broken_references == "warn"
+    assert config.theme == SiteTheme()
 
 
 def test_index_defaults_to_docs_api(tmp_path: Path) -> None:
@@ -88,3 +90,74 @@ def test_full_config(tmp_path: Path) -> None:
 def test_invalid_configs_are_rejected(tmp_path: Path, text: str, message: str) -> None:
     with pytest.raises(RuntimeError, match=message):
         load_config(_write(tmp_path / "docs" / "cpdocs.yml", text))
+
+
+THEMED = (
+    MINIMAL
+    + """site:
+  theme:
+    logo: share/icon.svg
+    stylesheet: docs/api.css
+    colors:
+      light:
+        selected: "#E6F0F2"
+        accent: "#266C7C"
+      dark:
+        accent: "#65a9ba"
+        on-accent: "#0d1f24"
+"""
+)
+
+
+def _themed_project(root: Path, text: str = THEMED) -> Path:
+    _write(root / "share" / "icon.svg", "<svg/>")
+    _write(root / "share" / "favicon.png", "png")
+    _write(root / "docs" / "api.css", ".api-brand { font-weight: 700; }\n")
+    return _write(root / "docs" / "cpdocs.yml", text)
+
+
+def test_theme_resolves_files_and_normalizes_colors(tmp_path: Path) -> None:
+    config = load_config(_themed_project(tmp_path))
+    assert config.theme == SiteTheme(
+        logo=tmp_path / "share" / "icon.svg",
+        # Without its own favicon the site uses the logo.
+        favicon=tmp_path / "share" / "icon.svg",
+        stylesheet=tmp_path / "docs" / "api.css",
+        colors={
+            "light": {"accent": "#266c7c", "selected": "#e6f0f2"},
+            "dark": {"accent": "#65a9ba", "on-accent": "#0d1f24"},
+        },
+    )
+
+
+def test_theme_favicon_can_differ_from_logo(tmp_path: Path) -> None:
+    text = THEMED.replace(
+        "    logo: share/icon.svg\n", "    logo: share/icon.svg\n    favicon: share/favicon.png\n"
+    )
+    config = load_config(_themed_project(tmp_path, text))
+    assert config.theme.favicon == tmp_path / "share" / "favicon.png"
+
+
+def test_theme_of_current_tree_applies_to_other_versions(tmp_path: Path) -> None:
+    config = load_config(_themed_project(tmp_path / "current"))
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    assert _config_for_checkout(config, checkout).theme == config.theme
+
+
+@pytest.mark.parametrize(
+    ("theme", "message"),
+    [
+        ("    banner: share/icon.svg\n", "unknown site.theme keys: banner"),
+        ("    logo: share/missing.svg\n", "site.theme.logo does not exist"),
+        ("    logo: docs/api.css\n", "site.theme.logo must be one of"),
+        ("    stylesheet: share/icon.svg\n", "site.theme.stylesheet must be one of .css"),
+        ("    colors:\n      sepia: {}\n", "unknown site.theme.colors schemes: sepia"),
+        ("    colors:\n      light:\n        link: '#ffffff'\n", "colours: link"),
+        ("    colors:\n      light:\n        accent: #266c7c\n", "quoted in YAML"),
+        ("    colors:\n      light:\n        accent: teal\n", "hexadecimal colour"),
+    ],
+)
+def test_invalid_themes_are_rejected(tmp_path: Path, theme: str, message: str) -> None:
+    with pytest.raises(RuntimeError, match=message):
+        load_config(_themed_project(tmp_path, MINIMAL + "site:\n  theme:\n" + theme))

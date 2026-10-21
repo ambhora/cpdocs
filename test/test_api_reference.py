@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from conftest import fixture_text
+from cpdocs.config import SiteTheme
 from cpdocs.contract import ParseOptions
 from cpdocs.languages.cpp.extract import extract_clang_graph
 from cpdocs.languages.python.extract import build_python_graph
@@ -27,7 +28,7 @@ from cpdocs.model import (
     stable_entity_id,
 )
 from cpdocs.rendering.common import entity_document
-from cpdocs.rendering.html import render_html_site
+from cpdocs.rendering.html import _theme_head, _ThemeAsset, _ThemeAssets, render_html_site
 from cpdocs.resources import resource
 
 
@@ -438,3 +439,65 @@ def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
     # Redirect markup is a file-backed template too.
     assert resource_root.joinpath("redirect.html").is_file()
     assert (site / "assets" / "cpdocs-api-init.js").is_file()
+
+
+def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: Path) -> None:
+    logo = tmp_path / "icon.svg"
+    logo.write_text("<svg/>", encoding="utf-8")
+    extra = tmp_path / "api.css"
+    extra.write_text(".api-brand { font-weight: 700; }\n", encoding="utf-8")
+    theme = SiteTheme(
+        logo=logo,
+        favicon=logo,
+        stylesheet=extra,
+        colors={"light": {"accent": "#266c7c"}, "dark": {"on-accent": "#0d1f24"}},
+    )
+    graph = ApiGraph(project="demo", version="main", language="cpp")
+    site = tmp_path / "site"
+    render_html_site(
+        graph, output_directory=site, project_docs_url="../", copyright_text="c", theme=theme
+    )
+
+    stylesheet = (site / "assets" / "cpdocs-theme.css").read_text(encoding="utf-8")
+    assert 'html[data-theme="light"] {\n  --api-accent: #266c7c;\n}' in stylesheet
+    assert 'html[data-theme="dark"] {\n  --api-on-accent: #0d1f24;\n}' in stylesheet
+    # The project's own rules come after the colours, so they can use or override them.
+    assert stylesheet.index("--api-on-accent") < stylesheet.index(".api-brand { font-weight")
+    assert (site / "assets" / "logo.svg").read_bytes() == logo.read_bytes()
+    assert (site / "assets" / "favicon.svg").read_bytes() == logo.read_bytes()
+
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert page.index('href="assets/cpdocs-api.css?v=') < page.index(
+        'href="assets/cpdocs-theme.css?v='
+    )
+    assert re.search(r'<link rel="icon" href="assets/favicon\.svg\?v=[0-9a-f]{10}">', page)
+    assert re.search(
+        r'<a class="api-brand" href="[^"]*"><img class="api-brand-logo" '
+        r'src="assets/logo\.svg\?v=[0-9a-f]{10}" alt="">demo API documentation</a>',
+        page,
+    )
+
+
+def test_theme_links_are_relative_to_nested_pages() -> None:
+    theme = _ThemeAssets(
+        stylesheet=_ThemeAsset(name="cpdocs-theme.css", version="0123456789"),
+        favicon=_ThemeAsset(name="favicon.png", version="abcdefabcd"),
+    )
+    head = _theme_head(Path("api/demo/class-widget.md"), theme)
+    assert 'href="../../../assets/cpdocs-theme.css?v=0123456789"' in head
+    assert 'href="../../../assets/favicon.png?v=abcdefabcd"' in head
+
+
+def test_site_without_theme_keeps_the_cpdocs_look(tmp_path: Path) -> None:
+    graph = ApiGraph(project="demo", version="main", language="cpp")
+    site = tmp_path / "site"
+    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    assert sorted(path.name for path in (site / "assets").iterdir()) == [
+        "cpdocs-api-init.js",
+        "cpdocs-api.css",
+        "cpdocs-api.js",
+    ]
+    page = (site / "index.html").read_text(encoding="utf-8")
+    assert "cpdocs-theme.css" not in page
+    assert 'rel="icon"' not in page
+    assert "api-brand-logo" not in page

@@ -458,3 +458,28 @@ def test_site_without_theme_keeps_the_cpdocs_look(tmp_path: Path) -> None:
     assert "cpdocs-theme.css" not in page
     assert 'rel="icon"' not in page
     assert "api-brand-logo" not in page
+
+
+def test_namespace_pages_list_their_members_on_this_page(tmp_path: Path) -> None:
+    graph = ApiGraph(project="demo", version="main", language="cpp")
+    graph.add(ApiEntity(id="cpp:namespace:demo", language="cpp", kind="namespace", name="demo", qualified_name="demo"))
+    for name in ("convert", "always"):
+        graph.add(
+            ApiEntity(
+                id=f"cpp:function:demo::{name}",
+                language="cpp",
+                kind="function",
+                name=name,
+                qualified_name=f"demo::{name}",
+                parent="cpp:namespace:demo",
+                signatures=[ApiSignature(returns="int")],
+            )
+        )
+    graph.rebuild_children()
+    render_html_site(graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c")
+    page = (tmp_path / "site" / "api" / "demo" / "index.html").read_text(encoding="utf-8")
+    toc = page[page.index('<aside class="api-toc">') :]
+    toc = toc[: toc.index("</aside>")]
+    assert toc.index("always()") < toc.index("convert()")
+    assert 'href="#member-function-always"' in toc
+    assert 'id="member-function-always"' in page

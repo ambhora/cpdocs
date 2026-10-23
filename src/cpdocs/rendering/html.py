@@ -701,7 +701,12 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
         ]
     )
 
-    def render_container_children(container: ApiEntity) -> str:
+    toc: list[tuple[str, str, int]] = [("Members", "members", 1)]
+    anchors: set[str] = set()
+
+    def render_container_children(container: ApiEntity, *, listed: bool) -> str:
+        """Render the members of ``container``; ``listed`` adds them to "On this page"."""
+
         children = [
             graph.entities[value]
             for value in container.children
@@ -710,7 +715,14 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
         children.sort(key=entity_sort_key)
         parts: list[str] = []
         for child in children:
-            parts.append('<li><div class="api-namespace-tree-row">')
+            row_id = ""
+            if listed:
+                anchor = _member_anchor(child)
+                if anchor not in anchors:
+                    anchors.add(anchor)
+                    toc.append((child.member_label, anchor, 2))
+                    row_id = f' id="{html.escape(anchor)}"'
+            parts.append(f'<li><div class="api-namespace-tree-row"{row_id}>')
             parts.append(_kind_badge(child.kind, child.language))
             parts.append(
                 f'<a href="{html.escape(_entity_href(document, child, graph))}">{html.escape(child.member_label)}</a>'
@@ -718,15 +730,15 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
             parts.append(_language_badge(child))
             parts.append("</div>")
             if _is_container(child):
-                nested = render_container_children(child)
+                nested = render_container_children(child, listed=False)
                 if nested:
                     parts.append("<ul>" + nested + "</ul>")
             parts.append("</li>")
         return "".join(parts)
 
-    body.append(render_container_children(entity))
+    body.append(render_container_children(entity, listed=True))
     body.extend(["</ul>", _availability(entity, graph, document), "</section>"])
-    return "".join(body), [("Members", "members", 1)]
+    return "".join(body), toc
 
 
 def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:

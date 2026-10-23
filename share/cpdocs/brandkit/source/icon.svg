@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 cpdocs developers -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" width="1600" height="1600">
+<title>cpdocs</title>
+<defs><clipPath id="cpdocs-tile"><path d="M360,0 H1240 A360,360 0 0 1 1600,360 V1240 A360,360 0 0 1 1240,1600 H360 A360,360 0 0 1 0,1240 V360 A360,360 0 0 1 360,0 Z"/></clipPath></defs>
+<path d="M360,0 H1240 A360,360 0 0 1 1600,360 V1240 A360,360 0 0 1 1240,1600 H360 A360,360 0 0 1 0,1240 V360 A360,360 0 0 1 360,0 Z" fill="#3B7553"/>
+<g clip-path="url(#cpdocs-tile)">
+<path d="M120,1600 C140,1320 300,1180 560,1130 L800,1100 L1040,1130 C1300,1180 1460,1320 1480,1600 Z" fill="#4E3524" />
+<path d="M640,1110 L800,1400 L960,1110 Z" fill="#EEE6D3" />
+<path d="M800,1170 L752,1235 L800,1560 L848,1235 Z" fill="#2C5A40" />
+<path d="M760,1150 L800,1200 L840,1150 L815,1120 H785 Z" fill="#2C5A40" />
+<path d="M640,1105 L720,1095 L790,1185 L720,1235 Z" fill="#EEE6D3" stroke="#3A2619" stroke-width="10" stroke-linejoin="round"/>
+<path d="M960,1105 L880,1095 L810,1185 L880,1235 Z" fill="#EEE6D3" stroke="#3A2619" stroke-width="10" stroke-linejoin="round"/>
+<path d="M560,1130 L640,1105 L760,1330 L700,1600 L540,1600 L610,1350 Z" fill="#3A2619" />
+<path d="M1040,1130 L960,1105 L840,1330 L900,1600 L1060,1600 L990,1350 Z" fill="#3A2619" />
+<path d="M640,990 C660,1080 700,1120 800,1128 C900,1120 940,1080 960,990 Z" fill="#6A4429" />
+<circle cx="500" cy="330" r="120" fill="#8B5E3C" />
+<circle cx="1100" cy="330" r="120" fill="#8B5E3C" />
+<circle cx="505" cy="340" r="62" fill="#6A4429" />
+<circle cx="1095" cy="340" r="62" fill="#6A4429" />
+<ellipse cx="800" cy="640" rx="360" ry="390" fill="#8B5E3C" />
+<ellipse cx="800" cy="845" rx="190" ry="140" fill="#C9A57F" />
+<path d="M738,770 Q800,750 862,770 Q875,780 866,796 Q838,836 800,842 Q762,836 734,796 Q725,780 738,770 Z" fill="#1E1612" />
+<path fill="none" stroke="#1E1612" stroke-width="20" stroke-linecap="round" d="M800,842 V895 M748,915 Q800,900 852,915"/>
+<path fill="none" stroke="#6A4429" stroke-width="44" stroke-linecap="round" d="M565,520 L720,555"/>
+<ellipse cx="650" cy="610" rx="30" ry="27" fill="#1E1612" />
+<ellipse cx="950" cy="612" rx="38" ry="34" fill="#1E1612" />
+<circle cx="660" cy="600" r="7" fill="#FFFFFF" />
+<circle cx="962" cy="600" r="9" fill="#FFFFFF" />
+<path fill="none" stroke="#D6B25E" stroke-width="14" stroke-linecap="round" stroke-dasharray="1 26" d="M1045,690 C1120,820 1120,960 1060,1080 C1030,1140 960,1180 905,1210"/>
+<circle cx="950" cy="612" r="122" fill="#FFFFFF" fill-opacity="0.18"/>
+<path fill="none" stroke="#FFFFFF" stroke-opacity="0.75" stroke-width="16" stroke-linecap="round" d="M868,575 A95,95 0 0 1 925,515"/>
+<circle cx="950" cy="612" r="122" fill="none" stroke="#D6B25E" stroke-width="28"/>
+<path fill="none" stroke="#6A4429" stroke-width="46" stroke-linecap="round" d="M870,515 Q950,478 1045,505"/>
+</g>
+</svg>

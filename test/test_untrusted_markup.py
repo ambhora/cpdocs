@@ -14,6 +14,46 @@ import pytest
 from conftest import REPOSITORY
 from cpdocs.contract import ContractError, read_manifest
 from cpdocs.languages.python.extract import build_python_graph
+from cpdocs.rendering.html import _inline_documentation, safe_link_destination
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "javascript:alert(1)",
+        " JaVaScRiPt:alert(1)",
+        "java\tscript:alert(1)",
+        "java\nscript:alert(1)",
+        "\x01javascript:alert(1)",
+        "javascript:alert(1)\x7f",
+        "data:text/html,x",
+        "vbscript:x",
+        "file:///etc/passwd",
+        "",
+    ],
+)
+def test_executable_and_unknown_destinations_are_refused(href: str) -> None:
+    assert safe_link_destination(href) is None
+    rendered = _inline_documentation(f"[label]({href})")
+    assert "<a" not in rendered
+    assert "label" in rendered
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "https://example.org/a?b=c#d",
+        "http://example.org",
+        "mailto:someone@example.org",
+        "projectdocs:how-to/ci/",
+        "../other/page/",
+        "#anchor",
+        "relative/page.html",
+    ],
+)
+def test_ordinary_destinations_are_kept(href: str) -> None:
+    assert safe_link_destination(href) == href
+    assert "<a href=" in _inline_documentation(f"[label]({href})")
 
 
 def test_search_results_are_built_from_text_nodes() -> None:

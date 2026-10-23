@@ -61,6 +61,29 @@ _PROJECTDOCS_HREF = re.compile(r'href=(?P<quote>["\'])projectdocs:(?P<path>[^"\'
 
 _MARKDOWN = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
 
+# A browser drops ASCII tab and newline anywhere in a URL, and leading C0 controls and spaces, before
+# it reads the scheme, so ``java\tscript:`` and ``\x01javascript:`` both reach it as ``javascript:``.
+# Destinations with any control character are therefore refused outright rather than normalized.
+_LINK_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+_LINK_SCHEME = re.compile(r"^(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*):")
+_LINK_SCHEMES = frozenset({"http", "https", "mailto", "projectdocs"})
+
+
+def safe_link_destination(href: str) -> str | None:
+    """Return a documentation link destination if it is safe to emit, otherwise ``None``.
+
+    Relative links and anchors carry no scheme and are kept; a destination with a scheme is kept
+    only for HTTP(S), mail and cpdocs's own ``projectdocs:`` links.
+    """
+
+    value = href.strip(" ")
+    if not value or _LINK_CONTROL.search(value):
+        return None
+    scheme = _LINK_SCHEME.match(value)
+    if scheme is not None and scheme.group("scheme").casefold() not in _LINK_SCHEMES:
+        return None
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Paths and links
@@ -420,10 +443,9 @@ def _inline_documentation(text: str) -> str:
             result.append(f"<strong>{html.escape(match.group('strong'))}</strong>")
         elif match.group("label") is not None:
             label = html.escape(match.group("label"))
-            href = match.group("href").strip()
-            # Reject executable URL schemes in comments.  Ordinary relative links, anchors,
-            # HTTP(S), mailto and projectdocs semantic links remain available.
-            if re.match(r"(?i)^(?:javascript|data|vbscript):", href):
+            href = safe_link_destination(match.group("href"))
+            # A refused destination keeps its label as plain text.
+            if href is None:
                 result.append(label)
             else:
                 result.append(f'<a href="{html.escape(href, quote=True)}">{label}</a>')

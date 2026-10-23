@@ -22,5 +22,8 @@ own build. Each example site is versioned with its explicit `versions:` list.
 | `python-basic` | a plain Python package, answered by `cpdocs manifest python` | [python-basic](python-basic/) |
 | `rust-basic` | Cargo features plus nightly rustdoc JSON, with private implementation source still browseable | [rust-basic](rust-basic/) |
 
+[A build framework that provides the hooks](besa.md) shows the variant space of `cmake-variants`
+declared with the BESA CMake framework instead; it is not built by the test suite.
+
 There is no separate example-site build step. Both `properdocs build` and `properdocs serve` build
 these sites directly at `examples/<name>/`; during `serve`, they use the checked-out working tree.

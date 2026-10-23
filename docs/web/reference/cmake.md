@@ -39,20 +39,9 @@ build:
     -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
 ```
 
-A framework such as BESA can provide the contract natively. In that case the project does not need
-cpdocs-specific provider code at all:
+A larger project can compute its variants in CMake as well: the
+[cmake-variants example](../examples/index.md) lists a product of two variant axes and adds a CUDA
+unit for one of them. A build framework can also implement the hooks once for all its projects; the
+[BESA example](../examples/besa.md) shows one.
 
-```yaml
-build:
-  feature-sets: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
-  build: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SET="{{feature-set}}"
-    -DBESA_CPDOCS_MANIFEST_OUTPUT="{{output-file}}"
-    && cmake --build "{{tmpdir}}" --target besa.cpdocs
-```
-
-The important boundary is the JSON contract, not CMake itself. cpdocs remains independent of BESA
-and of any other build framework.
+The boundary is the JSON contract, not CMake: cpdocs depends on no build system or framework.

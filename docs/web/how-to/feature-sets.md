@@ -2,43 +2,79 @@
 SPDX-FileCopyrightText: 2026 cpdocs developers
 SPDX-License-Identifier: Apache-2.0
 -->
-# Document feature-dependent APIs
+# Document build variants
 
-The build system owns the finite feature space worth documenting. cpdocs asks for the concrete
-feature sets, builds each one independently, and records where each extracted definition exists.
+Many projects expose a different API in different builds: an MPI overload only when MPI is enabled,
+a GPU implementation only in GPU builds. cpdocs documents every variant and merges them into one
+reference in which each declaration and each overload lists the variants it exists in.
 
-Features and API languages are different concepts. With BESA, for example, a project can define a
-host/GPU implementation choice and optional MPI independently:
+The build system knows which variants are valid, so it lists them. cpdocs calls two hooks,
+the commands under `build` in `cpdocs.yml`:
+
+1. `build.feature-sets` writes the list of variants to `feature-sets.json`;
+2. `build.build` receives one variant in `feature-set.json`, builds it as far as needed and writes
+   its `manifest.json`.
+
+cpdocs runs the second hook once per variant. A variant is a plain list of project features; cpdocs
+does not interpret the names.
+
+## A variant space in plain CMake
+
+The [cmake-variants example](../examples/index.md) has exactly one implementation, `host` or
+`gpu`, and MPI optionally. Its `CMakeLists.txt` declares the two axes and lists their product in
+the first hook:
 
 ```cmake
-foreach(_feature IN ITEMS host gpu mpi)
-  besa_add_feature("${_feature}")
-endforeach()
+set(DEMO_IMPLEMENTATIONS host gpu)
+set(DEMO_PARALLEL none mpi)
 
-besa_add_variant(implementation ONE_OF host gpu)
-besa_add_variant(parallel ZERO_OR_ONE mpi)
-besa_keyso_create_feature_set(supported PRODUCT implementation parallel)
-besa_set_feature_set(supported)
+if(CPDOCS_FEATURE_SETS_OUTPUT)
+  set(_variants "")
+  foreach(_implementation_value IN LISTS DEMO_IMPLEMENTATIONS)
+    foreach(_parallel_value IN LISTS DEMO_PARALLEL)
+      if(_parallel_value STREQUAL "none")
+        list(APPEND _variants "{\"features\": [\"${_implementation_value}\"]}")
+      else()
+        list(APPEND _variants "{\"features\": [\"${_implementation_value}\", \"${_parallel_value}\"]}")
+      endif()
+    endforeach()
+  endforeach()
+  # ... write the list to ${CPDOCS_FEATURE_SETS_OUTPUT}
+endif()
 ```
 
-The resulting feature sets can be `host`, `host + mpi`, `gpu`, and `gpu + mpi`. The units selected
-by those sets carry their own semantic language (`cpp`, `cuda`, and so on) in the manifest.
+The result is four variants: `host`, `host + mpi`, `gpu` and `gpu + mpi`. In the second hook, the
+same `CMakeLists.txt` reads the selected features from `CPDOCS_FEATURE_SET`, configures the build
+exactly as an ordinary build with `-DDEMO_FEATURES="gpu;mpi"` would, and describes the result. The
+GPU implementation adds a unit whose language is `cuda`, so its declarations are marked **CUDA**.
 
-The cpdocs configuration repeats none of this project logic:
+The cpdocs configuration repeats none of this logic:
 
 ```yaml
 contract: 3
 build:
   feature-sets: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
   build: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SET="{{feature-set}}"
-    -DBESA_CPDOCS_MANIFEST_OUTPUT="{{output-file}}"
-    && cmake --build "{{tmpdir}}" --target besa.cpdocs
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SET="{{feature-set}}"
+    -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
 ```
 
-If the same qualified function has a C++ definition and a CUDA definition, cpdocs renders two API
-entries and marks them **C++** and **CUDA**. If the CUDA definition is identical in both `gpu` and
-`gpu + mpi`, it is rendered once and both feature sets are listed in its availability section.
+## What the reference shows
+
+- A declaration present in every variant is shown once and lists all of them.
+- An overload present in some variants lists only those, for example the MPI overload of
+  `demo::scale` in `host + mpi` and `gpu + mpi`.
+- A definition in another language, such as the CUDA overload of `demo::scale`, is a separate
+  entry marked with its language, with its own variants.
+- The feature-sets page lists every variant with the declarations it adds.
+
+Variants and language standards are independent: with both, cpdocs builds every variant for every
+standard. See [Document several language standards](language-standards.md).
+
+The build system can be anything that runs the two hooks: a build framework, a script such as the
+`tools/minibuild.py` of the `cpp-features` example, or the bundled Python and Rust providers. See
+[Use another build system](other-build-systems.md) and, for the files themselves, the
+[build-system contract](../reference/contract.md).

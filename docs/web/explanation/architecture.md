@@ -19,5 +19,27 @@ cpdocs is a pipeline with a single boundary to the outside:
    independently and joined by `versions.json`.
 
 The API graph, @apidocs::cpdocs.model.ApiGraph, is the only interface between the stages; the
-whole pipeline for one ref is @apidocs::cpdocs.build.build_graph. Adding a language means adding an
-extractor that produces it; adding a build system means implementing the contract.
+whole pipeline for one ref is @apidocs::cpdocs.build.build_graph. Adding a build system means
+implementing the contract.
+
+## Languages
+
+Each language is a package below `cpdocs.languages` with three parts:
+
+- `extract.py` provides `extract_unit(unit, context)`, which turns a manifest unit of the language
+  into an API graph; the build looks it up by the unit's semantic language.
+- `entities.py` declares the [entity kinds](../reference/entity-kinds.md) of the language, each
+  with its label, badge, order in member lists, member heading and roles. An entity of a kind its
+  language does not declare is rejected.
+- `render.py` spells declarations and signatures the way the language writes them.
+
+Adding a kind is one entry in `entities.py`; adding a language is a new package registered in
+`cpdocs.languages`.
+
+## Renderer resources
+
+The renderer keeps its static content in `share/cpdocs/api/`: page and redirect templates, the
+default API introduction, page fragments, the stylesheet and the scripts. They are read through
+`importlib.resources`, and the wheel installs `share/` at its root, so they work without a source
+checkout. Browser assets are copied into each site's `assets/` directory under content-derived
+names, so browsers never keep a stale copy. Test-only sources live in `test/share/`.

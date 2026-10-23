@@ -39,16 +39,37 @@ double solve(settings const& options) noexcept;
 
 ## Let the build system describe the API
 
-The build system owns the public API, feature selection, generated files and parser settings. cpdocs
-only asks it for `feature-sets.json` and then one `manifest.json` per selected feature set.
+The build system owns the public API, the build variants, generated files and parser settings.
+cpdocs asks it through two hooks: one writes `feature-sets.json`, the list of variants, and the other
+writes one `manifest.json` per variant, naming its API headers and how to parse them.
 
-For CMake there is no injected cpdocs module. A project can provide those files directly from its
-`CMakeLists.txt`, as the standalone examples do, or a build framework such as BESA can provide the
-same contract natively. See [CMake integration](../reference/cmake.md) for the small provider pattern.
+A CMake project implements both hooks in its own `CMakeLists.txt`; cpdocs adds no CMake module. With
+one variant this is a few lines:
+
+```cmake
+if(CPDOCS_FEATURE_SETS_OUTPUT)
+  file(WRITE "${CPDOCS_FEATURE_SETS_OUTPUT}" "{\n"
+    "  \"cpdocs-feature-sets\": 1,\n"
+    "  \"project\": {\"name\": \"${PROJECT_NAME}\", \"version\": \"${PROJECT_VERSION}\"},\n"
+    "  \"feature-sets\": [{\"features\": []}]\n"
+    "}\n")
+endif()
+
+if(CPDOCS_FEATURE_SET AND CPDOCS_MANIFEST_OUTPUT)
+  file(WRITE "${CPDOCS_MANIFEST_OUTPUT}" "{\n"
+    "  \"cpdocs-manifest\": 1,\n"
+    "  \"units\": [{\n"
+    "    \"id\": \"demo\", \"language\": \"cpp\",\n"
+    "    \"api\": [{\"path\": \"${CMAKE_CURRENT_SOURCE_DIR}/include\"}],\n"
+    "    \"parse\": {\"standard\": \"c++20\", \"include\": [\"${CMAKE_CURRENT_SOURCE_DIR}/include\"]}\n"
+    "  }]\n"
+    "}\n")
+endif()
+```
 
 ## Telling cpdocs how to ask
 
-`docs/cpdocs.yml` contains only the two orchestration commands:
+`docs/cpdocs.yml` names the two hooks, here two CMake invocations:
 
 ```yaml
 contract: 3
@@ -63,8 +84,8 @@ build:
     -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
 ```
 
-The first command runs once. cpdocs then writes one selected `feature-set.json` and runs the second
-command once for each feature set. The build command never receives a list of feature sets.
+The first hook runs once. cpdocs then writes the selected variant to `feature-set.json` and runs the
+second hook once for each variant. The second hook always handles exactly one variant.
 
 ## Building
 
@@ -77,4 +98,4 @@ api  feature-sets  assets  index.html  ...
 Open `build/cpdocs/current/index.html`. `docs/api/index.md` becomes the introduction of the
 reference; `{{ project }}` and `{{ version }}` in it are replaced.
 
-Next: [document feature sets](../how-to/feature-sets.md).
+Next: [document build variants](../how-to/feature-sets.md) or [document several versions](../how-to/versions.md).

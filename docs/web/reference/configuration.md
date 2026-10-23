@@ -21,24 +21,25 @@ contract: 3
 
 build:
   feature-sets: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
   build: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DBESA_CPDOCS_FEATURE_SET="{{feature-set}}"
-    -DBESA_CPDOCS_MANIFEST_OUTPUT="{{output-file}}"
-    && cmake --build "{{tmpdir}}" --target besa.cpdocs
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SET="{{feature-set}}"
+    -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
 
 versions: [main, v2.0.0, v1.0.0]
 ```
 
-The two commands are the whole build-system interface. `build.feature-sets` runs once per source
-version. `build.build` runs once for every feature set returned by the first command.
+The two hooks are the whole build-system interface. `build.feature-sets` runs once per version and
+language configuration and lists the build variants; `build.build` runs once for every variant it
+lists. See the [build-system contract](contract.md).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `build.feature-sets` | required | command that writes `feature-sets.json` |
-| `build.build` | required | command that consumes one `feature-set.json` and writes one `manifest.json` |
+| `build.feature-sets` | required | hook that lists the build variants in `feature-sets.json` |
+| `build.build` | required | hook that builds the variant in `feature-set.json` and describes it in `manifest.json` |
+| `languages` | none | Keyso space of language standards, see [Document several language standards](../how-to/language-standards.md) |
 | `versions` | `[main]` | exact branch/tag names to document, in publication/default order |
 | `site.index` | `docs/api/index.md` | introduction of the API reference |
 | `site.copyright` | project developers | footer text |

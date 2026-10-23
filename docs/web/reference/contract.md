@@ -4,8 +4,9 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # Build-system contract
 
-cpdocs intentionally has no configure/build model of its own. For each source version it performs
-only this loop:
+cpdocs has no configure or build model of its own. It talks to the project's build system through
+two hooks, the commands `build.feature-sets` and `build.build` in `cpdocs.yml`, and two JSON files
+each of them writes. For each version and language configuration it runs this loop:
 
 1. run `build.feature-sets` once;
 2. read `feature-sets.json`;
@@ -17,9 +18,9 @@ only this loop:
 The build command therefore always handles **one concrete feature set**, never a list of feature
 sets.
 
-## Commands
+## Hooks
 
-Both values in `cpdocs.yml` are shell command strings run from the source directory.
+Both hooks in `cpdocs.yml` are shell command strings run from the source directory.
 
 `build.feature-sets` may use:
 
@@ -59,7 +60,7 @@ features:
 ```json
 {
   "cpdocs-feature-sets": 1,
-  "generator": "besa",
+  "generator": "CMake 4.3.4",
   "project": {"name": "demo", "version": "2.0.0"},
   "feature-sets": [
     {"features": ["host"]},

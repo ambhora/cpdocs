@@ -53,10 +53,12 @@ nav:
   - Tutorials:
       - A first API reference: tutorials/first-reference.md
   - How-To:
-      - Document feature-dependent APIs: how-to/feature-sets.md
+      - Document several versions: how-to/versions.md
+      - Document build variants: how-to/feature-sets.md
+      - Document several language standards: how-to/language-standards.md
+      - Embed the API in a project website: how-to/properdocs.md
       - Document generated headers: how-to/generated-headers.md
       - Use another build system: how-to/other-build-systems.md
-      - Mount the API in ProperDocs: how-to/properdocs.md
       - Build in CI: how-to/ci.md
   - Reference:
       - Build-system contract: reference/contract.md
@@ -71,4 +73,6 @@ nav:
   - Explanation:
       - Architecture: explanation/architecture.md
       - Why the build system owns feature sets: explanation/feature-sets.md
-  - Examples: examples/index.md
+  - Examples:
+      - examples/index.md
+      - A build framework that provides the hooks: examples/besa.md

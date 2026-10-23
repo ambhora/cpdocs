@@ -25,6 +25,7 @@ from pathlib import Path, PurePosixPath
 from markdown_it import MarkdownIt
 
 from ..config import THEME_COLORS, SiteTheme
+from ..filesystem import contained_path
 from ..languages import kind_label as language_kind_label
 from ..languages import language_label as semantic_language_label
 from ..languages import rendering_for
@@ -1448,7 +1449,7 @@ def _write_page(
     copyright_text: str,
     theme: _ThemeAssets,
 ) -> None:
-    path = output / _output_file(document)
+    path = contained_path(output, _output_file(document))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         _layout(
@@ -1466,8 +1467,24 @@ def _write_page(
     )
 
 
+def _symbol_alias(parts: list[str]) -> Path | None:
+    """The stable ``_symbols/...`` alias of a qualified name, if every component is a plain name.
+
+    Aliases keep the readable spelling of each component, so a component that a filesystem would
+    read as structure (a separator, ``.``, ``..``) gets no alias. Such names, as ``operator/``,
+    are still documented and reachable through their page.
+    """
+
+    if any(
+        not part or part in {".", ".."} or "/" in part or "\\" in part or "\0" in part
+        for part in parts
+    ):
+        return None
+    return Path("_symbols", *parts, "index.md")
+
+
 def _redirect(output: Path, document: Path, target: str) -> None:
-    path = output / _output_file(document)
+    path = contained_path(output, _output_file(document))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         shared_template("api/redirect.html").substitute(
@@ -1612,9 +1629,10 @@ def render_html_site(
             target_url += f"#{anchor}"
         symbols[entity.qualified_name] = target_url
         separator = "." if entity.language == "python" else "::"
-        alias = Path("_symbols", *entity.qualified_name.split(separator), "index.md")
-        redirect_target = _page_href(alias, target_document, anchor)
-        _redirect(output, alias, redirect_target)
+        alias = _symbol_alias(entity.qualified_name.split(separator))
+        if alias is not None:
+            redirect_target = _page_href(alias, target_document, anchor)
+            _redirect(output, alias, redirect_target)
 
     (output / "symbols.json").write_text(
         json.dumps(symbols, indent=2, sort_keys=True) + "\n", encoding="utf-8"

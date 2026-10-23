@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -201,11 +202,26 @@ def stable_entity_id(language: str, kind: str, qualified_name: str, signature_ke
 
 
 def relative_source_path(path: str | Path, project_root: Path) -> str:
+    """The logical path of a source file: relative to the project, or below ``_external``.
+
+    A logical path names the page of the file in the published site, so it must stay relative. A
+    file outside the project, such as a dependency's source named by a rustdoc span or a module
+    root in an out-of-tree build directory, keeps its name below a digest of its directory. The
+    absolute path would otherwise become an output path, and would publish the directory layout
+    of the machine that built the documentation.
+    """
+
     source = Path(path)
     try:
         return source.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
-        return source.as_posix()
+        pass
+    try:
+        absolute = source.resolve()
+    except OSError:
+        absolute = source.absolute()
+    digest = hashlib.sha1(absolute.parent.as_posix().encode("utf-8")).hexdigest()[:10]
+    return f"_external/{digest}/{absolute.name}"
 
 
 def merge_graphs(

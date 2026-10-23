@@ -27,6 +27,7 @@ from pathlib import Path, PurePosixPath
 
 from .config import CpdocsConfig
 from .contract import ContractError, UnitManifest
+from .filesystem import contained_path, path_component
 from .languages import rendering_for
 from .languages.cpp.extract import extract_clang_graph
 from .languages.fortran.extract import extract_fortran_graph
@@ -65,7 +66,7 @@ class Layout:
         return self.root / "versions"
 
     def work(self, ref: str) -> Path:
-        return self.work_root / "work" / ref.replace("/", "__")
+        return self.work_root / "work" / path_component(ref.replace("/", "__"))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -90,8 +91,9 @@ def _browse_logical_path(
         return path.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
         # Keep a stable internal key for files outside the checkout. This path is not presented to
-        # readers; rendering uses the semantic layout recorded in ``source_display_paths``.
-        base = Path("_generated") / unit.id / category
+        # readers; rendering uses the semantic layout recorded in ``source_display_paths``. The
+        # unit identifier comes from the build system and becomes a path, so it is made safe.
+        base = Path("_generated") / path_component(unit.id) / category
         try:
             relative = (
                 path.resolve().relative_to(root.resolve()) if root.is_dir() else Path(path.name)
@@ -240,7 +242,7 @@ def extract_unit(
             parse=unit.parse,
             feature_set=feature_set,
             clang_executable=_clang(),
-            work_directory=work / "clang" / unit.id,
+            work_directory=work / "clang" / path_component(unit.id),
         )
         generated = _generated_sources(unit, graph)
         if generated:
@@ -691,7 +693,7 @@ def build_versions(
             _render(
                 graph,
                 ref_config,
-                output=layout.versions / ref.name,
+                output=contained_path(layout.versions, Path(ref.name)),
                 work=work / "render",
                 root_depth=project_docs_root_depth,
             )

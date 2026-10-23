@@ -15,6 +15,7 @@ from ...model import (
     ApiParameter,
     ApiSignature,
     SourceLocation,
+    relative_source_path,
     stable_entity_id,
 )
 
@@ -336,12 +337,8 @@ def build_rust_graph(
         if isinstance(span, dict) and isinstance(span.get("filename"), str):
             filename = Path(str(span["filename"]))
             if project_root is not None:
-                try:
-                    filename_text = (
-                        filename.resolve().relative_to(project_root.resolve()).as_posix()
-                    )
-                except (OSError, ValueError):
-                    filename_text = filename.as_posix()
+                physical = filename if filename.is_absolute() else project_root / filename
+                filename_text = relative_source_path(physical, project_root)
             else:
                 filename_text = filename.as_posix()
             begin = span.get("begin")
@@ -354,7 +351,6 @@ def build_rust_graph(
                     column = begin[1]
             source = SourceLocation(filename_text, line, column)
             if project_root is not None:
-                physical = filename if filename.is_absolute() else project_root / filename
                 try:
                     graph.sources.setdefault(filename_text, physical.read_text(encoding="utf-8"))
                 except (OSError, UnicodeDecodeError):

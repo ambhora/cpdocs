@@ -22,6 +22,7 @@ from ...model import (
     ApiParameter,
     ApiSignature,
     SourceLocation,
+    relative_source_path,
     stable_entity_id,
 )
 
@@ -575,9 +576,9 @@ def build_python_graph(
             continue
         try:
             graph.sources.setdefault(
-                path.relative_to(project_root).as_posix(), path.read_text(encoding="utf-8")
+                relative_source_path(path, project_root), path.read_text(encoding="utf-8")
             )
-        except (OSError, UnicodeDecodeError, ValueError):
+        except (OSError, UnicodeDecodeError):
             pass
 
     parsed: list[tuple[Path, ast.Module, str, str, str]] = []
@@ -590,10 +591,7 @@ def build_python_graph(
         except (OSError, UnicodeDecodeError, SyntaxError) as error:
             raise RuntimeError(f"Cannot parse Python API source {path}: {error}") from error
         qualified, kind = _module_info(package_root, path, package)
-        try:
-            source_path = path.relative_to(project_root).as_posix()
-        except ValueError:
-            source_path = path.as_posix()
+        source_path = relative_source_path(path, project_root)
         parsed.append((path, tree, qualified, kind, source_path))
         try:
             graph.sources.setdefault(source_path, path.read_text(encoding="utf-8"))

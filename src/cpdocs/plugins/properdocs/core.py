@@ -13,6 +13,8 @@ from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
+from ...filesystem import remove_tree
+
 _APIDOCS_REFERENCE = re.compile(
     r"@apidocs(?:\[(?P<version>[^\]]+)\])?::"
     r"(?P<symbol>[A-Za-z_](?:[A-Za-z0-9_:.]*[A-Za-z0-9_])?)"
@@ -148,12 +150,33 @@ def expand_versions_directive(
     return _VERSIONS_DIRECTIVE.sub(lambda _match: listing, markdown)
 
 
+def mount_path(mount: str) -> PurePosixPath:
+    """Validate the site-relative directory the API is published at.
+
+    The directory is deleted and replaced on every build, so it must be a proper subdirectory of
+    the site: not the site itself, and with no component that is empty, ``.`` or ``..``.
+    """
+
+    value = mount.strip("/")
+    parts = value.split("/")
+    if not value or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(
+            f"mount must be a subdirectory of the site such as reference/api, found {mount!r}"
+        )
+    return PurePosixPath(*parts)
+
+
 def publish_api(source: Path, site_directory: Path, mount: str) -> Path:
     """Replace the mounted API subtree with cpdocs's complete versioned output."""
 
-    destination = site_directory / Path(*PurePosixPath(mount).parts)
-    if destination.exists():
-        shutil.rmtree(destination)
+    destination = site_directory / Path(*mount_path(mount).parts)
+    # A link inside the site could still lead the mount elsewhere; remove_tree refuses links on
+    # the way down and this check catches a mount that resolves outside the site.
+    site = site_directory.resolve()
+    resolved = destination.resolve()
+    if resolved == site or not resolved.is_relative_to(site):
+        raise ValueError(f"mount {mount!r} leads outside the site directory {site_directory}")
+    remove_tree(destination, owner=site_directory)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
     (site_directory / ".nojekyll").touch()

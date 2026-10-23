@@ -27,7 +27,7 @@ from pathlib import Path, PurePosixPath
 
 from .config import CpdocsConfig
 from .contract import ContractError, UnitManifest
-from .filesystem import contained_path, path_component
+from .filesystem import contained_path, path_component, remove_tree
 from .languages import rendering_for
 from .languages.cpp.extract import extract_clang_graph
 from .languages.fortran.extract import extract_fortran_graph
@@ -53,8 +53,11 @@ class Layout:
 
     @classmethod
     def for_output(cls, output: Path, *, tmp_directory: Path | None = None) -> Layout:
-        root = (output / "cpdocs").resolve()
-        work_root = tmp_directory.resolve() / "cpdocs" if tmp_directory else root
+        # The output and temporary roots are the user's choice and may be reached through links.
+        # The ``cpdocs`` directory below them is not resolved: cpdocs deletes inside it, and a link
+        # there must be refused rather than followed (see ``remove_tree``).
+        root = output.absolute() / "cpdocs"
+        work_root = tmp_directory.absolute() / "cpdocs" if tmp_directory else root
         return cls(root=root, work_root=work_root)
 
     @property
@@ -669,7 +672,7 @@ def build_versions(
         elif not any(ref.checkout is None for ref in selected):
             selected.insert(0, SelectedRef(name="current", kind="worktree", checkout=None))
 
-    shutil.rmtree(layout.versions, ignore_errors=True)
+    remove_tree(layout.versions, owner=layout.root.parent)
     layout.versions.mkdir(parents=True, exist_ok=True)
 
     built: list[SelectedRef] = []

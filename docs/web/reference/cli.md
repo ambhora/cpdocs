@@ -19,6 +19,11 @@ feature set returned by `build.feature-sets`.
 `versions` documents the exact ordered `versions:` list from `cpdocs.yml` into
 `<output>/cpdocs/versions`.
 
+cpdocs writes and deletes only below `<output>/cpdocs` and `DIR/cpdocs` for `--tmp-directory`.
+The output root itself may be a symbolic link, for example to scratch space, but cpdocs refuses to
+delete through a link below it rather than follow it. Each API site is rendered next to its final
+location and moved into place when complete, so a failed build leaves the previous site intact.
+
 `manifest python` is a small provider for plain Python projects.
 
 `rust` is the built-in Cargo provider. `rust feature-sets` reads Cargo metadata. By default every

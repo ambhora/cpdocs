@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-"""cpdocs writes only inside the directories it owns."""
+"""cpdocs writes and deletes only inside the directories it owns."""
 
 from __future__ import annotations
 
@@ -11,10 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from cpdocs.build import _collect_browse_files
+import cpdocs.rendering.html as rendering
+from cpdocs.build import Layout, _collect_browse_files
 from cpdocs.contract import read_manifest
-from cpdocs.filesystem import contained_path, path_component
+from cpdocs.filesystem import contained_path, path_component, remove_tree
 from cpdocs.model import ApiEntity, ApiGraph, relative_source_path
+from cpdocs.plugins.properdocs.core import mount_path, publish_api
 from cpdocs.rendering.html import render_html_site
 
 
@@ -125,3 +127,94 @@ def test_manifest_unit_ids_cannot_escape(tmp_path: Path) -> None:
     output = project / "build" / "cpdocs" / "current"
     _render(graph, output)
     assert _files_outside(tmp_path, output) == []
+
+
+def test_render_refuses_to_replace_a_symbolic_link(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "sentinel").write_text("keep", encoding="utf-8")
+    output = tmp_path / "out"
+    output.symlink_to(victim, target_is_directory=True)
+
+    graph = ApiGraph(project="p", version="main", language="none")
+    with pytest.raises(RuntimeError, match="symbolic link"):
+        _render(graph, output)
+    assert (victim / "sentinel").read_text(encoding="utf-8") == "keep"
+    assert sorted(path.name for path in victim.iterdir()) == ["sentinel"]
+    assert not any(".cpdocs-staging" in path.name for path in tmp_path.iterdir())
+
+
+def test_failed_render_keeps_the_previous_site(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "site"
+    graph = ApiGraph(project="p", version="main", language="none")
+    _render(graph, output)
+    previous = (output / "index.html").read_text(encoding="utf-8")
+
+    def fail(*arguments: object, **keywords: object) -> None:
+        raise RuntimeError("render failed")
+
+    monkeypatch.setattr(rendering, "_render_site", fail)
+    with pytest.raises(RuntimeError, match="render failed"):
+        _render(graph, output)
+    assert (output / "index.html").read_text(encoding="utf-8") == previous
+    assert not any(".cpdocs-staging" in path.name for path in tmp_path.iterdir())
+
+
+def test_remove_tree_refuses_links_below_the_owner(tmp_path: Path) -> None:
+    victim = tmp_path / "victim"
+    (victim / "versions").mkdir(parents=True)
+    (victim / "versions" / "sentinel").write_text("keep", encoding="utf-8")
+    output = tmp_path / "build"
+    output.mkdir()
+    (output / "cpdocs").symlink_to(victim, target_is_directory=True)
+
+    layout = Layout.for_output(output)
+    with pytest.raises(RuntimeError, match="symbolic link"):
+        remove_tree(layout.versions, owner=layout.root.parent)
+    assert (victim / "versions" / "sentinel").exists()
+
+
+def test_output_roots_may_be_reached_through_links(tmp_path: Path) -> None:
+    # Build directories on shared systems are often links to scratch space.
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    build = tmp_path / "build"
+    build.symlink_to(scratch, target_is_directory=True)
+    layout = Layout.for_output(build)
+    _render(ApiGraph(project="p", version="main", language="none"), layout.current)
+    assert (scratch / "cpdocs" / "current" / "index.html").is_file()
+    _render(ApiGraph(project="p", version="main", language="none"), layout.current)
+    assert (scratch / "cpdocs" / "current" / "index.html").is_file()
+
+
+@pytest.mark.parametrize("mount", ["", "/", ".", "./", "..", "../victim", "a/../../b", "a//b"])
+def test_mount_must_be_a_subdirectory_of_the_site(mount: str) -> None:
+    with pytest.raises(ValueError, match="mount"):
+        mount_path(mount)
+
+
+def test_mount_keeps_ordinary_values() -> None:
+    assert mount_path("/reference/api/").as_posix() == "reference/api"
+
+
+def test_publish_api_cannot_delete_outside_the_site(tmp_path: Path) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "sentinel").write_text("keep", encoding="utf-8")
+    source = tmp_path / "api"
+    source.mkdir()
+    (source / "index.html").write_text("api", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        publish_api(source, site, "../victim")
+    (site / "reference").symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(ValueError):
+        publish_api(source, site, "reference/victim")
+    assert (victim / "sentinel").read_text(encoding="utf-8") == "keep"
+
+    published = publish_api(source, site, "docs/api")
+    assert (published / "index.html").read_text(encoding="utf-8") == "api"

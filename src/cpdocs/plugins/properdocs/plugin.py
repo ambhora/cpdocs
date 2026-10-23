@@ -21,11 +21,13 @@ from properdocs.plugins import BasePlugin
 
 from cpdocs.build import Layout, build_versions, recorded_default_version
 from cpdocs.config import DEFAULT_CONFIG, CpdocsConfig, load_config
+from cpdocs.filesystem import remove_tree
 
 from .core import (
     default_issue_url,
     edit_url,
     expand_versions_directive,
+    mount_path,
     publish_api,
     repository_provider,
     resolve_api_references,
@@ -61,10 +63,10 @@ class CpdocsPlugin(BasePlugin):
 
     @property
     def mount(self) -> str:
-        value = str(self.config.get("mount", "reference/api")).strip("/")
-        if not value:
-            raise PluginError("cpdocs: mount must not be the site root")
-        return value
+        try:
+            return mount_path(str(self.config.get("mount", "reference/api"))).as_posix()
+        except ValueError as error:
+            raise PluginError(f"cpdocs: {error}") from error
 
     @property
     def output(self) -> Path:
@@ -370,8 +372,8 @@ class CpdocsPlugin(BasePlugin):
         _LOG.info("Built ProperDocs subsite %s", mount.as_posix())
 
     @staticmethod
-    def _publish_subsite(source: Path, destination: Path) -> None:
-        shutil.rmtree(destination, ignore_errors=True)
+    def _publish_subsite(source: Path, destination: Path, *, site_directory: Path) -> None:
+        remove_tree(destination, owner=site_directory)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, destination)
 
@@ -404,7 +406,7 @@ class CpdocsPlugin(BasePlugin):
             else:
                 _LOG.debug("Reusing cached ProperDocs subsite %s", mount.as_posix())
 
-            self._publish_subsite(cache, destination)
+            self._publish_subsite(cache, destination, site_directory=site_directory)
 
     def on_post_build(self, *, config) -> None:
         site_directory = Path(config["site_dir"]).resolve()

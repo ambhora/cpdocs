@@ -16,7 +16,8 @@ plugins:
 ```
 
 The plugin options and their defaults are `config: docs/cpdocs.yml`, `output: build` and
-`mount: reference/api`. `properdocs serve` also documents the checked-out working tree in situ,
+`mount: reference/api`. The mount directory is replaced on every build, so it must be a proper
+subdirectory of the site: the site root, `.`, `..` and absolute paths are rejected. `properdocs serve` also documents the checked-out working tree in situ,
 even when that branch is not selected by `versions.branches.include`. That working-tree version is
 the default during the development server, so local and uncommitted API changes are immediately
 visible. The plugin also registers the project source directories with ProperDocs' live-reload

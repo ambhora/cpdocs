@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +20,7 @@ from ..contract import (
     read_manifest,
     write_feature_set,
 )
+from ..filesystem import remove_tree
 
 _PLACEHOLDER = re.compile(r"\{\{\s*([a-z][a-z0-9_.-]*)\s*\}\}")
 
@@ -101,7 +101,7 @@ def discover_feature_sets(
     """Run ``build.feature-sets`` and read ``feature-sets.json``."""
 
     directory = work / "feature-sets"
-    shutil.rmtree(directory, ignore_errors=True)
+    remove_tree(directory, owner=work)
     tmpdir = directory / "tmp"
     tmpdir.mkdir(parents=True)
     output = directory / "feature-sets.json"
@@ -133,7 +133,7 @@ def resolve_manifest(
     """Run ``build.build`` for one feature set and read ``manifest.json``."""
 
     directory = work / "feature-sets" / feature_set.key
-    shutil.rmtree(directory, ignore_errors=True)
+    remove_tree(directory, owner=work)
     tmpdir = directory / "tmp"
     tmpdir.mkdir(parents=True)
     feature_set_file = directory / "feature-set.json"

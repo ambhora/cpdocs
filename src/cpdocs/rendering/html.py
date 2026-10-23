@@ -19,13 +19,14 @@ import html
 import json
 import posixpath
 import re
+import secrets
 import shutil
 from pathlib import Path, PurePosixPath
 
 from markdown_it import MarkdownIt
 
 from ..config import THEME_COLORS, SiteTheme
-from ..filesystem import contained_path
+from ..filesystem import contained_path, remove_tree
 from ..languages import kind_label as language_kind_label
 from ..languages import language_label as semantic_language_label
 from ..languages import rendering_for
@@ -1523,12 +1524,46 @@ def render_html_site(
     introduction_file: Path | None = None,
     theme: SiteTheme | None = None,
 ) -> None:
-    """Render one API version directly to a standalone HTML site."""
+    """Render one API version to a standalone HTML site in ``output_directory``.
+
+    The site is rendered into a fresh sibling directory and moved into place only when complete,
+    so a failed render leaves the previous site untouched. The directory being replaced is deleted
+    as itself: a symbolic link there is refused rather than followed.
+    """
+
+    target = output_directory.absolute()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = target.parent / f".{target.name}.{secrets.token_hex(6)}.cpdocs-staging"
+    # mkdir, unlike mkdtemp, applies the umask, so a published site stays readable by a web server.
+    staging.mkdir()
+    try:
+        _render_site(
+            graph,
+            output=staging,
+            project_docs_url=project_docs_url,
+            copyright_text=copyright_text,
+            introduction_file=introduction_file,
+            theme=theme,
+        )
+        remove_tree(target, owner=target.parent)
+        staging.rename(target)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def _render_site(
+    graph: ApiGraph,
+    *,
+    output: Path,
+    project_docs_url: str,
+    copyright_text: str,
+    introduction_file: Path | None,
+    theme: SiteTheme | None,
+) -> None:
+    """Render the pages, assets and indexes of one API version into the empty ``output``."""
 
     assign_documents(graph.entities.values())
-    output = output_directory.resolve()
-    shutil.rmtree(output, ignore_errors=True)
-    output.mkdir(parents=True, exist_ok=True)
     assets = output / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     for name in _ASSET_FILES:

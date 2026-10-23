@@ -34,10 +34,7 @@ def test_publish_replaces_api_subtree(tmp_path: Path) -> None:
 
 def test_sentence_final_period_is_not_part_of_the_symbol() -> None:
     rendered = resolve_api_references(
-        "Call @apidocs::dice::roll.",
-        page_dest_uri="index.html",
-        mount="reference/api",
-        default_version="main",
+        "Call @apidocs::dice::roll.", page_dest_uri="index.html", mount="reference/api", default_version="main"
     )
     assert rendered == "Call [`dice::roll`](reference/api/main/_symbols/dice/roll/)."
 
@@ -61,9 +58,7 @@ def test_known_references_link_straight_to_the_page() -> None:
         page_dest_uri="guide/index.html",
         mount="reference/api",
         default_version="1.0",
-        locate=lambda version, symbol: {"a::b": "api/a/function-b/", "a::c": "api/a/#member-c"}.get(
-            symbol
-        ),
+        locate=lambda version, symbol: {"a::b": "api/a/function-b/", "a::c": "api/a/#member-c"}.get(symbol),
     )
     assert "(../reference/api/1.0/api/a/function-b/)" in rendered
     assert "(../reference/api/1.0/api/a/#member-c)" in rendered
@@ -79,10 +74,7 @@ def test_versions_directive_lists_every_version() -> None:
         metadata={
             "default": "1.1",
             "aliases": {"stable": "1.1", "dev": "main"},
-            "versions": [
-                {"name": "main", "kind": "branch"},
-                {"name": "1.1", "kind": "tag"},
-            ],
+            "versions": [{"name": "main", "kind": "branch"}, {"name": "1.1", "kind": "tag"}],
         },
     )
     assert "- [main](api/main/) — branch, `dev`" in rendered
@@ -90,12 +82,8 @@ def test_versions_directive_lists_every_version() -> None:
 
 
 def test_code_is_left_alone() -> None:
-    markdown = (
-        "Use `@apidocs::a::b` like this:\n\n```text\n@apidocs::a::b\n```\n\nSee @apidocs::a::b.\n"
-    )
-    rendered = resolve_api_references(
-        markdown, page_dest_uri="index.html", mount="api", default_version="main"
-    )
+    markdown = "Use `@apidocs::a::b` like this:\n\n```text\n@apidocs::a::b\n```\n\nSee @apidocs::a::b.\n"
+    rendered = resolve_api_references(markdown, page_dest_uri="index.html", mount="api", default_version="main")
     assert rendered.count("@apidocs::a::b") == 2
     assert rendered.endswith("See [`a::b`](api/main/_symbols/a/b/).\n")
 
@@ -111,9 +99,7 @@ def test_subsite_mounts_are_relative_to_project_root(tmp_path: Path) -> None:
     assert plugin._subsites() == [(tmp_path / "examples" / "demo", Path("examples/demo"))]
 
 
-def test_serve_reuses_cached_subsites_until_their_inputs_change(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_serve_reuses_cached_subsites_until_their_inputs_change(tmp_path: Path, monkeypatch) -> None:
     from cpdocs.plugins.properdocs.plugin import CpdocsPlugin
 
     project = tmp_path / "examples" / "demo"

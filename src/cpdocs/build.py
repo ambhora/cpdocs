@@ -27,24 +27,14 @@ from pathlib import Path, PurePosixPath
 
 from .config import CpdocsConfig
 from .contract import ContractError, UnitManifest
-from .filesystem import (
-    contained_path,
-    git_tracked_files,
-    path_component,
-    readable_file,
-    remove_tree,
-)
+from .filesystem import contained_path, git_tracked_files, path_component, readable_file, remove_tree
 from .languages import rendering_for
 from .languages.cpp.extract import extract_clang_graph
 from .languages.fortran.extract import extract_fortran_graph
 from .languages.python.extract import build_python_graph
 from .languages.rust.extract import build_rust_graph
 from .model import ApiGraph, merge_graphs, relative_source_path
-from .providers.contract import (
-    discover_feature_sets,
-    language_template_values,
-    resolve_manifest,
-)
+from .providers.contract import discover_feature_sets, language_template_values, resolve_manifest
 from .rendering.html import render_html_site
 from .resources import shared_template
 from .versioning import SelectedRef, current_branch, select_refs
@@ -88,14 +78,11 @@ def _clang() -> str:
         if candidate and shutil.which(candidate):
             return candidate
     raise RuntimeError(
-        "cpdocs needs clang to document C and C++ units; put clang++ on PATH "
-        "(or name it in CPDOCS_CLANG)"
+        "cpdocs needs clang to document C and C++ units; put clang++ on PATH (or name it in CPDOCS_CLANG)"
     )
 
 
-def _browse_logical_path(
-    path: Path, *, project_root: Path, unit: UnitManifest, category: str, root: Path
-) -> str:
+def _browse_logical_path(path: Path, *, project_root: Path, unit: UnitManifest, category: str, root: Path) -> str:
     try:
         return path.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
@@ -104,9 +91,7 @@ def _browse_logical_path(
         # unit identifier comes from the build system and becomes a path, so it is made safe.
         base = Path("_generated") / path_component(unit.id) / category
         try:
-            relative = (
-                path.resolve().relative_to(root.resolve()) if root.is_dir() else Path(path.name)
-            )
+            relative = path.resolve().relative_to(root.resolve()) if root.is_dir() else Path(path.name)
         except (OSError, ValueError):
             relative = Path(path.name)
         return (base / relative).as_posix()
@@ -137,9 +122,7 @@ def _semantic_display_path(path: Path, *, root: Path, generated: bool) -> str:
     return (base / relative).as_posix()
 
 
-def _api_display_paths(
-    unit: UnitManifest, graph: ApiGraph, *, project_root: Path
-) -> dict[str, str]:
+def _api_display_paths(unit: UnitManifest, graph: ApiGraph, *, project_root: Path) -> dict[str, str]:
     """Map API source keys to their semantic include/module layout."""
 
     values: dict[str, str] = {}
@@ -156,19 +139,11 @@ def _api_display_paths(
                 root_relative = path.name
             project_relative = relative_source_path(path, project_root)
             logical = next(
-                (
-                    candidate
-                    for candidate in (root_relative, project_relative)
-                    if candidate in graph.sources
-                ),
-                None,
+                (candidate for candidate in (root_relative, project_relative) if candidate in graph.sources), None
             )
             if logical is not None:
                 values.setdefault(
-                    logical,
-                    _semantic_display_path(
-                        path, root=root, generated=unit.generated or api_root.generated
-                    ),
+                    logical, _semantic_display_path(path, root=root, generated=unit.generated or api_root.generated)
                 )
     return values
 
@@ -190,11 +165,7 @@ def _collect_browse_files(
     display_paths: dict[str, str] = {}
     # Public headers are already present in ``graph.sources`` after API extraction.  These roots
     # add implementation-only material without duplicating public headers in the file hierarchy.
-    groups = (
-        ("sources", unit.sources),
-        ("modules", unit.modules),
-        ("executables", unit.executables),
-    )
+    groups = (("sources", unit.sources), ("modules", unit.modules), ("executables", unit.executables))
     for category, roots in groups:
         for root in roots:
             if root.is_file():
@@ -218,14 +189,9 @@ def _collect_browse_files(
                     content = path.read_text(encoding="utf-8")
                 except (OSError, UnicodeDecodeError):
                     continue
-                logical = _browse_logical_path(
-                    path, project_root=project_root, unit=unit, category=category, root=root
-                )
+                logical = _browse_logical_path(path, project_root=project_root, unit=unit, category=category, root=root)
                 files.setdefault(logical, content)
-                display_paths.setdefault(
-                    logical,
-                    _semantic_display_path(path, root=root, generated=unit.generated),
-                )
+                display_paths.setdefault(logical, _semantic_display_path(path, root=root, generated=unit.generated))
                 if unit.generated and logical not in generated:
                     generated.append(logical)
     return files, generated, display_paths
@@ -278,11 +244,7 @@ def extract_unit(
         roots = [root.path for root in unit.api]
         roots.extend(path for path in unit.modules if path not in roots)
         return extract_fortran_graph(
-            project=project,
-            version=version,
-            project_root=project_root,
-            api_roots=roots,
-            feature_set=feature_set,
+            project=project, version=version, project_root=project_root, api_roots=roots, feature_set=feature_set
         )
     if unit.language == "python":
         assert unit.package is not None
@@ -292,9 +254,7 @@ def extract_unit(
             if isinstance(python_config, dict) and "version" in python_config:
                 value = str(python_config["version"])
                 if not re.fullmatch(r"[0-9]+\.[0-9]+", value):
-                    raise RuntimeError(
-                        f"cpdocs.yml: python.version must be MAJOR.MINOR, found {value!r}"
-                    )
+                    raise RuntimeError(f"cpdocs.yml: python.version must be MAJOR.MINOR, found {value!r}")
                 target_version = tuple(int(part) for part in value.split("."))
         return build_python_graph(
             project_root=project_root,
@@ -307,10 +267,7 @@ def extract_unit(
     if unit.language == "rust":
         assert unit.rustdoc_json is not None
         return build_rust_graph(
-            rustdoc_json=unit.rustdoc_json,
-            project=project,
-            version=version,
-            project_root=project_root,
+            rustdoc_json=unit.rustdoc_json, project=project, version=version, project_root=project_root
         )
     raise ContractError(f"unsupported unit language {unit.language!r}")
 
@@ -375,8 +332,7 @@ def _check_undocumented(graph: ApiGraph, level: str) -> None:
     missing = sorted(
         entity.qualified_name
         for entity in graph.entities.values()
-        if entity.kind not in rendering_for(entity.language).container_kinds
-        and not entity.documentation.strip()
+        if entity.kind not in rendering_for(entity.language).container_kinds and not entity.documentation.strip()
     )
     if not missing:
         return
@@ -388,13 +344,7 @@ def _check_undocumented(graph: ApiGraph, level: str) -> None:
     print(f"cpdocs: warning: {message}", file=sys.stderr)
 
 
-def build_graph(
-    config: CpdocsConfig,
-    *,
-    source: Path,
-    work: Path,
-    version: str,
-) -> ApiGraph:
+def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str) -> ApiGraph:
     """Build every allowed language configuration and its discovered feature sets."""
 
     per_feature_set: list[tuple[str, ApiGraph]] = []
@@ -412,16 +362,9 @@ def build_graph(
     for index, configuration in enumerate(config.language_configurations, 1):
         template_values = language_template_values(configuration)
         # Preserve the existing work directory layout for projects with a single configuration.
-        language_work = (
-            work / "language-configurations" / f"language-{index:03d}"
-            if multiple_languages
-            else work
-        )
+        language_work = work / "language-configurations" / f"language-{index:03d}" if multiple_languages else work
         feature_sets = discover_feature_sets(
-            config.feature_sets,
-            source=source,
-            work=language_work,
-            template_values=template_values,
+            config.feature_sets, source=source, work=language_work, template_values=template_values
         )
         if project is None:
             project = feature_sets.project
@@ -429,22 +372,13 @@ def build_graph(
             generator = feature_sets.generator
         elif project != feature_sets.project:
             raise RuntimeError(
-                f"build.feature-sets returned inconsistent projects: "
-                f"{project!r} and {feature_sets.project!r}"
+                f"build.feature-sets returned inconsistent projects: {project!r} and {feature_sets.project!r}"
             )
 
         for feature_set in feature_sets.feature_sets:
-            key = (
-                f"language-{index:03d}--{feature_set.key}"
-                if multiple_languages
-                else feature_set.key
-            )
+            key = f"language-{index:03d}--{feature_set.key}" if multiple_languages else feature_set.key
             manifest = resolve_manifest(
-                config.build,
-                feature_set,
-                source=source,
-                work=language_work,
-                template_values=template_values,
+                config.build, feature_set, source=source, work=language_work, template_values=template_values
             )
             if manifest.options:
                 configuration_options[key] = [dict(option) for option in manifest.options]
@@ -474,9 +408,7 @@ def build_graph(
                 )
                 display_paths = unit_graph.metadata.setdefault("source_display_paths", {})
                 assert isinstance(display_paths, dict)
-                for path, display in _api_display_paths(
-                    unit, unit_graph, project_root=source
-                ).items():
+                for path, display in _api_display_paths(unit, unit_graph, project_root=source).items():
                     display_paths.setdefault(path, display)
 
                 browse_files, generated_files, browse_display_paths = _collect_browse_files(
@@ -491,12 +423,7 @@ def build_graph(
                     assert isinstance(existing, list)
                     existing.extend(path for path in generated_files if path not in existing)
                 unit_graphs.append(unit_graph)
-            graph = _combine(
-                unit_graphs,
-                project=feature_sets.project,
-                version=version,
-                language=feature_set_language,
-            )
+            graph = _combine(unit_graphs, project=feature_sets.project, version=version, language=feature_set_language)
             graph.feature_sets[key] = {
                 "features": list(feature_set.features),
                 "selection": feature_set.selection,
@@ -513,15 +440,11 @@ def build_graph(
         language = "mixed"
     else:
         language = "none"
-    merged = merge_graphs(
-        per_feature_set, project=project or "", version=version, language=language
-    )
+    merged = merge_graphs(per_feature_set, project=project or "", version=version, language=language)
     metadata["feature_sets"] = all_feature_selections
     metadata["language_configurations"] = list(config.language_configurations)
     sorted_units = sorted(units, key=lambda value: (value[0], value[1] or ""))
-    metadata["units"] = [
-        {"id": unit_id, "language": unit_language} for unit_id, unit_language in sorted_units
-    ]
+    metadata["units"] = [{"id": unit_id, "language": unit_language} for unit_id, unit_language in sorted_units]
     if configuration_options:
         metadata["configuration_options"] = configuration_options
     metadata["generator"] = generator
@@ -549,9 +472,7 @@ def _project_docs_url(graph: ApiGraph, configured: str, *, root_depth: int) -> s
     return "../" * (root_depth + version_depth)
 
 
-def _render(
-    graph: ApiGraph, config: CpdocsConfig, *, output: Path, work: Path, root_depth: int
-) -> None:
+def _render(graph: ApiGraph, config: CpdocsConfig, *, output: Path, work: Path, root_depth: int) -> None:
     work.mkdir(parents=True, exist_ok=True)
     render_html_site(
         graph,
@@ -576,19 +497,8 @@ def build_current(
 
     layout = Layout.for_output(output, tmp_directory=tmp_directory)
     work = layout.work("current")
-    graph = build_graph(
-        config,
-        source=config.project_root,
-        work=work,
-        version=version,
-    )
-    _render(
-        graph,
-        config,
-        output=layout.current,
-        work=work / "render",
-        root_depth=project_docs_root_depth,
-    )
+    graph = build_graph(config, source=config.project_root, work=work, version=version)
+    _render(graph, config, output=layout.current, work=work / "render", root_depth=project_docs_root_depth)
     return graph
 
 
@@ -599,9 +509,7 @@ def _html_pages(root: Path) -> list[str]:
 
 
 def _redirect_page(target: str) -> str:
-    return shared_template("api/versions-redirect.html").substitute(
-        target=html.escape(target, quote=True)
-    )
+    return shared_template("api/versions-redirect.html").substitute(target=html.escape(target, quote=True))
 
 
 def _write_versions(output: Path, built: list[SelectedRef]) -> None:
@@ -609,12 +517,7 @@ def _write_versions(output: Path, built: list[SelectedRef]) -> None:
     metadata = {
         "default": default_name,
         "versions": [
-            {
-                "name": ref.name,
-                "kind": ref.kind,
-                "url": f"{ref.name}/",
-                "pages": _html_pages(output / ref.name),
-            }
+            {"name": ref.name, "kind": ref.kind, "url": f"{ref.name}/", "pages": _html_pages(output / ref.name)}
             for ref in built
             if (output / ref.name / "index.html").is_file()
         ],
@@ -626,12 +529,7 @@ def _write_versions(output: Path, built: list[SelectedRef]) -> None:
 
 def _git(command: list[str], *, cwd: Path) -> None:
     result = subprocess.run(
-        ["git", *command],
-        cwd=cwd,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        ["git", *command], cwd=cwd, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
     if result.returncode != 0:
         raise RuntimeError("Git command failed:\n" + result.stdout.rstrip())
@@ -711,9 +609,7 @@ def build_versions(
             checkout = worktree / subdirectory
         try:
             if not checkout.is_dir():
-                raise RuntimeError(
-                    f"configured version {ref.name!r} does not contain {subdirectory}"
-                )
+                raise RuntimeError(f"configured version {ref.name!r} does not contain {subdirectory}")
             ref_config = _config_for_checkout(config, checkout) if ref.checkout else config
             work = layout.work(ref.name)
             graph = build_graph(ref_config, source=checkout, work=work, version=ref.name)

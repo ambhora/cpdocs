@@ -9,23 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from cpdocs.contract import (
-    ContractError,
-    read_feature_set,
-    read_feature_sets,
-    read_manifest,
-    write_feature_set,
-)
+from cpdocs.contract import ContractError, read_feature_set, read_feature_sets, read_manifest, write_feature_set
 
 
 def _feature_sets(**overrides: object) -> dict[str, object]:
     manifest: dict[str, object] = {
         "cpdocs-feature-sets": 1,
         "project": {"name": "demo", "version": "1.0"},
-        "feature-sets": [
-            {"features": []},
-            {"features": ["gpu"], "build-option": "CUDA"},
-        ],
+        "feature-sets": [{"features": []}, {"features": ["gpu"], "build-option": "CUDA"}],
     }
     manifest.update(overrides)
     return manifest
@@ -61,14 +52,8 @@ def test_feature_sets_are_unnamed_but_keep_build_system_fields(tmp_path: Path) -
     feature_sets = read_feature_sets(_write(tmp_path / "m.json", _feature_sets()))
     assert feature_sets.project == "demo"
     assert [feature_set.features for feature_set in feature_sets.feature_sets] == [(), ("gpu",)]
-    assert [feature_set.key for feature_set in feature_sets.feature_sets] == [
-        "feature-set-001",
-        "feature-set-002",
-    ]
-    assert feature_sets.feature_sets[1].selection == {
-        "features": ["gpu"],
-        "build-option": "CUDA",
-    }
+    assert [feature_set.key for feature_set in feature_sets.feature_sets] == ["feature-set-001", "feature-set-002"]
+    assert feature_sets.feature_sets[1].selection == {"features": ["gpu"], "build-option": "CUDA"}
 
 
 def test_selected_feature_set_round_trip_preserves_build_system_fields(tmp_path: Path) -> None:
@@ -76,17 +61,10 @@ def test_selected_feature_set_round_trip_preserves_build_system_fields(tmp_path:
     path = tmp_path / "feature-set.json"
     write_feature_set(path, feature_sets.feature_sets[1])
     raw = json.loads(path.read_text(encoding="utf-8"))
-    assert raw == {
-        "cpdocs-feature-set": 1,
-        "features": ["gpu"],
-        "build-option": "CUDA",
-    }
+    assert raw == {"cpdocs-feature-set": 1, "features": ["gpu"], "build-option": "CUDA"}
     selected = read_feature_set(path)
     assert selected.features == ("gpu",)
-    assert selected.selection == {
-        "features": ["gpu"],
-        "build-option": "CUDA",
-    }
+    assert selected.selection == {"features": ["gpu"], "build-option": "CUDA"}
 
 
 @pytest.mark.parametrize(
@@ -94,10 +72,7 @@ def test_selected_feature_set_round_trip_preserves_build_system_fields(tmp_path:
     [
         ({"cpdocs-feature-sets": 2}, "unsupported cpdocs-feature-sets"),
         ({"feature-sets": []}, "feature-sets must be a non-empty list"),
-        (
-            {"feature-sets": [{"features": ["gpu", "mpi"]}, {"features": ["mpi", "gpu"]}]},
-            "duplicate feature sets",
-        ),
+        ({"feature-sets": [{"features": ["gpu", "mpi"]}, {"features": ["mpi", "gpu"]}]}, "duplicate feature sets"),
         ({"feature-sets": [{"features": ["gpu", "gpu"]}]}, "must not contain duplicates"),
     ],
 )
@@ -139,10 +114,7 @@ def test_manifest_does_not_have_to_echo_the_feature_set(tmp_path: Path) -> None:
 
 
 def test_python_unit_needs_exactly_one_root(tmp_path: Path) -> None:
-    value = {
-        "cpdocs-manifest": 1,
-        "units": [{"id": "p", "language": "python", "package": "p", "api": []}],
-    }
+    value = {"cpdocs-manifest": 1, "units": [{"id": "p", "language": "python", "package": "p", "api": []}]}
     with pytest.raises(ContractError, match="exactly one API root"):
         read_manifest(_write(tmp_path / "m.json", value), source=tmp_path)
 
@@ -172,15 +144,7 @@ def test_fortran_modules_are_api_sources_and_layout_roots_are_preserved(tmp_path
 def test_browse_only_unit_may_have_no_language(tmp_path: Path) -> None:
     value = {
         "cpdocs-manifest": 1,
-        "units": [
-            {
-                "id": "tools",
-                "language": None,
-                "api": [],
-                "sources": ["bin"],
-                "executables": ["bin/tool.cpp"],
-            }
-        ],
+        "units": [{"id": "tools", "language": None, "api": [], "sources": ["bin"], "executables": ["bin/tool.cpp"]}],
     }
     unit = read_manifest(_write(tmp_path / "m.json", value), source=tmp_path).units[0]
     assert unit.language is None
@@ -193,14 +157,7 @@ def test_besa_options_metadata_does_not_affect_feature_selection(tmp_path):
         json.dumps(
             {
                 "cpdocs-manifest": 1,
-                "units": [
-                    {
-                        "id": "python",
-                        "language": "python",
-                        "api": [{"path": "."}],
-                        "package": "fixture",
-                    }
-                ],
+                "units": [{"id": "python", "language": "python", "api": [{"path": "."}], "package": "fixture"}],
                 "options": [{"name": "BUILD_WARNINGS", "group": "build", "value": "extra;werror"}],
             }
         )

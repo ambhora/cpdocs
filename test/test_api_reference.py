@@ -18,15 +18,7 @@ from cpdocs.contract import ParseOptions
 from cpdocs.languages.cpp.extract import extract_clang_graph
 from cpdocs.languages.python.extract import build_python_graph
 from cpdocs.languages.rust.extract import build_rust_graph
-from cpdocs.model import (
-    ApiAttribute,
-    ApiEntity,
-    ApiGraph,
-    ApiParameter,
-    ApiSignature,
-    merge_graphs,
-    stable_entity_id,
-)
+from cpdocs.model import ApiAttribute, ApiEntity, ApiGraph, ApiParameter, ApiSignature, merge_graphs, stable_entity_id
 from cpdocs.rendering.common import entity_document
 from cpdocs.rendering.html import _theme_head, _ThemeAsset, _ThemeAssets, render_html_site
 from cpdocs.resources import resource
@@ -39,10 +31,7 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
 
     include = tmp_path / "include"
     include.mkdir()
-    (include / "dice.hpp").write_text(
-        fixture_text("conditional-api.hpp"),
-        encoding="utf-8",
-    )
+    (include / "dice.hpp").write_text(fixture_text("conditional-api.hpp"), encoding="utf-8")
 
     graphs = []
     for feature_set, defines in (("cpu", ()), ("cuda", ("USE_CUDA=1",))):
@@ -53,12 +42,7 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
             language="cpp",
             api_roots=[include],
             parse=ParseOptions(
-                standard="c++20",
-                include=(),
-                system_include=(),
-                define=defines,
-                flags=(),
-                compile_database=None,
+                standard="c++20", include=(), system_include=(), define=defines, flags=(), compile_database=None
             ),
             feature_set=feature_set,
             clang_executable=clang,
@@ -73,9 +57,7 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
     assert {signature.compact for signature in foo.signatures} == {"(cpu_view)", "(cuda_view)"}
     assert set(foo.feature_sets) == {"cpu", "cuda"}
     backend_name = merged.entities[stable_entity_id("cpp", "function", "dice::backend_name")]
-    assert backend_name.signatures[0].attributes == (
-        ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),
-    )
+    assert backend_name.signatures[0].attributes == (ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),)
     assert stable_entity_id("cpp", "method", "visible::yes") in merged.entities
     assert stable_entity_id("cpp", "method", "visible::no") not in merged.entities
 
@@ -91,26 +73,13 @@ def test_python_backend_uses_same_graph_model(tmp_path: Path) -> None:
     (package / "__init__.py").write_text(
         '"""Dice package."""\nfrom .core import Solver\n__all__ = ["Solver"]\n', encoding="utf-8"
     )
-    (package / "core.py").write_text(
-        fixture_text("python-public-api.py"),
-        encoding="utf-8",
-    )
+    (package / "core.py").write_text(fixture_text("python-public-api.py"), encoding="utf-8")
 
-    graph = build_python_graph(
-        project_root=tmp_path,
-        package_root=package,
-        package="dice",
-        version="main",
-    )
-    assert (
-        graph.entities[stable_entity_id("python", "package", "dice")].documentation
-        == "Dice package."
-    )
+    graph = build_python_graph(project_root=tmp_path, package_root=package, package="dice", version="main")
+    assert graph.entities[stable_entity_id("python", "package", "dice")].documentation == "Dice package."
     reader = graph.entities[stable_entity_id("python", "protocol", "dice.core.Reader")]
     assert reader.kind == "protocol"
-    constructor = graph.entities[
-        stable_entity_id("python", "constructor", "dice.core.Solver.__init__")
-    ]
+    constructor = graph.entities[stable_entity_id("python", "constructor", "dice.core.Solver.__init__")]
     assert constructor.signatures[0].parameters[0].type == "int"
     solve = graph.entities[stable_entity_id("python", "method", "dice.core.Solver.solve")]
     # The implicit ``self`` is not part of the documented signature.
@@ -120,22 +89,14 @@ def test_python_backend_uses_same_graph_model(tmp_path: Path) -> None:
 def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: Path) -> None:
     package = tmp_path / "src" / "dice"
     (package / "_impl").mkdir(parents=True)
-    (package / "__init__.py").write_text(
-        '"""Dice package."""\nfrom ._rng import roll\n', encoding="utf-8"
-    )
+    (package / "__init__.py").write_text('"""Dice package."""\nfrom ._rng import roll\n', encoding="utf-8")
     (package / "_rng.py").write_text('def roll() -> int:\n    """Roll."""\n', encoding="utf-8")
     (package / "_impl" / "tables.py").write_text("TABLE = 1\n", encoding="utf-8")
     (package / "__pycache__").mkdir()
     (package / "__pycache__" / "cached.py").write_text("", encoding="utf-8")
 
-    graph = build_python_graph(
-        project_root=tmp_path, package_root=package, package="dice", version="main"
-    )
-    assert sorted(graph.sources) == [
-        "src/dice/__init__.py",
-        "src/dice/_impl/tables.py",
-        "src/dice/_rng.py",
-    ]
+    graph = build_python_graph(project_root=tmp_path, package_root=package, package="dice", version="main")
+    assert sorted(graph.sources) == ["src/dice/__init__.py", "src/dice/_impl/tables.py", "src/dice/_rng.py"]
     # The modules themselves stay out of the API.
     assert {entity.qualified_name for entity in graph.entities.values()} == {"dice"}
 
@@ -175,20 +136,11 @@ def test_rustdoc_backend_normalizes_function_signature(tmp_path: Path) -> None:
                                     "output": {
                                         "resolved_path": {
                                             "name": "Result",
-                                            "args": {
-                                                "angle_bracketed": {
-                                                    "args": [{"type": {"primitive": "u64"}}]
-                                                }
-                                            },
+                                            "args": {"angle_bracketed": {"args": [{"type": {"primitive": "u64"}}]}},
                                         }
                                     },
                                 },
-                                "header": {
-                                    "is_const": False,
-                                    "is_async": False,
-                                    "is_unsafe": False,
-                                    "abi": "Rust",
-                                },
+                                "header": {"is_const": False, "is_async": False, "is_unsafe": False, "abi": "Rust"},
                             }
                         },
                     }
@@ -303,14 +255,8 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     graph.add(package)
     graph.add(macro)
     graph.sources["dice/version.hpp"] = "#pragma once\nnamespace dice { namespace meta {} }\n"
-    graph.feature_sets["feature-set-001"] = {
-        "features": ["cpu"],
-        "selection": {"features": ["cpu"]},
-    }
-    graph.metadata = {
-        "units": [{"id": "dice", "language": "cpp"}],
-        "generator": "test",
-    }
+    graph.feature_sets["feature-set-001"] = {"features": ["cpu"], "selection": {"features": ["cpu"]}}
+    graph.metadata = {"units": [{"id": "dice", "language": "cpp"}], "generator": "test"}
     graph.rebuild_children()
 
     site = tmp_path / "site"
@@ -353,9 +299,7 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert "Public Functions" in class_page
     assert 'id="member-method-run"' in class_page
     assert not html_page(entity_document(method)).is_file()
-    method_alias = (site / "_symbols" / "dice" / "bar" / "run" / "index.html").read_text(
-        encoding="utf-8"
-    )
+    method_alias = (site / "_symbols" / "dice" / "bar" / "run" / "index.html").read_text(encoding="utf-8")
     assert "#member-method-run" in method_alias
     package_page = html_page(entity_document(package)).read_text(encoding="utf-8")
     assert 'class="cpdocs-api-signature-type"' in package_page
@@ -370,9 +314,7 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert ">run</a>" not in namespace_page
     nested_namespace_page = html_page(entity_document(nested_namespace)).read_text(encoding="utf-8")
     assert "groups the public API declared in this scope" in nested_namespace_page
-    source_page = (site / "_sources" / "dice" / "version.hpp" / "index.html").read_text(
-        encoding="utf-8"
-    )
+    source_page = (site / "_sources" / "dice" / "version.hpp" / "index.html").read_text(encoding="utf-8")
     assert 'class="language-cpp"' in source_page
     assert "style=" in source_page or "cpdocs-syntax-keyword" in source_page
     home_page = (site / "index.html").read_text(encoding="utf-8")
@@ -408,10 +350,7 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert "grid-template-columns: 1.45rem minmax(0, 1fr) auto auto" in css
     assert ".api-outline-language { min-width: 0; justify-self: end; overflow: hidden; }" in css
     assert "text-overflow: ellipsis" in css
-    assert (
-        '<span class="api-outline-language"><span class="api-language-badge">C++</span></span>'
-        in home_page
-    )
+    assert '<span class="api-outline-language"><span class="api-language-badge">C++</span></span>' in home_page
     assert "border: 1px solid var(--api-border)" in css
     assert '"dice::foo"' in (site / "symbols.json").read_text(encoding="utf-8")
 
@@ -428,18 +367,10 @@ def test_feature_set_page_shows_opaque_selection(tmp_path: Path) -> None:
             feature_sets=["feature-set-001", "feature-set-002"],
         )
     )
-    graph.feature_sets["feature-set-001"] = {
-        "features": ["base"],
-        "selection": {"features": ["base"]},
-    }
-    graph.feature_sets["feature-set-002"] = {
-        "features": ["base", "gpu"],
-        "selection": {"features": ["base", "gpu"]},
-    }
+    graph.feature_sets["feature-set-001"] = {"features": ["base"], "selection": {"features": ["base"]}}
+    graph.feature_sets["feature-set-002"] = {"features": ["base", "gpu"], "selection": {"features": ["base", "gpu"]}}
     graph.rebuild_children()
-    render_html_site(
-        graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c"
-    )
+    render_html_site(graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c")
     page = (tmp_path / "site" / "feature-sets" / "index.html").read_text(encoding="utf-8")
     assert "Feature Sets" in page
     assert "Feature sets have no names" in page
@@ -484,9 +415,7 @@ def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: 
     )
     graph = ApiGraph(project="demo", version="main", language="cpp")
     site = tmp_path / "site"
-    render_html_site(
-        graph, output_directory=site, project_docs_url="../", copyright_text="c", theme=theme
-    )
+    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c", theme=theme)
 
     stylesheet = (site / "assets" / "cpdocs-theme.css").read_text(encoding="utf-8")
     assert 'html[data-theme="light"] {\n  --api-accent: #266c7c;\n}' in stylesheet
@@ -497,9 +426,7 @@ def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: 
     assert (site / "assets" / "favicon.svg").read_bytes() == logo.read_bytes()
 
     page = (site / "index.html").read_text(encoding="utf-8")
-    assert page.index('href="assets/cpdocs-api.css?v=') < page.index(
-        'href="assets/cpdocs-theme.css?v='
-    )
+    assert page.index('href="assets/cpdocs-api.css?v=') < page.index('href="assets/cpdocs-theme.css?v=')
     assert re.search(r'<link rel="icon" href="assets/favicon\.svg\?v=[0-9a-f]{10}">', page)
     assert re.search(
         r'<a class="api-brand" href="[^"]*"><img class="api-brand-logo" '

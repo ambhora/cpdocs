@@ -51,12 +51,7 @@ def test_config_outside_docs_belongs_to_its_directory(tmp_path: Path) -> None:
 
 
 def test_full_config(tmp_path: Path) -> None:
-    config = load_config(
-        _write(
-            tmp_path / "docs" / "cpdocs.yml",
-            fixture_text("complete-cpdocs.yml"),
-        )
-    )
+    config = load_config(_write(tmp_path / "docs" / "cpdocs.yml", fixture_text("complete-cpdocs.yml")))
     assert config.versions == ("main", "v2.0.0", "v1.0.0")
     assert config.hide_cpp_namespaces == ("*::detail",)
     assert config.hide_private_python is False
@@ -69,22 +64,13 @@ def test_full_config(tmp_path: Path) -> None:
         ("build:\n  feature-sets: make\n  build: make\n", "contract must be 3"),
         ("contract: 3\n", "build.feature-sets"),
         ("contract: 3\nbuild:\n  feature-sets: [make]\n  build: make\n", "command string"),
-        (
-            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\n  manifest: make\n",
-            "unknown build keys",
-        ),
+        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\n  manifest: make\n", "unknown build keys"),
         (
             "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: {tags: all}\n",
             "versions must be a list",
         ),
-        (
-            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: [main, main]\n",
-            "duplicates",
-        ),
-        (
-            "contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: []\n",
-            "at least one version",
-        ),
+        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: [main, main]\n", "duplicates"),
+        ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: []\n", "at least one version"),
     ],
 )
 def test_invalid_configs_are_rejected(tmp_path: Path, text: str, message: str) -> None:
@@ -131,9 +117,7 @@ def test_theme_resolves_files_and_normalizes_colors(tmp_path: Path) -> None:
 
 
 def test_theme_favicon_can_differ_from_logo(tmp_path: Path) -> None:
-    text = THEMED.replace(
-        "    logo: share/icon.svg\n", "    logo: share/icon.svg\n    favicon: share/favicon.png\n"
-    )
+    text = THEMED.replace("    logo: share/icon.svg\n", "    logo: share/icon.svg\n    favicon: share/favicon.png\n")
     config = load_config(_themed_project(tmp_path, text))
     assert config.theme.favicon == tmp_path / "share" / "favicon.png"
 

@@ -14,15 +14,7 @@ from .fortran.render import RENDERING as FORTRAN
 from .python.render import RENDERING as PYTHON
 from .rust.render import RENDERING as RUST
 
-_RENDERINGS = {
-    "c": CPP,
-    "cpp": CPP,
-    "cuda": CPP,
-    "hip": CPP,
-    "fortran": FORTRAN,
-    "python": PYTHON,
-    "rust": RUST,
-}
+_RENDERINGS = {"c": CPP, "cpp": CPP, "cuda": CPP, "hip": CPP, "fortran": FORTRAN, "python": PYTHON, "rust": RUST}
 
 _LANGUAGE_LABELS = {
     "c": "C",
@@ -130,11 +122,4 @@ def source_language(path: str) -> str:
     return "text"
 
 
-__all__ = [
-    "LanguageRendering",
-    "kind_label",
-    "kind_marker",
-    "language_label",
-    "rendering_for",
-    "source_language",
-]
+__all__ = ["LanguageRendering", "kind_label", "kind_marker", "language_label", "rendering_for", "source_language"]

@@ -29,10 +29,7 @@ def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None
         include = project / "api" / backend / "demo"
         include.mkdir(parents=True, exist_ok=True)
         (include / "backend.hpp").write_text(
-            "#pragma once\nnamespace demo {\n"
-            f"/// {backend.upper()} definition.\n{declaration}\n"
-            "}\n",
-            encoding="utf-8",
+            f"#pragma once\nnamespace demo {{\n/// {backend.upper()} definition.\n{declaration}\n}}\n", encoding="utf-8"
         )
 
     (project / "provider.py").write_text(PROVIDER, encoding="utf-8")
@@ -52,12 +49,8 @@ def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None
 
     assert cpp.language == "cpp"
     assert cuda.language == "cuda"
-    assert [(signature.returns, signature.compact) for signature in cpp.signatures] == [
-        ("int", "(int)")
-    ]
-    assert [(signature.returns, signature.compact) for signature in cuda.signatures] == [
-        ("double", "(double)")
-    ]
+    assert [(signature.returns, signature.compact) for signature in cpp.signatures] == [("int", "(int)")]
+    assert [(signature.returns, signature.compact) for signature in cuda.signatures] == [("double", "(double)")]
     assert cpp.feature_sets == ["feature-set-001"]
     assert set(cuda.feature_sets) == {"feature-set-002", "feature-set-003"}
     assert graph.feature_sets["feature-set-001"]["features"] == ["host"]

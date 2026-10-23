@@ -17,11 +17,7 @@ def _parameters(signature: ApiSignature) -> str:
     has_var_positional = any(item.kind == "var-positional" for item in parameters)
     keyword_marker_emitted = False
     for index, parameter in enumerate(parameters):
-        if (
-            parameter.kind == "keyword-only"
-            and not has_var_positional
-            and not keyword_marker_emitted
-        ):
+        if parameter.kind == "keyword-only" and not has_var_positional and not keyword_marker_emitted:
             values.append("*")
             keyword_marker_emitted = True
         prefix = ""

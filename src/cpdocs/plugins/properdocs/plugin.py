@@ -142,11 +142,7 @@ class CpdocsPlugin(BasePlugin):
         else:
             files = [path for path in self._project_root.rglob("*") if path.is_file()]
         output = self.output.resolve()
-        watched = [
-            path
-            for path in files
-            if output not in path.resolve().parents and ".git" not in path.parts
-        ]
+        watched = [path for path in files if output not in path.resolve().parents and ".git" not in path.parts]
         refs = self._project_root / ".git" / "refs"
         if refs.is_dir():
             watched.extend(path for path in refs.rglob("*") if path.is_file())
@@ -247,9 +243,7 @@ class CpdocsPlugin(BasePlugin):
                 names = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 names = {}
-            self._symbols[version] = {
-                _symbol_key(name): str(target) for name, target in names.items()
-            }
+            self._symbols[version] = {_symbol_key(name): str(target) for name, target in names.items()}
         return self._symbols[version]
 
     def _locate(self, version: str, symbol: str) -> str | None:
@@ -268,10 +262,7 @@ class CpdocsPlugin(BasePlugin):
         level = self._cpdocs.check_broken_references
         missing: list[tuple[str, str]] = []
         markdown = expand_versions_directive(
-            markdown,
-            page_dest_uri=page.file.dest_uri,
-            mount=self.mount,
-            metadata=self._versions_metadata(),
+            markdown, page_dest_uri=page.file.dest_uri, mount=self.mount, metadata=self._versions_metadata()
         )
         result = resolve_api_references(
             markdown,
@@ -327,9 +318,7 @@ class CpdocsPlugin(BasePlugin):
             try:
                 mount = project.relative_to(root)
             except ValueError as error:
-                raise PluginError(
-                    f"cpdocs: subsite must be below the project root: {configured}"
-                ) from error
+                raise PluginError(f"cpdocs: subsite must be below the project root: {configured}") from error
             if project in seen:
                 continue
             if not (project / "properdocs.yml").is_file():
@@ -338,22 +327,13 @@ class CpdocsPlugin(BasePlugin):
             result.append((project, mount))
         return result
 
-    def _run_subsite_build(
-        self, project: Path, mount: Path, destination: Path, *, strict: bool
-    ) -> None:
+    def _run_subsite_build(self, project: Path, mount: Path, destination: Path, *, strict: bool) -> None:
         environment = os.environ.copy()
         if self._serve_active:
             # The nested invocation uses ``build`` so that it writes once into a persistent
             # cache. Tell its cpdocs plugin to use serve semantics for the checked-out tree.
             environment["_CPDOCS_SERVE_IN_SITU"] = "1"
-        command = [
-            sys.executable,
-            "-m",
-            "properdocs",
-            "build",
-            "--site-dir",
-            str(destination),
-        ]
+        command = [sys.executable, "-m", "properdocs", "build", "--site-dir", str(destination)]
         if strict:
             command.append("--strict")
         result = subprocess.run(
@@ -366,9 +346,7 @@ class CpdocsPlugin(BasePlugin):
             stderr=subprocess.STDOUT,
         )
         if result.returncode != 0:
-            raise PluginError(
-                f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n{result.stdout}"
-            )
+            raise PluginError(f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n{result.stdout}")
         _LOG.info("Built ProperDocs subsite %s", mount.as_posix())
 
     @staticmethod

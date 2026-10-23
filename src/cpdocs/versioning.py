@@ -82,7 +82,5 @@ def select_refs(project_root: Path, versions: tuple[str, ...]) -> list[SelectedR
         elif name in tags:
             selected.append(SelectedRef(name=name, kind="tag", checkout=f"refs/tags/{name}"))
         else:
-            raise RuntimeError(
-                f"configured version {name!r} is not a local/remote branch or tag; fetch it first"
-            )
+            raise RuntimeError(f"configured version {name!r} is not a local/remote branch or tag; fetch it first")
     return selected

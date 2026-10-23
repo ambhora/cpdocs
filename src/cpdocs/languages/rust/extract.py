@@ -140,9 +140,7 @@ def _function_signature(item: dict[str, object]) -> tuple[ApiSignature | None, l
         abi = header.get("abi")
         if isinstance(abi, str) and abi.casefold() not in {"", "rust"}:
             properties.append(f'extern "{abi}"')
-    return ApiSignature(
-        parameters=tuple(parameters), returns=returns, qualifiers=tuple(properties)
-    ), properties
+    return ApiSignature(parameters=tuple(parameters), returns=returns, qualifiers=tuple(properties)), properties
 
 
 def _inner_kind(item: dict[str, object]) -> str | None:
@@ -383,9 +381,7 @@ def build_rust_graph(
         if parent and parent != entity.id:
             entity.parent = parent
             continue
-        parent_path = (
-            entity.qualified_name.rsplit("::", 1)[0] if "::" in entity.qualified_name else ""
-        )
+        parent_path = entity.qualified_name.rsplit("::", 1)[0] if "::" in entity.qualified_name else ""
         parent = path_to_id.get(parent_path)
         if parent and parent != entity.id:
             entity.parent = parent

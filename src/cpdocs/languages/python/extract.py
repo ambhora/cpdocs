@@ -45,12 +45,7 @@ def _version_imports(tree: ast.Module) -> tuple[set[str], set[str]]:
     return sys_names, version_names
 
 
-def _guard_value(
-    node: ast.expr,
-    version: tuple[int, int],
-    sys_names: set[str],
-    version_names: set[str],
-) -> Any:
+def _guard_value(node: ast.expr, version: tuple[int, int], sys_names: set[str], version_names: set[str]) -> Any:
     """Evaluate only literals and standard Python interpreter-version references."""
 
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, str, bool)):
@@ -93,10 +88,7 @@ def _guard_value(
 
 
 def _version_guard(
-    node: ast.expr,
-    version: tuple[int, int] | None,
-    sys_names: set[str],
-    version_names: set[str],
+    node: ast.expr, version: tuple[int, int] | None, sys_names: set[str], version_names: set[str]
 ) -> bool | None:
     """Resolve safe native version tests; unknown conditions remain undecidable."""
 
@@ -106,9 +98,7 @@ def _version_guard(
         result = _version_guard(node.operand, version, sys_names, version_names)
         return None if result is None else not result
     if isinstance(node, ast.BoolOp):
-        results = [
-            _version_guard(value, version, sys_names, version_names) for value in node.values
-        ]
+        results = [_version_guard(value, version, sys_names, version_names) for value in node.values]
         if isinstance(node.op, ast.And):
             if False in results:
                 return False
@@ -148,10 +138,7 @@ def _version_guard(
 
 
 def _selected_body(
-    body: list[ast.stmt],
-    version: tuple[int, int] | None,
-    sys_names: set[str],
-    version_names: set[str],
+    body: list[ast.stmt], version: tuple[int, int] | None, sys_names: set[str], version_names: set[str]
 ) -> list[ast.stmt]:
     """Flatten resolvable version branches; omit unknown conditions (legacy behavior).
 
@@ -165,12 +152,7 @@ def _selected_body(
             decision = _version_guard(node.test, version, sys_names, version_names)
             if decision is not None:
                 selected.extend(
-                    _selected_body(
-                        node.body if decision else node.orelse,
-                        version,
-                        sys_names,
-                        version_names,
-                    )
+                    _selected_body(node.body if decision else node.orelse, version, sys_names, version_names)
                 )
             continue
         selected.append(node)
@@ -195,9 +177,7 @@ def _default(node: ast.expr | None) -> str | None:
         return None
 
 
-def _signature(
-    node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: bool = False
-) -> ApiSignature:
+def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: bool = False) -> ApiSignature:
     args = node.args
     positional = [*args.posonlyargs, *args.args]
     if implicit_first and positional and positional[0].arg in {"self", "cls"}:
@@ -216,28 +196,17 @@ def _signature(
         )
     if args.vararg is not None:
         parameters.append(
-            ApiParameter(
-                name=args.vararg.arg,
-                type=_annotation(args.vararg.annotation),
-                kind="var-positional",
-            )
+            ApiParameter(name=args.vararg.arg, type=_annotation(args.vararg.annotation), kind="var-positional")
         )
     for argument, default in zip(args.kwonlyargs, args.kw_defaults, strict=True):
         parameters.append(
             ApiParameter(
-                name=argument.arg,
-                type=_annotation(argument.annotation),
-                default=_default(default),
-                kind="keyword-only",
+                name=argument.arg, type=_annotation(argument.annotation), default=_default(default), kind="keyword-only"
             )
         )
     if args.kwarg is not None:
         parameters.append(
-            ApiParameter(
-                name=args.kwarg.arg,
-                type=_annotation(args.kwarg.annotation),
-                kind="var-keyword",
-            )
+            ApiParameter(name=args.kwarg.arg, type=_annotation(args.kwarg.annotation), kind="var-keyword")
         )
     qualifiers: list[str] = []
     if isinstance(node, ast.AsyncFunctionDef):
@@ -249,9 +218,7 @@ def _signature(
         elif text.endswith(".overload") or text == "overload":
             qualifiers.append("overload")
     return ApiSignature(
-        parameters=tuple(parameters),
-        returns=_annotation(node.returns),
-        qualifiers=tuple(dict.fromkeys(qualifiers)),
+        parameters=tuple(parameters), returns=_annotation(node.returns), qualifiers=tuple(dict.fromkeys(qualifiers))
     )
 
 
@@ -272,10 +239,7 @@ def _parent_qualified_name(qualified: str) -> str | None:
 
 
 def _public_names(
-    tree: ast.Module,
-    version: tuple[int, int] | None,
-    sys_names: set[str],
-    version_names: set[str],
+    tree: ast.Module, version: tuple[int, int] | None, sys_names: set[str], version_names: set[str]
 ) -> set[str] | None:
     for node in _selected_body(tree.body, version, sys_names, version_names):
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
@@ -336,11 +300,7 @@ def _walk_body(
             ):
                 continue
             qualified = ".".join((*scopes, node.name))
-            kind = (
-                "constructor"
-                if in_class and node.name == "__init__"
-                else ("method" if in_class else "function")
-            )
+            kind = "constructor" if in_class and node.name == "__init__" else ("method" if in_class else "function")
             signature = _signature(node, implicit_first=in_class)
             properties = list(signature.qualifiers)
             if "property" in properties:
@@ -361,9 +321,7 @@ def _walk_body(
             continue
 
         if isinstance(node, ast.ClassDef):
-            if node.name.startswith("_") and (
-                explicit_public is None or node.name not in explicit_public
-            ):
+            if node.name.startswith("_") and (explicit_public is None or node.name not in explicit_public):
                 continue
             qualified = ".".join((*scopes, node.name))
             bases = [_annotation(base) for base in node.bases]
@@ -450,15 +408,11 @@ def _walk_body(
                 if not isinstance(target, ast.Name):
                     continue
                 name = target.id
-                if name.startswith("_") and (
-                    explicit_public is None or name not in explicit_public
-                ):
+                if name.startswith("_") and (explicit_public is None or name not in explicit_public):
                     continue
                 # Ordinary module/class assignments are useful API constants when explicitly public.
                 # Avoid documenting imports/cache helpers merely because they are assigned.
-                if not (
-                    name.isupper() or (explicit_public is not None and name in explicit_public)
-                ):
+                if not (name.isupper() or (explicit_public is not None and name in explicit_public)):
                     continue
                 qualified = ".".join((*scopes, name))
                 value = _default(node.value)
@@ -483,11 +437,7 @@ def _walk_body(
                 continue
             qualified = ".".join((*scopes, name))
             annotation = _annotation(node.annotation)
-            is_alias = annotation in {
-                "TypeAlias",
-                "typing.TypeAlias",
-                "typing_extensions.TypeAlias",
-            }
+            is_alias = annotation in {"TypeAlias", "typing.TypeAlias", "typing_extensions.TypeAlias"}
             kind = "type_alias" if is_alias else ("constant" if name.isupper() else "attribute")
             properties: list[str] = []
             if not is_alias and annotation:
@@ -563,12 +513,7 @@ def build_python_graph(
         return all(part.isidentifier() for part in parts)
 
     every_source = sorted(
-        {
-            path
-            for suffix in ("*.py", "*.pyi")
-            for path in package_root.rglob(suffix)
-            if package_source(path)
-        },
+        {path for suffix in ("*.py", "*.pyi") for path in package_root.rglob(suffix) if package_source(path)},
         key=lambda path: (path.relative_to(package_root).as_posix(), path.suffix != ".py"),
     )
     sources = [path for path in every_source if public_source(path) and importable_source(path)]
@@ -579,9 +524,7 @@ def build_python_graph(
         if public_source(path) and importable_source(path):
             continue
         try:
-            graph.sources.setdefault(
-                relative_source_path(path, project_root), path.read_text(encoding="utf-8")
-            )
+            graph.sources.setdefault(relative_source_path(path, project_root), path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError):
             pass
 
@@ -589,9 +532,7 @@ def build_python_graph(
     # Create the module/package hierarchy first so children can always refer to a semantic parent.
     for path in sources:
         try:
-            tree = ast.parse(
-                path.read_text(encoding="utf-8"), filename=str(path), type_comments=True
-            )
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path), type_comments=True)
         except (OSError, UnicodeDecodeError, SyntaxError) as error:
             raise RuntimeError(f"Cannot parse Python API source {path}: {error}") from error
         qualified, kind = _module_info(package_root, path, package)
@@ -613,9 +554,7 @@ def build_python_graph(
         parent_name = _parent_qualified_name(qualified) or package
         parent_id = stable_entity_id(
             "python",
-            "package"
-            if (package_root / Path(*parent_name.split(".")[1:]) / "__init__.py").is_file()
-            else "module",
+            "package" if (package_root / Path(*parent_name.split(".")[1:]) / "__init__.py").is_file() else "module",
             parent_name,
         )
         if parent_id not in graph.entities:

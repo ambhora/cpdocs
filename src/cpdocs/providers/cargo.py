@@ -23,23 +23,14 @@ def _cargo_command(toolchain: str | None) -> list[str]:
     return command
 
 
-def _run_cargo(
-    source: Path, arguments: list[str], *, toolchain: str | None
-) -> subprocess.CompletedProcess[str]:
+def _run_cargo(source: Path, arguments: list[str], *, toolchain: str | None) -> subprocess.CompletedProcess[str]:
     command = [*_cargo_command(toolchain), *arguments]
     try:
         return subprocess.run(
-            command,
-            cwd=source,
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            command, cwd=source, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
     except FileNotFoundError as error:
-        raise RuntimeError(
-            "cpdocs rust: cargo is not available; install Rust/Cargo or set CPDOCS_CARGO"
-        ) from error
+        raise RuntimeError("cpdocs rust: cargo is not available; install Rust/Cargo or set CPDOCS_CARGO") from error
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or error.stdout or "").strip()
         suffix = f": {detail}" if detail else ""
@@ -51,15 +42,7 @@ def _metadata(source: Path, *, toolchain: str | None) -> dict[str, Any]:
     if not manifest.is_file():
         raise RuntimeError(f"cpdocs rust: {manifest} does not exist")
     result = _run_cargo(
-        source,
-        [
-            "metadata",
-            "--format-version=1",
-            "--no-deps",
-            "--manifest-path",
-            str(manifest),
-        ],
-        toolchain=toolchain,
+        source, ["metadata", "--format-version=1", "--no-deps", "--manifest-path", str(manifest)], toolchain=toolchain
     )
     try:
         raw = json.loads(result.stdout)
@@ -75,9 +58,7 @@ def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dic
     if package:
         matches = [item for item in packages if item.get("name") == package]
         if len(matches) != 1:
-            raise RuntimeError(
-                f"cpdocs rust: Cargo package {package!r} is not unique in the workspace"
-            )
+            raise RuntimeError(f"cpdocs rust: Cargo package {package!r} is not unique in the workspace")
         return matches[0]
 
     root_manifest = (source / "Cargo.toml").resolve()
@@ -94,9 +75,7 @@ def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dic
         return matches[0]
     if len(packages) == 1:
         return packages[0]
-    raise RuntimeError(
-        "cpdocs rust: Cargo workspace contains multiple packages; pass --package explicitly"
-    )
+    raise RuntimeError("cpdocs rust: Cargo workspace contains multiple packages; pass --package explicitly")
 
 
 def _library_target(package: dict[str, Any]) -> dict[str, Any]:
@@ -111,9 +90,7 @@ def _library_target(package: dict[str, Any]) -> dict[str, Any]:
         if isinstance(kinds, list) and any(kind in {"lib", "proc-macro"} for kind in kinds):
             libraries.append(target)
     if len(libraries) != 1:
-        raise RuntimeError(
-            "cpdocs rust: package must expose exactly one library target for rustdoc JSON"
-        )
+        raise RuntimeError("cpdocs rust: package must expose exactly one library target for rustdoc JSON")
     return libraries[0]
 
 
@@ -133,27 +110,18 @@ def _feature_sets(package: dict[str, Any]) -> list[list[str]]:
             return [[feature] for feature in sorted(declared_features)]
         return [[]]
     if not isinstance(configured, list) or not configured:
-        raise RuntimeError(
-            "cpdocs rust: package.metadata.cpdocs.feature-sets must be a non-empty array"
-        )
+        raise RuntimeError("cpdocs rust: package.metadata.cpdocs.feature-sets must be a non-empty array")
 
     result: list[list[str]] = []
     identities: set[tuple[str, ...]] = set()
     for index, value in enumerate(configured):
         if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
-            raise RuntimeError(
-                "cpdocs rust: package.metadata.cpdocs.feature-sets entries must be arrays of strings"
-            )
+            raise RuntimeError("cpdocs rust: package.metadata.cpdocs.feature-sets entries must be arrays of strings")
         if len(set(value)) != len(value):
-            raise RuntimeError(
-                f"cpdocs rust: feature set {index + 1} contains duplicate Cargo features"
-            )
+            raise RuntimeError(f"cpdocs rust: feature set {index + 1} contains duplicate Cargo features")
         unknown = [feature for feature in value if feature not in declared_features]
         if unknown:
-            raise RuntimeError(
-                "cpdocs rust: feature set references undeclared Cargo feature(s): "
-                + ", ".join(unknown)
-            )
+            raise RuntimeError("cpdocs rust: feature set references undeclared Cargo feature(s): " + ", ".join(unknown))
         identity = tuple(sorted(value))
         if identity in identities:
             raise RuntimeError("cpdocs rust: feature-sets must not contain duplicates")
@@ -188,31 +156,18 @@ def _browse_roots(source: Path, package: dict[str, Any], target: dict[str, Any])
     src_path = target.get("src_path")
     if isinstance(src_path, str):
         src = Path(src_path)
-        if (
-            src.exists()
-            and src not in roots
-            and not any(root.is_dir() and root in src.parents for root in roots)
-        ):
+        if src.exists() and src not in roots and not any(root.is_dir() and root in src.parents for root in roots):
             roots.append(src)
     return [_relative_or_absolute(root, source) for root in roots]
 
 
-def write_feature_sets(
-    source: Path,
-    output: Path,
-    *,
-    package: str | None = None,
-    toolchain: str | None = None,
-) -> Path:
+def write_feature_sets(source: Path, output: Path, *, package: str | None = None, toolchain: str | None = None) -> Path:
     metadata = _metadata(source, toolchain=toolchain)
     selected = _package(metadata, source, package)
     manifest = {
         "cpdocs-feature-sets": CONTRACT_VERSION,
         "generator": "cpdocs rust",
-        "project": {
-            "name": str(selected.get("name") or ""),
-            "version": str(selected.get("version") or ""),
-        },
+        "project": {"name": str(selected.get("name") or ""), "version": str(selected.get("version") or "")},
         "feature-sets": [{"features": features} for features in _feature_sets(selected)],
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -221,12 +176,7 @@ def write_feature_sets(
 
 
 def write_manifest(
-    source: Path,
-    feature_set_file: Path,
-    output: Path,
-    *,
-    package: str | None = None,
-    toolchain: str | None = None,
+    source: Path, feature_set_file: Path, output: Path, *, package: str | None = None, toolchain: str | None = None
 ) -> Path:
     feature_set = read_feature_set(feature_set_file)
     metadata = _metadata(source, toolchain=toolchain)
@@ -237,8 +187,7 @@ def write_manifest(
     unknown = [feature for feature in feature_set.features if feature not in declared_features]
     if unknown:
         raise RuntimeError(
-            "cpdocs rust: selected feature set contains undeclared Cargo feature(s): "
-            + ", ".join(unknown)
+            "cpdocs rust: selected feature set contains undeclared Cargo feature(s): " + ", ".join(unknown)
         )
 
     target_dir = output.parent / "cargo-target"
@@ -264,9 +213,7 @@ def write_manifest(
     target_name = str(target.get("name") or "").replace("-", "_")
     rustdoc_json = target_dir / "doc" / f"{target_name}.json"
     if not rustdoc_json.is_file():
-        raise RuntimeError(
-            f"cpdocs rust: cargo rustdoc succeeded but did not produce {rustdoc_json}"
-        )
+        raise RuntimeError(f"cpdocs rust: cargo rustdoc succeeded but did not produce {rustdoc_json}")
 
     manifest = {
         "cpdocs-manifest": CONTRACT_VERSION,

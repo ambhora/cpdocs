@@ -21,8 +21,6 @@ else:
     assert isinstance(selection["features"], list)
     data = {
         "cpdocs-manifest": 1,
-        "units": [
-            {"id": "pkg", "language": "python", "package": "pkg", "api": [{"path": "src/pkg"}]}
-        ],
+        "units": [{"id": "pkg", "language": "python", "package": "pkg", "api": [{"path": "src/pkg"}]}],
     }
 Path(output).write_text(json.dumps(data), encoding="utf-8")

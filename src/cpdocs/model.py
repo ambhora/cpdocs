@@ -110,11 +110,7 @@ class ApiGraph:
         while len(existing.signature_feature_sets) < len(existing.signatures):
             existing.signature_feature_sets.append([])
         for index, signature in enumerate(entity.signatures):
-            incoming = (
-                entity.signature_feature_sets[index]
-                if index < len(entity.signature_feature_sets)
-                else []
-            )
+            incoming = entity.signature_feature_sets[index] if index < len(entity.signature_feature_sets) else []
             if signature not in existing.signatures:
                 existing.signatures.append(signature)
                 existing.signature_feature_sets.append(list(incoming))
@@ -161,9 +157,7 @@ class ApiGraph:
 
     def roots(self) -> list[ApiEntity]:
         values = [
-            entity
-            for entity in self.entities.values()
-            if not entity.parent or entity.parent not in self.entities
+            entity for entity in self.entities.values() if not entity.parent or entity.parent not in self.entities
         ]
         return sorted(values, key=entity_sort_key)
 
@@ -224,9 +218,7 @@ def relative_source_path(path: str | Path, project_root: Path) -> str:
     return f"_external/{digest}/{absolute.name}"
 
 
-def merge_graphs(
-    graphs: Iterable[tuple[str, ApiGraph]], *, project: str, version: str, language: str
-) -> ApiGraph:
+def merge_graphs(graphs: Iterable[tuple[str, ApiGraph]], *, project: str, version: str, language: str) -> ApiGraph:
     merged = ApiGraph(project=project, version=version, language=language)
     for feature_set_name, graph in graphs:
         for key, value in graph.metadata.items():

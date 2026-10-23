@@ -38,12 +38,7 @@ os.environ.update(
 
 def git(project: Path, *arguments: str) -> str:
     result = subprocess.run(
-        ["git", *arguments],
-        cwd=project,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        ["git", *arguments], cwd=project, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     return result.stdout
 
@@ -79,23 +74,14 @@ def fixture_text(name: str) -> str:
 FAKE_BUILD = fixture_text("fake-build.py")
 
 
-def fake_project(
-    root: Path,
-    *,
-    feature_sets: list[list[str]] | None = None,
-    config: str = "",
-) -> Path:
+def fake_project(root: Path, *, feature_sets: list[list[str]] | None = None, config: str = "") -> Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / "src" / "pkg").mkdir(parents=True)
     (root / "src" / "pkg" / "__init__.py").write_text(
-        '"""A package."""\n\n\ndef answer() -> int:\n    """Return 42."""\n    return 42\n',
-        encoding="utf-8",
+        '"""A package."""\n\n\ndef answer() -> int:\n    """Return 42."""\n    return 42\n', encoding="utf-8"
     )
     (root / "fake_build.py").write_text(FAKE_BUILD, encoding="utf-8")
-    spec: dict[str, object] = {
-        "name": "fake",
-        "feature_sets": feature_sets or [[]],
-    }
+    spec: dict[str, object] = {"name": "fake", "feature_sets": feature_sets or [[]]}
     (root / "fake-build.json").write_text(json.dumps(spec), encoding="utf-8")
     (root / "docs").mkdir()
     python = shlex.quote(sys.executable)
@@ -103,8 +89,7 @@ def fake_project(
         "contract: 3\n"
         "build:\n"
         f'  feature-sets: >\n    {python} fake_build.py feature-sets "{{{{output-file}}}}"\n'
-        f'  build: >\n    {python} fake_build.py build "{{{{feature-set}}}}" "{{{{output-file}}}}"\n'
-        + config,
+        f'  build: >\n    {python} fake_build.py build "{{{{feature-set}}}}" "{{{{output-file}}}}"\n' + config,
         encoding="utf-8",
     )
     (root / ".gitignore").write_text("build/\n", encoding="utf-8")

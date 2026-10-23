@@ -7,12 +7,7 @@
 from __future__ import annotations
 
 from ...model import ApiEntity, ApiSignature
-from ..base import (
-    LanguageRendering,
-    assigned_property,
-    parameter_spelling,
-    typed_property,
-)
+from ..base import LanguageRendering, assigned_property, parameter_spelling, typed_property
 
 
 def entity_declaration(entity: ApiEntity) -> str:
@@ -45,9 +40,7 @@ def entity_declaration(entity: ApiEntity) -> str:
 
 def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
     attribute_spellings = list(
-        dict.fromkeys(
-            attribute.spelling for attribute in signature.attributes if attribute.spelling
-        )
+        dict.fromkeys(attribute.spelling for attribute in signature.attributes if attribute.spelling)
     )
     attribute_prefix = " ".join(attribute_spellings)
     if signature.spelling:
@@ -55,9 +48,7 @@ def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
 
     parameters = parameter_spelling(signature)
     prefix_values = [
-        value
-        for value in entity.properties
-        if value in {"inline", "constexpr", "consteval", "static", "virtual"}
+        value for value in entity.properties if value in {"inline", "constexpr", "consteval", "static", "virtual"}
     ]
     prefix = (" ".join(prefix_values) + " ") if prefix_values else ""
     result = (signature.returns + " ") if signature.returns else ""
@@ -101,9 +92,7 @@ RENDERING = LanguageRendering(
     type_like_kinds=frozenset({"class", "struct", "union", "enum", "type_alias", "concept"}),
     function_kinds=frozenset({"function", "method", "constructor", "deduction_guide"}),
     member_value_kinds=frozenset({"attribute", "variable", "constant"}),
-    source_suffixes=frozenset(
-        {".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh", ".hip"}
-    ),
+    source_suffixes=frozenset({".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh", ".hip"}),
     kind_markers={
         "namespace": "N",
         "class": "C",

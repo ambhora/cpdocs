@@ -22,15 +22,9 @@ if args[0] == "metadata":
                 "manifest_path": str(manifest),
                 "features": {"checked": [], "batch": []},
                 "metadata": {},
-                "targets": [
-                    {
-                        "name": "rust_geometry",
-                        "kind": ["lib"],
-                        "src_path": str(root / "src" / "lib.rs"),
-                    }
-                ],
+                "targets": [{"name": "rust_geometry", "kind": ["lib"], "src_path": str(root / "src" / "lib.rs")}],
             }
-        ],
+        ]
     }
     print(json.dumps(value))
 elif args[0] == "rustdoc":
@@ -58,23 +52,14 @@ elif args[0] == "rustdoc":
                         "inner": {
                             "function": {
                                 "sig": {"inputs": [], "output": {"primitive": "f64"}},
-                                "header": {
-                                    "is_const": False,
-                                    "is_async": False,
-                                    "is_unsafe": False,
-                                    "abi": "rust",
-                                },
+                                "header": {"is_const": False, "is_async": False, "is_unsafe": False, "abi": "rust"},
                             }
                         },
                     },
                 },
                 "paths": {
                     "0": {"crate_id": 0, "path": ["rust_geometry"], "kind": "module"},
-                    "1": {
-                        "crate_id": 0,
-                        "path": ["rust_geometry", "dot"],
-                        "kind": "function",
-                    },
+                    "1": {"crate_id": 0, "path": ["rust_geometry", "dot"], "kind": "function"},
                 },
                 "external_crates": {},
                 "target": {},

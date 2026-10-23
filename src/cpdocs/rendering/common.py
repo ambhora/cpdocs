@@ -100,13 +100,7 @@ _OPERATOR_WORDS = (
 )
 
 # Symbols inside template arguments that must stay distinguishable, spelled as words.
-_TYPE_WORDS = (
-    ("...", " pack "),
-    ("&&", " rref "),
-    ("&", " ref "),
-    ("*", " ptr "),
-    ("[]", " array "),
-)
+_TYPE_WORDS = (("...", " pack "), ("&&", " rref "), ("&", " ref "), ("*", " ptr "), ("[]", " array "))
 
 
 def _slug(value: str) -> str:
@@ -152,9 +146,7 @@ def assign_documents(entities: Iterable[ApiEntity]) -> None:
             key = f"{entity.language}:{entity.kind}:{entity.qualified_name}"
             digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:7]
             if path.name == "index.md":
-                _DOCUMENT_OVERRIDES[entity.id] = (
-                    path.parent.with_name(f"{path.parent.name}-{digest}") / "index.md"
-                )
+                _DOCUMENT_OVERRIDES[entity.id] = path.parent.with_name(f"{path.parent.name}-{digest}") / "index.md"
             else:
                 _DOCUMENT_OVERRIDES[entity.id] = path.with_name(f"{path.stem}-{digest}.md")
 
@@ -380,11 +372,7 @@ def _fallback_lex(code: str, language: str) -> list[tuple[str, str]]:
         token = match.group(0)
         if language in {"c", "cpp", "cuda", "hip"} and token.startswith("#"):
             kind = "preprocessor"
-        elif (
-            token.startswith("//")
-            or token.startswith("/*")
-            or (language == "python" and token.startswith("#"))
-        ):
+        elif token.startswith("//") or token.startswith("/*") or (language == "python" and token.startswith("#")):
             kind = "comment"
         elif token.startswith(('"', "'")):
             kind = "string"
@@ -448,9 +436,7 @@ def _highlight_source_lines(content: str, language: str) -> list[str]:
             if part:
                 escaped = html.escape(part)
                 if style:
-                    rendered[-1].append(
-                        f'<span style="{html.escape(style, quote=True)}">{escaped}</span>'
-                    )
+                    rendered[-1].append(f'<span style="{html.escape(style, quote=True)}">{escaped}</span>')
                 else:
                     rendered[-1].append(escaped)
             if index + 1 < len(parts):
@@ -483,8 +469,7 @@ def _preferred_type_target(name: str, entity: ApiEntity, graph: ApiGraph) -> Api
     candidates = [
         candidate
         for candidate in graph.entities.values()
-        if candidate.kind in rendering_for(candidate.language).type_like_kinds
-        and candidate.name == name
+        if candidate.kind in rendering_for(candidate.language).type_like_kinds and candidate.name == name
     ]
     if not candidates:
         return None
@@ -513,14 +498,7 @@ def _entity_href(document_path: Path, entity: ApiEntity, graph: ApiGraph) -> str
     return _relative_link(document_path, entity_document(entity))
 
 
-def _highlight_declaration(
-    code: str,
-    language: str,
-    *,
-    entity: ApiEntity,
-    graph: ApiGraph,
-    document_path: Path,
-) -> str:
+def _highlight_declaration(code: str, language: str, *, entity: ApiEntity, graph: ApiGraph, document_path: Path) -> str:
     """Highlight a declaration and add semantic links to known API types."""
 
     if lex is None or HtmlFormatter is None:
@@ -533,9 +511,7 @@ def _highlight_declaration(
                 if target is not None and target.id != entity.id:
                     href = _entity_href(document_path, target, graph)
                     token_html = (
-                        f'<a class="cpdocs-api-signature-type" href="{html.escape(href)}">'
-                        + token_html
-                        + "</a>"
+                        f'<a class="cpdocs-api-signature-type" href="{html.escape(href)}">' + token_html + "</a>"
                     )
                 elif stripped == entity.name:
                     token_html = f'<span class="cpdocs-api-signature-name">{token_html}</span>'
@@ -556,20 +532,14 @@ def _highlight_declaration(
             continue
         style = _token_style(formatter, token_type)
         escaped = html.escape(value)
-        token_html = (
-            f'<span style="{html.escape(style, quote=True)}">{escaped}</span>' if style else escaped
-        )
+        token_html = f'<span style="{html.escape(style, quote=True)}">{escaped}</span>' if style else escaped
 
         stripped = value.strip()
         if stripped and re.fullmatch(r"[A-Za-z_]\w*", stripped):
             target = _preferred_type_target(stripped, entity, graph)
             if target is not None and target.id != entity.id:
                 href = _entity_href(document_path, target, graph)
-                token_html = (
-                    f'<a class="cpdocs-api-signature-type" href="{html.escape(href)}">'
-                    + token_html
-                    + "</a>"
-                )
+                token_html = f'<a class="cpdocs-api-signature-type" href="{html.escape(href)}">' + token_html + "</a>"
             elif stripped == entity.name:
                 token_html = f'<span class="cpdocs-api-signature-name">{token_html}</span>'
         values.append(token_html)
@@ -624,9 +594,7 @@ def _resolve_related_entity(reference: str, entity: ApiEntity, graph: ApiGraph) 
     return matches[0] if len(matches) == 1 else None
 
 
-def _documentation_blocks(
-    entity: ApiEntity, graph: ApiGraph
-) -> tuple[str, list[tuple[str, ApiEntity | None]]]:
+def _documentation_blocks(entity: ApiEntity, graph: ApiGraph) -> tuple[str, list[tuple[str, ApiEntity | None]]]:
     related_names = list(entity.related)
     paragraphs: list[str] = []
     for block in re.split(r"\n\s*\n", entity.documentation.strip()):

@@ -53,9 +53,7 @@ def test_every_configuration_in_the_repository_is_covered() -> None:
     assert len(CONFIGURATIONS) >= 10
 
 
-@pytest.mark.parametrize(
-    "path", CONFIGURATIONS, ids=lambda path: path.relative_to(REPOSITORY).as_posix()
-)
+@pytest.mark.parametrize("path", CONFIGURATIONS, ids=lambda path: path.relative_to(REPOSITORY).as_posix())
 def test_korml_reads_every_configuration_as_yaml_did(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     (document,) = korml.loads(text, filename=str(path)).to_builtin()
@@ -69,12 +67,7 @@ def test_duplicate_keys_are_rejected_with_their_location(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
-    "extra",
-    [
-        "versions: &v [main]\n",
-        "versions: !!python/object:os.system [main]\n",
-        "? versions\n: [main]\n",
-    ],
+    "extra", ["versions: &v [main]\n", "versions: !!python/object:os.system [main]\n", "? versions\n: [main]\n"]
 )
 def test_yaml_features_outside_korml_are_rejected(tmp_path: Path, extra: str) -> None:
     with pytest.raises(RuntimeError, match="cpdocs.yml: LexError"):
@@ -118,10 +111,7 @@ def test_keyso_interval_bounds_must_be_integers(tmp_path: Path) -> None:
 
 
 def test_a_configuration_is_one_document(tmp_path: Path) -> None:
-    path = _config(
-        tmp_path,
-        "%!korml version 1.0\n---\ncontract: 3\n" + COMMANDS + "...\n---\ncontract: 3\n...\n",
-    )
+    path = _config(tmp_path, "%!korml version 1.0\n---\ncontract: 3\n" + COMMANDS + "...\n---\ncontract: 3\n...\n")
     with pytest.raises(RuntimeError, match="single document"):
         load_config(path)
 

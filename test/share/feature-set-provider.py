@@ -11,11 +11,7 @@ if command == "feature-sets":
         "cpdocs-feature-sets": 1,
         "generator": "test-provider",
         "project": {"name": "backend-api", "version": "1.0"},
-        "feature-sets": [
-            {"features": ["host"]},
-            {"features": ["gpu"]},
-            {"features": ["gpu", "mpi"]},
-        ],
+        "feature-sets": [{"features": ["host"]}, {"features": ["gpu"]}, {"features": ["gpu", "mpi"]}],
     }
 else:
     selected = json.load(open(sys.argv[2], encoding="utf-8"))

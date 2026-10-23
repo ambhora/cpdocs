@@ -13,14 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..contract import (
-    FeatureSetDeclaration,
-    FeatureSets,
-    Manifest,
-    read_feature_sets,
-    read_manifest,
-    write_feature_set,
-)
+from ..contract import FeatureSetDeclaration, FeatureSets, Manifest, read_feature_sets, read_manifest, write_feature_set
 from ..filesystem import remove_tree
 
 _PLACEHOLDER = re.compile(r"\{\{\s*([a-z][a-z0-9_.-]*)\s*\}\}")
@@ -60,9 +53,7 @@ def placeholder_variable(name: str) -> str:
     return "CPDOCS_ARG_" + re.sub(r"[.-]", "_", name).upper()
 
 
-def _expand(
-    command: str, values: dict[str, str], *, allowed: set[str], name: str
-) -> tuple[str, dict[str, str]]:
+def _expand(command: str, values: dict[str, str], *, allowed: set[str], name: str) -> tuple[str, dict[str, str]]:
     """Replace placeholders by references to environment variables that hold their values.
 
     Substituting values into the command text would let the shell parse them: a checkout path or
@@ -74,9 +65,7 @@ def _expand(
     placeholders = set(_PLACEHOLDER.findall(command))
     unknown = sorted(placeholders - allowed)
     if unknown:
-        raise RuntimeError(
-            f"cpdocs.yml: build.{name} uses unknown placeholders: {', '.join(unknown)}"
-        )
+        raise RuntimeError(f"cpdocs.yml: build.{name} uses unknown placeholders: {', '.join(unknown)}")
     variables: dict[str, str] = {}
     for key in sorted(values):
         variable = placeholder_variable(key)
@@ -86,20 +75,12 @@ def _expand(
                 f"environment variable {variable}; rename one of them"
             )
         variables[variable] = key
-    expanded = _PLACEHOLDER.sub(
-        lambda match: "${" + placeholder_variable(match.group(1)) + "}", command
-    )
+    expanded = _PLACEHOLDER.sub(lambda match: "${" + placeholder_variable(match.group(1)) + "}", command)
     return expanded, {variable: values[key] for variable, key in variables.items()}
 
 
 def _run_command(
-    command: str,
-    *,
-    source: Path,
-    values: dict[str, str],
-    allowed: set[str],
-    name: str,
-    log: Path,
+    command: str, *, source: Path, values: dict[str, str], allowed: set[str], name: str, log: Path
 ) -> None:
     """Run one build-system command in ``source`` and record its output in ``log``.
 
@@ -113,9 +94,7 @@ def _run_command(
     pythonpath = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = package_root + (os.pathsep + pythonpath if pythonpath else "")
     # The log shows the values the command saw, quoted the way a shell would need them.
-    shown = "".join(
-        f"{variable}={shlex.quote(value)}\n" for variable, value in sorted(variables.items())
-    )
+    shown = "".join(f"{variable}={shlex.quote(value)}\n" for variable, value in sorted(variables.items()))
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w", encoding="utf-8") as stream:
         stream.write(shown + "$ " + expanded + "\n")
@@ -195,8 +174,7 @@ def resolve_manifest(
             "python": sys.executable,
             **(template_values or {}),
         },
-        allowed={"source", "tmpdir", "feature-set", "output-file", "python"}
-        | set(template_values or {}),
+        allowed={"source", "tmpdir", "feature-set", "output-file", "python"} | set(template_values or {}),
         name="build",
         log=directory / "log.txt",
     )

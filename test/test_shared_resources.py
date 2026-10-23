@@ -18,10 +18,7 @@ from cpdocs.build import _redirect_page
 from cpdocs.resources import resource, shared_template, shared_text
 
 
-def test_resources_resolve_from_cpdocs_share_not_other_namespaces(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
+def test_resources_resolve_from_cpdocs_share_not_other_namespaces(tmp_path: Path, monkeypatch) -> None:
     """A second ``share`` directory must not shadow cpdocs' resources."""
     foreign_share = tmp_path / "share" / "cpdocs" / "api"
     foreign_share.mkdir(parents=True)
@@ -98,8 +95,7 @@ def test_source_only_resource_lookup_from_elsewhere(tmp_path: Path) -> None:
         [
             sys.executable,
             "-c",
-            "from cpdocs.resources import shared_text; "
-            "assert 'API Documentation Home' in shared_text('api/index.md')",
+            "from cpdocs.resources import shared_text; assert 'API Documentation Home' in shared_text('api/index.md')",
         ],
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(repository / "src")},
@@ -132,12 +128,7 @@ def test_runtime_code_does_not_embed_large_static_strings() -> None:
             and isinstance(node.body[0].value.value, str)
         }
         for node in ast.walk(tree):
-            if (
-                isinstance(node, ast.Constant)
-                and isinstance(node.value, str)
-                and id(node) not in docstrings
-            ):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings:
                 assert len(node.value) < 250, (
-                    f"{filename.relative_to(source_root)}:{node.lineno}: "
-                    "move substantial static content to share/"
+                    f"{filename.relative_to(source_root)}:{node.lineno}: move substantial static content to share/"
                 )

@@ -87,14 +87,7 @@ def test_python_package_names_must_be_identifiers(tmp_path: Path) -> None:
         json.dumps(
             {
                 "cpdocs-manifest": 1,
-                "units": [
-                    {
-                        "id": "python",
-                        "language": "python",
-                        "package": "<b>demo</b>",
-                        "api": [{"path": "src"}],
-                    }
-                ],
+                "units": [{"id": "python", "language": "python", "package": "<b>demo</b>", "api": [{"path": "src"}]}],
             }
         ),
         encoding="utf-8",

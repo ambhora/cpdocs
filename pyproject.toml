@@ -54,7 +54,12 @@ addopts = "-ra"
 
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+line-length = 120
+
+# Collapse a construct onto one line whenever it fits, instead of keeping it one element per line
+# because of a trailing comma.
+[tool.ruff.format]
+skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

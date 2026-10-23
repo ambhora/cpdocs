@@ -17,9 +17,7 @@ else:
     assert isinstance(selected["features"], list)
     manifest = {
         "cpdocs-manifest": 1,
-        "units": [
-            {"id": "pkg", "language": "python", "package": "pkg", "api": [{"path": "src/pkg"}]}
-        ],
+        "units": [{"id": "pkg", "language": "python", "package": "pkg", "api": [{"path": "src/pkg"}]}],
     }
     output = sys.argv[3]
 json.dump(manifest, open(output, "w"))

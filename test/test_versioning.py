@@ -14,12 +14,7 @@ from cpdocs.versioning import select_refs
 
 @pytest.fixture
 def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    for variable in (
-        "CPDOCS_CURRENT_BRANCH",
-        "GITHUB_HEAD_REF",
-        "CI_COMMIT_BRANCH",
-        "GITHUB_REF_TYPE",
-    ):
+    for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH", "GITHUB_REF_TYPE"):
         monkeypatch.delenv(variable, raising=False)
     root = tmp_path / "project"
     root.mkdir()
@@ -54,7 +49,4 @@ def test_ci_clone_finds_remote_branch(project: Path, tmp_path: Path, monkeypatch
     git(clone, "checkout", "-q", "--detach")
     monkeypatch.setenv("CI_COMMIT_BRANCH", "main")
     refs = select_refs(clone, ("main", "release"))
-    assert [(ref.name, ref.checkout) for ref in refs] == [
-        ("main", None),
-        ("release", "origin/release"),
-    ]
+    assert [(ref.name, ref.checkout) for ref in refs] == [("main", None), ("release", "origin/release")]

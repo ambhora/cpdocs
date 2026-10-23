@@ -66,9 +66,7 @@ def default_issue_url(repo_url: str, provider: str) -> str:
 
 
 # Fenced code blocks and inline code spans show ``@apidocs`` literally; they are never rewritten.
-_CODE = re.compile(
-    r"^(?P<fence>`{3,}|~{3,}).*?^(?P=fence)[ \t]*$|`[^`\n]+`", re.MULTILINE | re.DOTALL
-)
+_CODE = re.compile(r"^(?P<fence>`{3,}|~{3,}).*?^(?P=fence)[ \t]*$|`[^`\n]+`", re.MULTILINE | re.DOTALL)
 
 
 def api_symbol_public_path(symbol: str, version: str, mount: str) -> PurePosixPath:
@@ -122,9 +120,7 @@ def resolve_api_references(
 _VERSIONS_DIRECTIVE = re.compile(r"^@apidocs-versions[ \t]*$", re.MULTILINE)
 
 
-def expand_versions_directive(
-    markdown: str, *, page_dest_uri: str, mount: str, metadata: dict[str, object]
-) -> str:
+def expand_versions_directive(markdown: str, *, page_dest_uri: str, mount: str, metadata: dict[str, object]) -> str:
     """Replace a line ``@apidocs-versions`` with a list of every published API version."""
 
     if not _VERSIONS_DIRECTIVE.search(markdown):
@@ -160,9 +156,7 @@ def mount_path(mount: str) -> PurePosixPath:
     value = mount.strip("/")
     parts = value.split("/")
     if not value or any(part in {"", ".", ".."} for part in parts):
-        raise ValueError(
-            f"mount must be a subdirectory of the site such as reference/api, found {mount!r}"
-        )
+        raise ValueError(f"mount must be a subdirectory of the site such as reference/api, found {mount!r}")
     return PurePosixPath(*parts)
 
 

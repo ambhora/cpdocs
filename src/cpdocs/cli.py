@@ -37,9 +37,7 @@ def _parser() -> argparse.ArgumentParser:
             help="output root; cpdocs writes below <output>/cpdocs (default: build)",
         )
         command.add_argument(
-            "--tmp-directory",
-            type=_path,
-            help="temporary workspace root; defaults to the output root",
+            "--tmp-directory", type=_path, help="temporary workspace root; defaults to the output root"
         )
         return command
 
@@ -55,16 +53,12 @@ def _parser() -> argparse.ArgumentParser:
     python_feature_sets = phases.add_parser("feature-sets", help="write feature-sets.json")
     python_feature_sets.add_argument("--source", type=_path, required=True)
     python_feature_sets.add_argument("--output", type=_path, required=True)
-    python_manifest = phases.add_parser(
-        "build", help="build one feature set and write manifest.json"
-    )
+    python_manifest = phases.add_parser("build", help="build one feature set and write manifest.json")
     python_manifest.add_argument("--source", type=_path, required=True)
     python_manifest.add_argument("--feature-set", type=_path, required=True)
     python_manifest.add_argument("--output", type=_path, required=True)
     python_manifest.add_argument("--package", required=True)
-    python_manifest.add_argument(
-        "--package-source", required=True, help="package directory, relative to the root"
-    )
+    python_manifest.add_argument("--package-source", required=True, help="package directory, relative to the root")
 
     rust = commands.add_parser("rust", help="Cargo/rustdoc contract provider")
     rust_phases = rust.add_subparsers(dest="rust_phase", required=True)
@@ -76,10 +70,7 @@ def _parser() -> argparse.ArgumentParser:
         phase.add_argument("--source", type=_path, required=True)
         phase.add_argument("--output", type=_path, required=True)
         phase.add_argument("--package", help="Cargo package name for a multi-package workspace")
-        phase.add_argument(
-            "--toolchain",
-            help="rustup toolchain override, for example nightly or nightly-2026-10-01",
-        )
+        phase.add_argument("--toolchain", help="rustup toolchain override, for example nightly or nightly-2026-10-01")
         if name == "build":
             phase.add_argument("--feature-set", type=_path, required=True)
     return parser
@@ -119,13 +110,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             config = load_config(arguments.config)
             output = arguments.output.resolve()
-            tmp_directory = (
-                arguments.tmp_directory.resolve() if arguments.tmp_directory is not None else None
-            )
+            tmp_directory = arguments.tmp_directory.resolve() if arguments.tmp_directory is not None else None
             if arguments.command == "build":
-                build_current(
-                    config, output=output, version=arguments.label, tmp_directory=tmp_directory
-                )
+                build_current(config, output=output, version=arguments.label, tmp_directory=tmp_directory)
             else:
                 build_versions(config, output=output, tmp_directory=tmp_directory)
     except RuntimeError as error:

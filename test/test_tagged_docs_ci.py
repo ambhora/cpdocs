@@ -58,9 +58,7 @@ def test_tag_detection_handles_legacy_and_current_tags(tmp_path: Path) -> None:
     workflow = yaml.safe_load(
         (REPOSITORY / ".github" / "workflows" / "docs-tag-rebuild.yml").read_text(encoding="utf-8")
     )
-    detect = next(
-        step for step in workflow["jobs"]["rebuild"]["steps"] if step.get("id") == "legacy"
-    )
+    detect = next(step for step in workflow["jobs"]["rebuild"]["steps"] if step.get("id") == "legacy")
     for commit, should_rebuild in ((old_commit, True), (new_commit, False)):
         output = tmp_path / "result.txt"
         output.write_text("", encoding="utf-8")

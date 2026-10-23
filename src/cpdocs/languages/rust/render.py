@@ -29,9 +29,7 @@ def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
     modifiers = [value for value in entity.properties if value != "pub"]
     visibility = "pub " if "pub" in entity.properties else ""
     modifier_prefix = (" ".join(modifiers) + " ") if modifiers else ""
-    value = (
-        f"{visibility}{modifier_prefix}fn {entity.qualified_name}({parameter_spelling(signature)})"
-    )
+    value = f"{visibility}{modifier_prefix}fn {entity.qualified_name}({parameter_spelling(signature)})"
     if signature.returns:
         value += f" -> {signature.returns}"
     return value

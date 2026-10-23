@@ -36,28 +36,14 @@ def write_feature_sets(source: Path, output: Path) -> Path:
     return output
 
 
-def write_manifest(
-    source: Path,
-    feature_set_file: Path,
-    output: Path,
-    *,
-    package: str,
-    package_source: str,
-) -> Path:
+def write_manifest(source: Path, feature_set_file: Path, output: Path, *, package: str, package_source: str) -> Path:
     read_feature_set(feature_set_file)
     root = source / package_source
     if not root.is_dir():
         raise RuntimeError(f"cpdocs manifest python: package source {root} does not exist")
     manifest = {
         "cpdocs-manifest": CONTRACT_VERSION,
-        "units": [
-            {
-                "id": package,
-                "language": "python",
-                "package": package,
-                "api": [{"path": package_source}],
-            }
-        ],
+        "units": [{"id": package, "language": "python", "package": package, "api": [{"path": package_source}]}],
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

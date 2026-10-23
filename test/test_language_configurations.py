@@ -20,9 +20,11 @@ from cpdocs.providers.contract import language_template_values
 
 
 def test_flatten_language_template_values_and_reject_non_scalars() -> None:
-    assert language_template_values(
-        {"cxx": {"standard": 23}, "python": {"version": "3.12"}, "optimized": True}
-    ) == {"cxx.standard": "23", "python.version": "3.12", "optimized": "true"}
+    assert language_template_values({"cxx": {"standard": 23}, "python": {"version": "3.12"}, "optimized": True}) == {
+        "cxx.standard": "23",
+        "python.version": "3.12",
+        "optimized": "true",
+    }
     with pytest.raises(RuntimeError, match="scalar"):
         language_template_values({"python": {"version": ["3.11", "3.12"]}})
     with pytest.raises(RuntimeError, match="reserved"):
@@ -40,9 +42,7 @@ def test_unspecified_languages_keep_single_legacy_configuration(tmp_path: Path) 
 
 def _project_with_language_variants(root: Path, expression: str) -> Path:
     project = fake_project(root)
-    (project / "language_provider.py").write_text(
-        fixture_text("language-provider.py"), encoding="utf-8"
-    )
+    (project / "language_provider.py").write_text(fixture_text("language-provider.py"), encoding="utf-8")
     command = shlex.quote(sys.executable) + " language_provider.py"
     (project / "docs" / "cpdocs.yml").write_text(
         "contract: 3\nlanguages:\n"
@@ -67,9 +67,7 @@ def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> N
     )
     graph = build_current(load_config(project / "docs/cpdocs.yml"), output=project / "build")
     assert len(graph.feature_sets) == 3  # one feature set for C++17, two for C++23
-    records = [
-        json.loads(line) for line in (project / "build-records.jsonl").read_text().splitlines()
-    ]
+    records = [json.loads(line) for line in (project / "build-records.jsonl").read_text().splitlines()]
     assert {(item["cxx"], item["python"]) for item in records} == {("17", "3.11"), ("23", "3.12")}
     assert len([item for item in records if item["phase"] == "feature-sets"]) == 2
     assert len([item for item in records if item["phase"] == "build"]) == 3
@@ -79,10 +77,7 @@ def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> N
     assert len({key for key in graph.feature_sets}) == 3
     for language in ("language-001", "language-002"):
         assert (
-            project
-            / "build/cpdocs/work/current/language-configurations"
-            / language
-            / "feature-sets/feature-sets.json"
+            project / "build/cpdocs/work/current/language-configurations" / language / "feature-sets/feature-sets.json"
         ).exists()
     feature_page = (project / "build/cpdocs/current/feature-sets/index.html").read_text()
     assert "cxx.standard=17" in feature_page

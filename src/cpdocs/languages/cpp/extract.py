@@ -53,11 +53,7 @@ _VARIABLE_KINDS = {"VarDecl": "variable", "FieldDecl": "attribute"}
 _SKIP_NAMES = {"__va_list_tag", "__NSConstantString_tag"}
 
 
-def _node_file(
-    node: dict[str, object],
-    inherited: Path | None,
-    file_state: list[Path | None],
-) -> Path | None:
+def _node_file(node: dict[str, object], inherited: Path | None, file_state: list[Path | None]) -> Path | None:
     """Resolve Clang's state-compressed JSON source location to an explicit file path."""
 
     loc = node.get("loc")
@@ -211,10 +207,7 @@ def _attached_comment(node: dict[str, object]) -> str:
 
 
 def _location(
-    node: dict[str, object],
-    path: Path | None,
-    project_root: Path,
-    public_roots: tuple[Path, ...],
+    node: dict[str, object], path: Path | None, project_root: Path, public_roots: tuple[Path, ...]
 ) -> SourceLocation | None:
     if path is None:
         return None
@@ -298,12 +291,7 @@ def _parameters(node: dict[str, object]) -> tuple[ApiParameter, ...]:
     for child in children:
         if not isinstance(child, dict) or child.get("kind") != "ParmVarDecl":
             continue
-        parameters.append(
-            ApiParameter(
-                name=str(child.get("name", "")),
-                type=_qual_type(child),
-            )
-        )
+        parameters.append(ApiParameter(name=str(child.get("name", "")), type=_qual_type(child)))
     return tuple(parameters)
 
 
@@ -423,10 +411,7 @@ def _signature(node: dict[str, object], path: Path | None) -> ApiSignature:
     parameters = _parameters(node)
     qualifiers = _qualifiers(node)
     return ApiSignature(
-        parameters=parameters,
-        returns=_return_type(node),
-        qualifiers=qualifiers,
-        attributes=_attributes(node, path),
+        parameters=parameters, returns=_return_type(node), qualifiers=qualifiers, attributes=_attributes(node, path)
     )
 
 
@@ -439,21 +424,9 @@ def _signature(node: dict[str, object], path: Path | None) -> ApiSignature:
 # --------------------------------------------------------------------------------------------------
 
 _SOURCE_BYTES: dict[Path, bytes] = {}
-_TEMPLATE_KINDS = {
-    "ClassTemplateDecl",
-    "FunctionTemplateDecl",
-    "VarTemplateDecl",
-    "TypeAliasTemplateDecl",
-}
-_TEMPLATE_PARAMETER_KINDS = {
-    "TemplateTypeParmDecl",
-    "NonTypeTemplateParmDecl",
-    "TemplateTemplateParmDecl",
-}
-_SPECIALIZATION_KINDS = {
-    "ClassTemplateSpecializationDecl",
-    "ClassTemplatePartialSpecializationDecl",
-}
+_TEMPLATE_KINDS = {"ClassTemplateDecl", "FunctionTemplateDecl", "VarTemplateDecl", "TypeAliasTemplateDecl"}
+_TEMPLATE_PARAMETER_KINDS = {"TemplateTypeParmDecl", "NonTypeTemplateParmDecl", "TemplateTemplateParmDecl"}
+_SPECIALIZATION_KINDS = {"ClassTemplateSpecializationDecl", "ClassTemplatePartialSpecializationDecl"}
 
 
 def _offset(location: object) -> int | None:
@@ -574,9 +547,7 @@ def _initializer(node: dict[str, object], path: Path | None) -> str:
     return re.sub(r"\s+", " ", value).strip().rstrip(";").strip()
 
 
-def _is_tag_typedef(
-    node: dict[str, object], name: str, scopes: tuple[str, ...], graph: ApiGraph
-) -> bool:
+def _is_tag_typedef(node: dict[str, object], name: str, scopes: tuple[str, ...], graph: ApiGraph) -> bool:
     """Whether a typedef merely re-exports the record or enum tag of the same name.
 
     The typedef's documentation is moved onto the tag when the tag has none.
@@ -723,8 +694,7 @@ def _walk_ast(
                 parent=parent_entity.id if parent_entity else None,
                 documentation=_attached_comment(node),
                 source=_location(node, path, project_root, public_roots),
-                properties=_entity_properties(node)
-                + (["template"] if template_context or template_header else []),
+                properties=_entity_properties(node) + (["template"] if template_context or template_header else []),
                 bases=_base_names(node),
                 related=_related_markers(node, path),
             )
@@ -785,8 +755,7 @@ def _walk_ast(
             ],
             documentation=_attached_comment(node),
             source=_location(node, path, project_root, public_roots),
-            properties=_entity_properties(node)
-            + (["template"] if template_context or template_header else []),
+            properties=_entity_properties(node) + (["template"] if template_context or template_header else []),
             related=_related_markers(node, path),
         )
         graph.add(entity)
@@ -826,12 +795,7 @@ def _walk_ast(
         )
         graph.add(entity)
 
-    elif (
-        kind in _ALIAS_KINDS
-        and name
-        and in_public_file
-        and _is_tag_typedef(node, name, scopes, graph)
-    ):
+    elif kind in _ALIAS_KINDS and name and in_public_file and _is_tag_typedef(node, name, scopes, graph):
         # ``typedef struct ring {...} ring;`` names the tag a second time; document the tag only.
         pass
 
@@ -881,9 +845,7 @@ def _walk_ast(
             name=name,
             qualified_name=qualified,
             parent=parent_entity.id if parent_entity else None,
-            declaration=_normalize_declaration(
-                _source_slice(path, *(_range_offsets(node) or (0, 0)))
-            ),
+            declaration=_normalize_declaration(_source_slice(path, *(_range_offsets(node) or (0, 0)))),
             documentation=_attached_comment(node),
             source=_location(node, path, project_root, public_roots),
             related=_related_markers(node, path),
@@ -893,13 +855,7 @@ def _walk_ast(
     # Callable bodies, variable initializers, aliases, and concepts can contain declarations that are
     # implementation details. Their semantic metadata has already been harvested above; only
     # namespace/record/enum/template containers should contribute nested public API entities.
-    if kind in {
-        *_CALLABLE_KINDS,
-        *_ALIAS_KINDS,
-        *_VARIABLE_KINDS,
-        "ConceptDecl",
-        "EnumConstantDecl",
-    }:
+    if kind in {*_CALLABLE_KINDS, *_ALIAS_KINDS, *_VARIABLE_KINDS, "ConceptDecl", "EnumConstantDecl"}:
         return
 
     children = node.get("inner")
@@ -920,13 +876,7 @@ def _walk_ast(
             if isinstance(child_access, str) and child_access:
                 member_access = child_access
             continue
-        if child_kind in {
-            "FullComment",
-            "ParagraphComment",
-            "TextComment",
-            "ParmVarDecl",
-            "CXXBaseSpecifier",
-        }:
+        if child_kind in {"FullComment", "ParagraphComment", "TextComment", "ParmVarDecl", "CXXBaseSpecifier"}:
             continue
         _walk_ast(
             child,
@@ -952,9 +902,7 @@ def _compile_entry_arguments(entry: dict[str, object]) -> list[str]:
     return []
 
 
-def _choose_compile_entry(
-    entries: list[dict[str, object]], *, language: str
-) -> dict[str, object] | None:
+def _choose_compile_entry(entries: list[dict[str, object]], *, language: str) -> dict[str, object] | None:
     preferred = {".c"} if language == "c" else {".cc", ".cpp", ".cxx", ".c++", ".C"}
     for entry in entries:
         source = entry.get("file")
@@ -964,10 +912,7 @@ def _choose_compile_entry(
 
 
 def _frontend_arguments(
-    entry: dict[str, object] | None,
-    *,
-    public_roots: tuple[Path, ...],
-    predefines: Iterable[str],
+    entry: dict[str, object] | None, *, public_roots: tuple[Path, ...], predefines: Iterable[str]
 ) -> tuple[Path | None, list[str]]:
     if entry is None:
         args = ["-std=c++20"]
@@ -1040,9 +985,7 @@ def _write_umbrella(path: Path, headers: Iterable[Path]) -> None:
         name = header.as_posix()
         # A header-name has no escapes: a quote ends it and a line break starts a new directive.
         if any(character in name for character in '"\n\r'):
-            raise RuntimeError(
-                f"cpdocs cannot include a header whose path contains a quote or line break: {name!r}"
-            )
+            raise RuntimeError(f"cpdocs cannot include a header whose path contains a quote or line break: {name!r}")
         lines.append(f'#include "{name}"')
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -1056,12 +999,7 @@ def _include_guard_name(lines: list[str]) -> str | None:
     candidate: str | None = None
     for line in lines[:40]:
         stripped = line.strip()
-        if (
-            not stripped
-            or stripped.startswith("//")
-            or stripped.startswith("/*")
-            or stripped.startswith("*")
-        ):
+        if not stripped or stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
             continue
         if candidate is None:
             match = ifndef.match(line)
@@ -1080,10 +1018,7 @@ def _include_guard_name(lines: list[str]) -> str | None:
 
 
 def _macro_candidates(
-    headers: Iterable[Path],
-    project_root: Path,
-    public_roots: tuple[Path, ...],
-    active_definitions: dict[str, str],
+    headers: Iterable[Path], project_root: Path, public_roots: tuple[Path, ...], active_definitions: dict[str, str]
 ) -> list[ApiEntity]:
     entities: list[ApiEntity] = []
     define = re.compile(r"^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)(\([^\n]*?\))?(?:\s+(.*))?$")
@@ -1124,9 +1059,7 @@ def _macro_candidates(
                     qualified_name=name,
                     signatures=[ApiSignature(parameters=parameters, spelling=line.strip())],
                     documentation=" ".join(comment_lines).strip(),
-                    source=SourceLocation(
-                        _logical_public_path(header, public_roots, project_root), number, 1
-                    ),
+                    source=SourceLocation(_logical_public_path(header, public_roots, project_root), number, 1),
                     properties=[value] if value else [],
                 )
                 entities.append(entity)
@@ -1138,11 +1071,7 @@ def _macro_candidates(
 
 
 def _active_macro_definitions(
-    *,
-    clang_executable: str,
-    frontend_args: list[str],
-    umbrella: Path,
-    cwd: Path,
+    *, clang_executable: str, frontend_args: list[str], umbrella: Path, cwd: Path
 ) -> dict[str, str]:
     """Return macro definitions active under the exact semantic extraction configuration."""
 
@@ -1181,14 +1110,8 @@ def _parse_arguments(
         try:
             raw_entries = json.loads(parse.compile_database.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
-            raise RuntimeError(
-                f"Cannot read compilation database {parse.compile_database}: {error}"
-            ) from error
-        entries = (
-            [entry for entry in raw_entries if isinstance(entry, dict)]
-            if isinstance(raw_entries, list)
-            else []
-        )
+            raise RuntimeError(f"Cannot read compilation database {parse.compile_database}: {error}") from error
+        entries = [entry for entry in raw_entries if isinstance(entry, dict)] if isinstance(raw_entries, list) else []
         entry = _choose_compile_entry(entries, language=language)
         if entry is not None:
             directory, args = _frontend_arguments(entry, public_roots=(), predefines=())
@@ -1261,16 +1184,13 @@ def extract_clang_graph(
     missing = [root for root in roots if not root.is_dir()]
     if missing:
         raise RuntimeError(
-            "API roots named in the feature-set manifest do not exist:\n"
-            + "\n".join(f"  - {root}" for root in missing)
+            "API roots named in the feature-set manifest do not exist:\n" + "\n".join(f"  - {root}" for root in missing)
         )
     headers = _public_headers(roots, project_root)
     graph = ApiGraph(project=project, version=version, language="cpp")
     for header in headers:
         try:
-            graph.sources[_logical_public_path(header, roots, project_root)] = header.read_text(
-                encoding="utf-8"
-            )
+            graph.sources[_logical_public_path(header, roots, project_root)] = header.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             pass
     if not headers:
@@ -1295,12 +1215,7 @@ def extract_clang_graph(
         str(umbrella),
     ]
     result = subprocess.run(
-        command,
-        cwd=cwd or project_root,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        command, cwd=cwd or project_root, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -1312,28 +1227,17 @@ def extract_clang_graph(
     try:
         tree = json.loads(result.stdout)
     except json.JSONDecodeError as error:
-        raise RuntimeError(
-            f"Clang returned invalid AST JSON for feature set {feature_set!r}: {error}"
-        ) from error
+        raise RuntimeError(f"Clang returned invalid AST JSON for feature set {feature_set!r}: {error}") from error
     if not isinstance(tree, dict):
         raise RuntimeError(f"Clang returned an unexpected AST root for feature set {feature_set!r}")
 
-    _walk_ast(
-        tree,
-        graph=graph,
-        project_root=project_root,
-        public_roots=roots,
-        file_state=[None],
-    )
+    _walk_ast(tree, graph=graph, project_root=project_root, public_roots=roots, file_state=[None])
 
     # The semantic AST deliberately does not represent macros as declarations. Discover only the
     # source macros that are active under this exact Clang configuration so conditional macros get
     # the same feature-set-aware availability semantics as declarations.
     active_macros = _active_macro_definitions(
-        clang_executable=clang_executable,
-        frontend_args=frontend_args,
-        umbrella=umbrella,
-        cwd=cwd or project_root,
+        clang_executable=clang_executable, frontend_args=frontend_args, umbrella=umbrella, cwd=cwd or project_root
     )
     for entity in _macro_candidates(headers, project_root, roots, active_macros):
         graph.add(entity)

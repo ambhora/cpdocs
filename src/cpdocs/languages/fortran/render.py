@@ -54,9 +54,7 @@ RENDERING = LanguageRendering(
     type_like_kinds=frozenset({"derived_type"}),
     function_kinds=frozenset({"function", "subroutine"}),
     member_value_kinds=frozenset({"variable", "attribute", "constant"}),
-    source_suffixes=frozenset(
-        {".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}
-    ),
+    source_suffixes=frozenset({".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}),
     kind_markers={
         "module": "M",
         "derived_type": "T",

@@ -28,17 +28,7 @@ _CHECK_LEVELS = {"ignore", "warn", "fail"}
 
 # The colours a theme may set, one set per colour scheme of the API site.
 THEME_SCHEMES = ("light", "dark")
-THEME_COLORS = (
-    "accent",
-    "accent-2",
-    "on-accent",
-    "background",
-    "foreground",
-    "muted",
-    "border",
-    "soft",
-    "selected",
-)
+THEME_COLORS = ("accent", "accent-2", "on-accent", "background", "foreground", "muted", "border", "soft", "selected")
 _HEX_COLOR = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
 _IMAGE_SUFFIXES = (".svg", ".png", ".ico", ".webp", ".jpg", ".jpeg", ".gif")
 
@@ -94,9 +84,7 @@ def _mapping(value: object, name: str) -> dict[str, Any]:
 def _strings(value: object, name: str, *, default: tuple[str, ...] = ()) -> tuple[str, ...]:
     if value is None:
         return default
-    if not isinstance(value, list) or not all(
-        isinstance(item, str) and item.strip() for item in value
-    ):
+    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
         raise RuntimeError(f"cpdocs.yml: {name} must be a list of non-empty strings")
     result = tuple(item.strip() for item in value)
     if len(set(result)) != len(result):
@@ -149,9 +137,7 @@ def _theme_colors(value: object) -> dict[str, dict[str, str]]:
         colors = _mapping(schemes[scheme], f"site.theme.colors.{scheme}")
         unknown = sorted(set(colors) - set(THEME_COLORS))
         if unknown:
-            raise RuntimeError(
-                f"cpdocs.yml: unknown site.theme.colors.{scheme} colours: {', '.join(unknown)}"
-            )
+            raise RuntimeError(f"cpdocs.yml: unknown site.theme.colors.{scheme} colours: {', '.join(unknown)}")
         for name, color in colors.items():
             # An unquoted "#266c7c" starts a comment, so the value must be quoted.
             if not isinstance(color, str) or not _HEX_COLOR.fullmatch(color):
@@ -169,16 +155,12 @@ def _theme(value: object, root: Path) -> SiteTheme:
     if unknown:
         raise RuntimeError(f"cpdocs.yml: unknown site.theme keys: {', '.join(unknown)}")
     logo = _theme_file(theme.get("logo"), "site.theme.logo", root, suffixes=_IMAGE_SUFFIXES)
-    favicon = _theme_file(
-        theme.get("favicon"), "site.theme.favicon", root, suffixes=_IMAGE_SUFFIXES
-    )
+    favicon = _theme_file(theme.get("favicon"), "site.theme.favicon", root, suffixes=_IMAGE_SUFFIXES)
     return SiteTheme(
         logo=logo,
         # The logo is usually the project's icon, which also serves as its favicon.
         favicon=favicon if favicon is not None else logo,
-        stylesheet=_theme_file(
-            theme.get("stylesheet"), "site.theme.stylesheet", root, suffixes=(".css",)
-        ),
+        stylesheet=_theme_file(theme.get("stylesheet"), "site.theme.stylesheet", root, suffixes=(".css",)),
         colors=_theme_colors(theme.get("colors")),
     )
 
@@ -250,9 +232,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
         raise RuntimeError(f"cpdocs configuration does not exist: {config_file}")
     raw = _read(config_file)
     if raw.get("contract") != str(CONTRACT_VERSION):
-        raise RuntimeError(
-            f"cpdocs.yml: contract must be {CONTRACT_VERSION}, found {raw.get('contract')!r}"
-        )
+        raise RuntimeError(f"cpdocs.yml: contract must be {CONTRACT_VERSION}, found {raw.get('contract')!r}")
     known = {"contract", "build", "languages", "versions", "site", "api", "checks"}
     unknown = sorted(set(raw) - known)
     if unknown:
@@ -269,9 +249,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
     checks = _mapping(raw.get("checks"), "checks")
 
     index_value = site.get("index")
-    index = (
-        (root / str(index_value)).resolve() if index_value else root / "docs" / "api" / "index.md"
-    )
+    index = (root / str(index_value)).resolve() if index_value else root / "docs" / "api" / "index.md"
     copyright_value = site.get("copyright")
 
     return CpdocsConfig(
@@ -290,9 +268,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
             hide.get("python-modules"), "api.hide.python-modules", {"private", "none"}, "private"
         )
         == "private",
-        check_undocumented=_choice(
-            checks.get("undocumented"), "checks.undocumented", _CHECK_LEVELS, "ignore"
-        ),
+        check_undocumented=_choice(checks.get("undocumented"), "checks.undocumented", _CHECK_LEVELS, "ignore"),
         check_broken_references=_choice(
             checks.get("broken-references"), "checks.broken-references", _CHECK_LEVELS, "warn"
         ),

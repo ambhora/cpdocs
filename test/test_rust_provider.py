@@ -22,10 +22,7 @@ def _fake_cargo(path: Path) -> Path:
 
 
 def test_default_cargo_features_are_disjoint_and_sorted() -> None:
-    package = {
-        "features": {"simd": [], "default": ["simd"], "mpi": []},
-        "metadata": {},
-    }
+    package = {"features": {"simd": [], "default": ["simd"], "mpi": []}, "metadata": {}}
     assert _feature_sets(package) == [["default"], ["mpi"], ["simd"]]
     assert _feature_sets({"features": {}, "metadata": {}}) == [[]]
 
@@ -38,54 +35,26 @@ def test_metadata_can_override_disjoint_default() -> None:
     assert _feature_sets(package) == [["mpi"], ["mpi", "cuda"]]
 
 
-def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "project"
     (source / "src").mkdir(parents=True)
     (source / "Cargo.toml").write_text(
-        '[package]\nname = "rust-geometry"\nversion = "1.0.0"\nedition = "2024"\n',
-        encoding="utf-8",
+        '[package]\nname = "rust-geometry"\nversion = "1.0.0"\nedition = "2024"\n', encoding="utf-8"
     )
     (source / "src" / "lib.rs").write_text("pub fn dot() -> f64 { 0.0 }\n", encoding="utf-8")
     cargo = _fake_cargo(tmp_path)
     monkeypatch.setenv("CPDOCS_CARGO", str(cargo))
 
     feature_sets_file = tmp_path / "feature-sets.json"
-    assert (
-        main(
-            [
-                "rust",
-                "feature-sets",
-                "--source",
-                str(source),
-                "--output",
-                str(feature_sets_file),
-            ]
-        )
-        == 0
-    )
+    assert main(["rust", "feature-sets", "--source", str(source), "--output", str(feature_sets_file)]) == 0
     feature_sets = read_feature_sets(feature_sets_file)
     assert [item.features for item in feature_sets.feature_sets] == [("batch",), ("checked",)]
 
     selected = tmp_path / "feature-set.json"
-    selected.write_text(
-        json.dumps({"cpdocs-feature-set": 1, "features": ["batch"]}), encoding="utf-8"
-    )
+    selected.write_text(json.dumps({"cpdocs-feature-set": 1, "features": ["batch"]}), encoding="utf-8")
     manifest_file = tmp_path / "manifest.json"
     assert (
-        main(
-            [
-                "rust",
-                "build",
-                "--source",
-                str(source),
-                "--feature-set",
-                str(selected),
-                "--output",
-                str(manifest_file),
-            ]
-        )
+        main(["rust", "build", "--source", str(source), "--feature-set", str(selected), "--output", str(manifest_file)])
         == 0
     )
 
@@ -95,10 +64,7 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(
     assert unit["rustdoc-json"].endswith("cargo-target/doc/rust_geometry.json")
     assert "src" in unit["sources"]
 
-    commands = [
-        json.loads(line)
-        for line in (source / "cargo-commands.jsonl").read_text(encoding="utf-8").splitlines()
-    ]
+    commands = [json.loads(line) for line in (source / "cargo-commands.jsonl").read_text(encoding="utf-8").splitlines()]
     rustdoc = next(command for command in commands if "rustdoc" in command)
     assert rustdoc[rustdoc.index("--features") + 1] == "batch"
     assert "--no-default-features" in rustdoc
@@ -118,39 +84,20 @@ def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_p
                 "format_version": 61,
                 "includes_private": False,
                 "index": {
-                    "0": {
-                        "crate_id": 0,
-                        "name": "demo",
-                        "visibility": "public",
-                        "inner": {"module": {"items": ["1"]}},
-                    },
+                    "0": {"crate_id": 0, "name": "demo", "visibility": "public", "inner": {"module": {"items": ["1"]}}},
                     "1": {
                         "crate_id": 0,
                         "name": "Mode",
                         "visibility": "public",
                         "inner": {"enum": {"variants": ["2"], "impls": []}},
                     },
-                    "2": {
-                        "crate_id": 0,
-                        "name": "Fast",
-                        "visibility": "default",
-                        "inner": {"variant": {}},
-                    },
-                    "99": {
-                        "crate_id": 1,
-                        "name": "External",
-                        "visibility": "public",
-                        "inner": {"struct": {}},
-                    },
+                    "2": {"crate_id": 0, "name": "Fast", "visibility": "default", "inner": {"variant": {}}},
+                    "99": {"crate_id": 1, "name": "External", "visibility": "public", "inner": {"struct": {}}},
                 },
                 "paths": {
                     "0": {"crate_id": 0, "path": ["demo"], "kind": "module"},
                     "1": {"crate_id": 0, "path": ["demo", "Mode"], "kind": "enum"},
-                    "2": {
-                        "crate_id": 0,
-                        "path": ["demo", "Mode", "Fast"],
-                        "kind": "variant",
-                    },
+                    "2": {"crate_id": 0, "path": ["demo", "Mode", "Fast"], "kind": "variant"},
                     "99": {"crate_id": 1, "path": ["other", "External"], "kind": "struct"},
                 },
                 "external_crates": {"1": {"name": "other", "html_root_url": None}},
@@ -179,24 +126,14 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                 "format_version": 61,
                 "includes_private": False,
                 "index": {
-                    "0": {
-                        "crate_id": 0,
-                        "name": "demo",
-                        "visibility": "public",
-                        "inner": {"module": {"items": ["1"]}},
-                    },
+                    "0": {"crate_id": 0, "name": "demo", "visibility": "public", "inner": {"module": {"items": ["1"]}}},
                     "1": {
                         "crate_id": 0,
                         "name": "Vector3",
                         "visibility": "public",
                         "inner": {
                             "struct": {
-                                "kind": {
-                                    "plain": {
-                                        "fields": ["2", "3", "4"],
-                                        "has_stripped_fields": False,
-                                    }
-                                },
+                                "kind": {"plain": {"fields": ["2", "3", "4"], "has_stripped_fields": False}},
                                 "generics": {},
                                 "impls": ["5", "7"],
                             }
@@ -227,13 +164,7 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                         "inner": {
                             "impl": {
                                 "trait": None,
-                                "for": {
-                                    "resolved_path": {
-                                        "name": "Vector3",
-                                        "id": "1",
-                                        "args": None,
-                                    }
-                                },
+                                "for": {"resolved_path": {"name": "Vector3", "id": "1", "args": None}},
                                 "items": ["6"],
                             }
                         },
@@ -242,12 +173,7 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                         "crate_id": 0,
                         "name": "norm",
                         "visibility": "public",
-                        "inner": {
-                            "function": {
-                                "sig": {"inputs": [], "output": {"primitive": "f64"}},
-                                "header": {},
-                            }
-                        },
+                        "inner": {"function": {"sig": {"inputs": [], "output": {"primitive": "f64"}}, "header": {}}},
                     },
                     "7": {
                         "crate_id": 0,
@@ -256,13 +182,7 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                         "inner": {
                             "impl": {
                                 "trait": {"name": "Clone", "id": "99", "args": None},
-                                "for": {
-                                    "resolved_path": {
-                                        "name": "Vector3",
-                                        "id": "1",
-                                        "args": None,
-                                    }
-                                },
+                                "for": {"resolved_path": {"name": "Vector3", "id": "1", "args": None}},
                                 "items": ["8"],
                             }
                         },
@@ -271,9 +191,7 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
                         "crate_id": 0,
                         "name": "clone",
                         "visibility": "default",
-                        "inner": {
-                            "function": {"sig": {"inputs": [], "output": None}, "header": {}}
-                        },
+                        "inner": {"function": {"sig": {"inputs": [], "output": None}, "header": {}}},
                     },
                 },
                 # Deliberately flat field/method paths reproduce the nightly rustdoc shape that

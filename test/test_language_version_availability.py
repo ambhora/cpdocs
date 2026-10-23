@@ -24,11 +24,7 @@ from cpdocs.rendering.common import _feature_set_anchor, entity_document
 
 def _page(site: Path, entity) -> str:
     path = entity_document(entity)
-    file = (
-        site / path.parent / "index.html"
-        if path.name == "index.md"
-        else site / path.with_suffix("") / "index.html"
-    )
+    file = site / path.parent / "index.html" if path.name == "index.md" else site / path.with_suffix("") / "index.html"
     return file.read_text(encoding="utf-8")
 
 
@@ -36,12 +32,8 @@ def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Pat
     package = tmp_path / "src" / "pkg"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text(fixture_text("python-version-guards.py"), encoding="utf-8")
-    older = build_python_graph(
-        project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11)
-    )
-    newer = build_python_graph(
-        project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 12)
-    )
+    older = build_python_graph(project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11))
+    newer = build_python_graph(project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 12))
 
     def name(kind, value):
         return stable_entity_id("python", kind, "pkg." + value)
@@ -72,10 +64,7 @@ else:
     )
     config = dataclasses.replace(
         load_config(project / "docs/cpdocs.yml"),
-        language_configurations=(
-            {"python": {"version": "3.11"}},
-            {"python": {"version": "3.12"}},
-        ),
+        language_configurations=({"python": {"version": "3.11"}}, {"python": {"version": "3.12"}}),
     )
     graph = build_current(config, output=project / "build")
     shared = graph.entities[stable_entity_id("python", "function", "pkg.shared")]
@@ -137,15 +126,9 @@ void mpi_only();
     )
     graph = build_current(config, output=project / "site")
     stable = graph.entities[stable_entity_id("cpp", "function", "demo::stable")]
-    signatures = {
-        s.compact: set(ids)
-        for s, ids in zip(stable.signatures, stable.signature_feature_sets, strict=True)
-    }
+    signatures = {s.compact: set(ids) for s, ids in zip(stable.signatures, stable.signature_feature_sets, strict=True)}
     assert len(signatures["(int)"]) == 4
-    assert signatures["(double)"] == {
-        "language-002--feature-set-001",
-        "language-002--feature-set-002",
-    }
+    assert signatures["(double)"] == {"language-002--feature-set-001", "language-002--feature-set-002"}
     mpi = graph.entities[stable_entity_id("cpp", "function", "demo::mpi_only")]
     assert mpi.feature_sets == ["language-002--feature-set-002"]
     page = _page(project / "site/cpdocs/current", mpi)

@@ -55,11 +55,4 @@ def assigned_property(entity: ApiEntity) -> str:
 def typed_property(entity: ApiEntity, *, ignored: frozenset[str] = frozenset()) -> str:
     """Return the first property that represents a type rather than an assignment/flag."""
 
-    return next(
-        (
-            value
-            for value in entity.properties
-            if not value.startswith("=") and value not in ignored
-        ),
-        "",
-    )
+    return next((value for value in entity.properties if not value.startswith("=") and value not in ignored), "")

@@ -143,9 +143,7 @@ def _resolve_projectdocs_links(fragment: str, document: Path, project_docs_url: 
     """Resolve semantic project-site links after a page has been placed in the API tree."""
 
     def replace(match: re.Match[str]) -> str:
-        target = _project_docs_target(
-            document, project_docs_url, html.unescape(match.group("path"))
-        )
+        target = _project_docs_target(document, project_docs_url, html.unescape(match.group("path")))
         quote = match.group("quote")
         return f"href={quote}{html.escape(target, quote=True)}{quote}"
 
@@ -203,9 +201,7 @@ def _kind_label(kind: str, language: str | None = None) -> str:
 
 def _kind_badge(kind: str, language: str | None = None) -> str:
     marker = html.escape(_kind_marker(kind, language))
-    return (
-        f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
-    )
+    return f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
 
 
 def _language_label(language: str) -> str:
@@ -271,11 +267,7 @@ def _legend(graph: ApiGraph) -> str:
         f'<span class="api-legend-entry">{_kind_badge(kind, language)} {_kind_label(kind, language)}</span>'
         for kind, language in kinds
     ]
-    return (
-        '<div class="api-legend">'
-        + '<span class="api-legend-separator">·</span>'.join(entries)
-        + "</div>"
-    )
+    return '<div class="api-legend">' + '<span class="api-legend-separator">·</span>'.join(entries) + "</div>"
 
 
 def _visible_outline_children(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
@@ -302,9 +294,7 @@ def _is_ancestor(candidate: ApiEntity, current: ApiEntity | None, graph: ApiGrap
     return False
 
 
-def _outline_entity(
-    entity: ApiEntity, graph: ApiGraph, document: Path, current: ApiEntity | None
-) -> str:
+def _outline_entity(entity: ApiEntity, graph: ApiGraph, document: Path, current: ApiEntity | None) -> str:
     children = _visible_outline_children(entity, graph)
     expanded = bool(children and _is_ancestor(entity, current, graph))
     active = current is not None and entity.id == current.id
@@ -329,32 +319,21 @@ def _outline_entity(
             '<ul class="api-outline-children"'
             + hidden
             + ">"
-            + "".join(
-                "<li>" + _outline_entity(child, graph, document, current) + "</li>"
-                for child in children
-            )
+            + "".join("<li>" + _outline_entity(child, graph, document, current) + "</li>" for child in children)
             + "</ul>"
         )
     return "".join(row) + child_html
 
 
-def _outline(
-    graph: ApiGraph, document: Path, current: ApiEntity | None, *, current_special: str = ""
-) -> str:
+def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, current_special: str = "") -> str:
     roots = [entity for entity in graph.roots() if entity.kind != "macro"]
-    macros = sorted(
-        (entity for entity in graph.entities.values() if entity.kind == "macro"),
-        key=entity_sort_key,
-    )
+    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
     current_label = (
         current.name
         if current is not None
-        else {
-            "home": "Home",
-            "feature_sets": "Feature Sets",
-            "macros": "Macros",
-            "source": "Source",
-        }.get(current_special, "")
+        else {"home": "Home", "feature_sets": "Feature Sets", "macros": "Macros", "source": "Source"}.get(
+            current_special, ""
+        )
     )
     home_current = current is None and current_special == "home"
     feature_sets_current = current_special == "feature_sets"
@@ -374,9 +353,7 @@ def _outline(
     if graph.feature_sets:
         parts.extend(
             [
-                '<li><div class="api-outline-row'
-                + (" is-current" if feature_sets_current else "")
-                + '">',
+                '<li><div class="api-outline-row' + (" is-current" if feature_sets_current else "") + '">',
                 '<span class="api-kind api-kind-empty"></span>',
                 f'<a class="api-outline-link" href="{html.escape(_page_href(document, Path("feature-sets.md")))}">Feature Sets</a>',
                 "</div></li>",
@@ -419,9 +396,7 @@ def _toc(items: list[tuple[str, str, int]]) -> str:
         return '<aside class="api-toc"><h2>On this page</h2></aside>'
     parts = ['<aside class="api-toc"><h2>On this page</h2><ul>']
     for label, anchor, level in items:
-        parts.append(
-            f'<li class="toc-level-{level}"><a href="#{html.escape(anchor)}">{html.escape(label)}</a></li>'
-        )
+        parts.append(f'<li class="toc-level-{level}"><a href="#{html.escape(anchor)}">{html.escape(label)}</a></li>')
     parts.append("</ul></aside>")
     return "".join(parts)
 
@@ -454,23 +429,14 @@ def _inline_documentation(text: str) -> str:
         else:
             target = (match.group("project_path") or "").strip()
             label = target.rstrip("/") or "project documentation"
-            result.append(
-                f'<a href="projectdocs:{html.escape(target, quote=True)}">{html.escape(label)}</a>'
-            )
+            result.append(f'<a href="projectdocs:{html.escape(target, quote=True)}">{html.escape(label)}</a>')
         position = match.end()
     result.append(html.escape(text[position:]))
     return "".join(result)
 
 
-_DOCUMENTATION_FIELD = re.compile(
-    r"@(?P<command>tparam|param|returns?|throws?)\b\s*(?P<rest>.*)", re.DOTALL
-)
-_FIELD_TITLES = {
-    "tparam": "Template parameters",
-    "param": "Parameters",
-    "return": "Returns",
-    "throws": "Throws",
-}
+_DOCUMENTATION_FIELD = re.compile(r"@(?P<command>tparam|param|returns?|throws?)\b\s*(?P<rest>.*)", re.DOTALL)
+_FIELD_TITLES = {"tparam": "Template parameters", "param": "Parameters", "return": "Returns", "throws": "Throws"}
 
 
 def _documentation_description(text: str) -> str:
@@ -493,9 +459,7 @@ def _documentation_description(text: str) -> str:
         if field is None:
             paragraphs.append(f"<p>{_inline_documentation(normalized)}</p>")
             continue
-        command = {"returns": "return", "throw": "throws"}.get(
-            field.group("command"), field.group("command")
-        )
+        command = {"returns": "return", "throw": "throws"}.get(field.group("command"), field.group("command"))
         rest = field.group("rest").strip()
         if command in {"tparam", "param"}:
             name, _, description = rest.partition(" ")
@@ -506,9 +470,7 @@ def _documentation_description(text: str) -> str:
         entries = fields.get(command)
         if not entries:
             continue
-        paragraphs.append(
-            f'<div class="api-doc-field"><p class="api-doc-field-title">{_FIELD_TITLES[command]}</p>'
-        )
+        paragraphs.append(f'<div class="api-doc-field"><p class="api-doc-field-title">{_FIELD_TITLES[command]}</p>')
         if command in {"tparam", "param"}:
             paragraphs.append(
                 "<dl>"
@@ -539,12 +501,7 @@ def _documentation(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
             links.append(
                 f'<a href="{html.escape(_entity_href(document, target, graph))}"><code>{html.escape(target.name)}</code></a>'
             )
-    return (
-        description
-        + '<p class="api-related"><strong>Related:</strong> '
-        + " · ".join(links)
-        + "</p>"
-    )
+    return description + '<p class="api-related"><strong>Related:</strong> ' + " · ".join(links) + "</p>"
 
 
 def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
@@ -572,16 +529,7 @@ def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
                 collect(item, path)
                 continue
             parts = path.split(".")
-            if (
-                len(parts) == 2
-                and parts[0] in names
-                and parts[1]
-                in {
-                    "standard",
-                    "version",
-                    "edition",
-                }
-            ):
+            if len(parts) == 2 and parts[0] in names and parts[1] in {"standard", "version", "edition"}:
                 language = names[parts[0]]
                 separator = "" if parts[0] in {"c", "cxx", "cpp"} else " "
                 labels.append(f"{language}{separator}{item}")
@@ -592,12 +540,7 @@ def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
     return labels
 
 
-def _availability(
-    entity: ApiEntity,
-    graph: ApiGraph,
-    document: Path,
-    feature_sets: list[str] | None = None,
-) -> str:
+def _availability(entity: ApiEntity, graph: ApiGraph, document: Path, feature_sets: list[str] | None = None) -> str:
     # A supplied empty signature list means *no observed build*, not entity-wide availability.
     keys = list(dict.fromkeys(entity.feature_sets if feature_sets is None else feature_sets))
     if not keys:
@@ -633,11 +576,7 @@ def _availability(
         labels = _language_configuration_labels(graph, key)
         # Preserve the exact combinations: e.g. C++20 + MPI can be present even if
         # C++20 + default is absent. Every row links to that precise build.
-        qualifier = (
-            " · " + " · ".join(f"<code>{html.escape(value)}</code>" for value in labels)
-            if labels
-            else ""
-        )
+        qualifier = " · " + " · ".join(f"<code>{html.escape(value)}</code>" for value in labels) if labels else ""
         rows.append("<li>" + link(key, _feature_set_inline(graph, key) + qualifier) + "</li>")
     parts.append(
         '<div class="api-availability-dimension"><strong>Available in feature sets</strong>'
@@ -688,16 +627,10 @@ def _signature_card(
             source=signature.source or entity.source,
         )
     spelling = _signature_spelling(entity, signature)
-    declaration = _highlight_declaration(
-        spelling, entity.language, entity=entity, graph=graph, document_path=document
-    )
+    declaration = _highlight_declaration(spelling, entity.language, entity=entity, graph=graph, document_path=document)
     properties = list(
         dict.fromkeys(
-            [
-                *entity.properties,
-                *signature.qualifiers,
-                *(attribute.name for attribute in signature.attributes),
-            ]
+            [*entity.properties, *signature.qualifiers, *(attribute.name for attribute in signature.attributes)]
         )
     )
     rows = []
@@ -747,15 +680,11 @@ def _member_anchor_for_signature(entity: ApiEntity, index: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _container_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     title = f"{_kind_label(entity.kind).title()} {entity.qualified_name}"
     body = [f"<h1>{html.escape(title)}</h1>"]
     if entity.documentation.strip():
-        body.append(
-            '<div class="api-namespace-doc">' + _documentation(entity, graph, document) + "</div>"
-        )
+        body.append('<div class="api-namespace-doc">' + _documentation(entity, graph, document) + "</div>")
     else:
         body.append(
             shared_template("api/namespace-description.html").substitute(
@@ -800,9 +729,7 @@ def _container_page(
     return "".join(body), [("Members", "members", 1)]
 
 
-def _record_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     children = [graph.entities[value] for value in entity.children if value in graph.entities]
     children.sort(key=entity_sort_key)
     body = [
@@ -829,8 +756,7 @@ def _record_page(
     specializations = _specializations(entity, graph)
     if specializations:
         body.append(
-            '<section id="specializations" class="api-section"><h2>Specializations</h2>'
-            '<div class="api-record-members">'
+            '<section id="specializations" class="api-section"><h2>Specializations</h2><div class="api-record-members">'
         )
         toc.append(("Specializations", "specializations", 1))
         for other in specializations:
@@ -849,9 +775,7 @@ def _record_page(
                 + _kind_badge(other.kind, other.language)
                 + f'<code>{prefix} <a href="{href}">{html.escape(other.name)}</a></code>'
                 + (
-                    '<div class="api-member-doc">'
-                    + _documentation(other, graph, document)
-                    + "</div>"
+                    '<div class="api-member-doc">' + _documentation(other, graph, document) + "</div>"
                     if other.documentation.strip()
                     else ""
                 )
@@ -868,9 +792,7 @@ def _record_page(
         if not values:
             continue
         section_anchor = re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
-        body.append(
-            f'<section id="{section_anchor}" class="api-section"><h2>{html.escape(heading)}</h2>'
-        )
+        body.append(f'<section id="{section_anchor}" class="api-section"><h2>{html.escape(heading)}</h2>')
         toc.append((heading, section_anchor, 1))
         body.append('<div class="api-record-members">')
         for child in values:
@@ -892,9 +814,7 @@ def _record_page(
                     + _kind_badge(child.kind, child.language)
                     + f"<code>{highlighted}</code>"
                     + (
-                        '<div class="api-member-doc">'
-                        + _documentation(child, graph, document)
-                        + "</div>"
+                        '<div class="api-member-doc">' + _documentation(child, graph, document) + "</div>"
                         if child.documentation.strip()
                         else ""
                     )
@@ -927,9 +847,7 @@ def _specializations(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
     return sorted(values, key=lambda other: other.name)
 
 
-def _function_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _function_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     body = [
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
@@ -944,31 +862,21 @@ def _function_page(
     return "".join(body), toc
 
 
-def _enum_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _enum_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     return _record_page(entity, graph, document)
 
 
-def _simple_entity_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _simple_entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     body = [
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
     ]
     if entity.signatures:
         for index, signature in enumerate(entity.signatures):
-            body.append(
-                _signature_card(entity, signature, graph, document, anchor=f"signature-{index + 1}")
-            )
+            body.append(_signature_card(entity, signature, graph, document, anchor=f"signature-{index + 1}"))
     else:
         declaration = _highlight_declaration(
-            _entity_declaration(entity),
-            entity.language,
-            entity=entity,
-            graph=graph,
-            document_path=document,
+            _entity_declaration(entity), entity.language, entity=entity, graph=graph, document_path=document
         )
         body.append(
             '<article class="api-entity-card">'
@@ -983,9 +891,7 @@ def _simple_entity_page(
     return "".join(body), []
 
 
-def _entity_page(
-    entity: ApiEntity, graph: ApiGraph, document: Path
-) -> tuple[str, list[tuple[str, str, int]]]:
+def _entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
     if _is_container(entity):
         return _container_page(entity, graph, document)
     if _is_type_page(entity):
@@ -1035,10 +941,7 @@ def _file_tree_html(node: dict[str, object], document: Path) -> str:
     for name, child in sorted(node.items()):
         if name == "__files__" or not isinstance(child, dict):
             continue
-        parts.append(
-            f'<li><span class="api-kind file-kind" title="directory">D</span>'
-            f"<span>{html.escape(name)}</span>"
-        )
+        parts.append(f'<li><span class="api-kind file-kind" title="directory">D</span><span>{html.escape(name)}</span>')
         parts.append(_file_tree_html(child, document))
         parts.append("</li>")
     parts.append("</ul>")
@@ -1065,18 +968,11 @@ def _render_markdown(text: str, graph: ApiGraph) -> str:
 
 
 def _home_page(
-    graph: ApiGraph,
-    document: Path,
-    project_docs_url: str,
-    *,
-    introduction: str | None = None,
+    graph: ApiGraph, document: Path, project_docs_url: str, *, introduction: str | None = None
 ) -> tuple[str, list[tuple[str, str, int]]]:
     del project_docs_url
     roots = [entity for entity in graph.roots() if entity.kind != "macro"]
-    macros = sorted(
-        (entity for entity in graph.entities.values() if entity.kind == "macro"),
-        key=entity_sort_key,
-    )
+    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
     if introduction is None:
         introduction = shared_text("api/index.md")
     body = [
@@ -1103,10 +999,7 @@ def _home_page(
             "</section>",
         ]
     )
-    return "".join(body), [
-        ("API hierarchy", "api-hierarchy", 1),
-        ("File Hierarchy", "file-hierarchy", 1),
-    ]
+    return "".join(body), [("API hierarchy", "api-hierarchy", 1), ("File Hierarchy", "file-hierarchy", 1)]
 
 
 def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
@@ -1119,9 +1012,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
         for unit in units
         if isinstance(unit, dict)
     )
-    has_language_configurations = any(
-        _language_configuration_inline(graph, key) for key in graph.feature_sets
-    )
+    has_language_configurations = any(_language_configuration_inline(graph, key) for key in graph.feature_sets)
     body = [
         "<h1>Feature Sets</h1>",
         shared_text("api/feature-sets-intro.html"),
@@ -1146,10 +1037,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
             "<tbody>",
         ]
     )
-    toc: list[tuple[str, str, int]] = [
-        ("Overview", "overview", 1),
-        ("Feature Sets", "feature-sets", 1),
-    ]
+    toc: list[tuple[str, str, int]] = [("Overview", "overview", 1), ("Feature Sets", "feature-sets", 1)]
     for index, key in enumerate(graph.feature_sets, 1):
         anchor = _feature_set_anchor(key)
         configuration_column = (
@@ -1181,23 +1069,15 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
             for option in options:
                 if not isinstance(option, dict):
                     continue
-                cells = [
-                    str(option.get(field, ""))
-                    for field in ("group", "name", "value", "description")
-                ]
-                body.append(
-                    "<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in cells) + "</tr>"
-                )
+                cells = [str(option.get(field, "")) for field in ("group", "name", "value", "description")]
+                body.append("<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in cells) + "</tr>")
             body.append("</tbody></table></section>")
             toc.append(("Configuration options", "configuration-options", 1))
     return "".join(body), toc
 
 
 def _macros_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
-    macros = sorted(
-        (entity for entity in graph.entities.values() if entity.kind == "macro"),
-        key=entity_sort_key,
-    )
+    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
     body = ['<h1>Macros</h1><ul class="api-member-list">']
     for macro in macros:
         body.append(
@@ -1217,9 +1097,9 @@ def _source_page(
         # Some generated headers align macro-continuation backslashes with large runs of spaces.
         # That is useful in raw source but produces visually detached backslashes in the browser.
         # Preserve the source semantics while normalizing only the rendered representation.
-        content = "\n".join(
-            re.sub(r"[ \t]+\\[ \t]*$", r" \\", line.rstrip()) for line in content.splitlines()
-        ) + ("\n" if content.endswith("\n") else "")
+        content = "\n".join(re.sub(r"[ \t]+\\[ \t]*$", r" \\", line.rstrip()) for line in content.splitlines()) + (
+            "\n" if content.endswith("\n") else ""
+        )
     highlighted = _highlight_source_lines(content, language)
     display_path = _display_source_path(source_path, graph)
     generated_sources = graph.metadata.get("generated_sources", [])
@@ -1227,11 +1107,7 @@ def _source_page(
     generated = (isinstance(generated_sources, list) and source_path in generated_sources) or (
         isinstance(generated_files, list) and source_path in generated_files
     )
-    note = (
-        '<p class="api-section-intro">Generated by the build; not part of the repository.</p>'
-        if generated
-        else ""
-    )
+    note = '<p class="api-section-intro">Generated by the build; not part of the repository.</p>' if generated else ""
     lines = [
         f"<h1>File: {html.escape(display_path)}</h1>" + note,
         f'<pre class="api-source"><code class="language-{html.escape(language)}">',
@@ -1260,9 +1136,7 @@ def _page_title(entity: ApiEntity | None, graph: ApiGraph, special: str) -> str:
 
 
 def _project_docs_href(document: Path, project_docs_url: str) -> str:
-    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", project_docs_url) or project_docs_url.startswith(
-        "/"
-    ):
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", project_docs_url) or project_docs_url.startswith("/"):
         return project_docs_url
     root = _root_relative(document, ".")
     if root == ".":
@@ -1287,16 +1161,9 @@ def _layout(
     body = _resolve_projectdocs_links(body, document, project_docs_url)
     # The version query changes whenever the asset does, so a browser never pairs new pages with a
     # stylesheet or script it cached from an older cpdocs.
-    stylesheet = (
-        _root_relative(document, "assets/cpdocs-api.css") + f"?v={_asset_version('cpdocs-api.css')}"
-    )
-    script = (
-        _root_relative(document, "assets/cpdocs-api.js") + f"?v={_asset_version('cpdocs-api.js')}"
-    )
-    init_script = (
-        _root_relative(document, "assets/cpdocs-api-init.js")
-        + f"?v={_asset_version('cpdocs-api-init.js')}"
-    )
+    stylesheet = _root_relative(document, "assets/cpdocs-api.css") + f"?v={_asset_version('cpdocs-api.css')}"
+    script = _root_relative(document, "assets/cpdocs-api.js") + f"?v={_asset_version('cpdocs-api.js')}"
+    init_script = _root_relative(document, "assets/cpdocs-api-init.js") + f"?v={_asset_version('cpdocs-api-init.js')}"
     home = _page_href(document, Path("index.md"))
     project_docs = _project_docs_href(document, project_docs_url)
     version_root = _root_relative(document, ".")
@@ -1399,20 +1266,14 @@ def _write_theme_asset(assets: Path, name: str, contents: bytes) -> _ThemeAsset:
 def _write_theme(assets: Path, theme: SiteTheme) -> _ThemeAssets:
     stylesheet = _theme_stylesheet(theme)
     return _ThemeAssets(
-        stylesheet=(
-            _write_theme_asset(assets, "cpdocs-theme.css", stylesheet.encode("utf-8"))
-            if stylesheet
-            else None
-        ),
+        stylesheet=(_write_theme_asset(assets, "cpdocs-theme.css", stylesheet.encode("utf-8")) if stylesheet else None),
         logo=(
             _write_theme_asset(assets, "logo" + theme.logo.suffix.lower(), theme.logo.read_bytes())
             if theme.logo is not None
             else None
         ),
         favicon=(
-            _write_theme_asset(
-                assets, "favicon" + theme.favicon.suffix.lower(), theme.favicon.read_bytes()
-            )
+            _write_theme_asset(assets, "favicon" + theme.favicon.suffix.lower(), theme.favicon.read_bytes())
             if theme.favicon is not None
             else None
         ),
@@ -1476,10 +1337,7 @@ def _symbol_alias(parts: list[str]) -> Path | None:
     are still documented and reachable through their page.
     """
 
-    if any(
-        not part or part in {".", ".."} or "/" in part or "\\" in part or "\0" in part
-        for part in parts
-    ):
+    if any(not part or part in {".", ".."} or "/" in part or "\\" in part or "\0" in part for part in parts):
         return None
     return Path("_symbols", *parts, "index.md")
 
@@ -1497,9 +1355,7 @@ def _redirect(output: Path, document: Path, target: str) -> None:
 
 def _search_index(graph: ApiGraph) -> list[dict[str, str]]:
     values: list[dict[str, str]] = []
-    for entity in sorted(
-        graph.entities.values(), key=lambda value: value.qualified_name.casefold()
-    ):
+    for entity in sorted(graph.entities.values(), key=lambda value: value.qualified_name.casefold()):
         target, anchor = _entity_target(entity, graph)
         url = _output_directory(target).as_posix().rstrip("/") + "/"
         if anchor:
@@ -1669,10 +1525,6 @@ def _render_site(
             redirect_target = _page_href(alias, target_document, anchor)
             _redirect(output, alias, redirect_target)
 
-    (output / "symbols.json").write_text(
-        json.dumps(symbols, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    (output / "search-index.json").write_text(
-        json.dumps(_search_index(graph), indent=2) + "\n", encoding="utf-8"
-    )
+    (output / "symbols.json").write_text(json.dumps(symbols, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (output / "search-index.json").write_text(json.dumps(_search_index(graph), indent=2) + "\n", encoding="utf-8")
     (output / ".nojekyll").touch()

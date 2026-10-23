@@ -84,11 +84,7 @@ def test_symbol_names_cannot_escape_through_aliases(tmp_path: Path) -> None:
             qualified_name='X<"/../../../../../escaped-symbol">',
         )
     )
-    graph.add(
-        ApiEntity(
-            id="cpp:struct:Y", language="cpp", kind="struct", name="Y", qualified_name="ns::Y"
-        )
-    )
+    graph.add(ApiEntity(id="cpp:struct:Y", language="cpp", kind="struct", name="Y", qualified_name="ns::Y"))
     graph.rebuild_children()
     _render(graph, output)
     assert _files_outside(tmp_path, output) == []
@@ -144,9 +140,7 @@ def test_render_refuses_to_replace_a_symbolic_link(tmp_path: Path) -> None:
     assert not any(".cpdocs-staging" in path.name for path in tmp_path.iterdir())
 
 
-def test_failed_render_keeps_the_previous_site(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_failed_render_keeps_the_previous_site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     output = tmp_path / "site"
     graph = ApiGraph(project="p", version="main", language="none")
     _render(graph, output)

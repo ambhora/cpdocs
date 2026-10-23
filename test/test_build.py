@@ -20,12 +20,7 @@ from cpdocs.model import stable_entity_id
 
 @pytest.fixture(autouse=True)
 def _no_ci_branch(monkeypatch: pytest.MonkeyPatch) -> None:
-    for variable in (
-        "CPDOCS_CURRENT_BRANCH",
-        "GITHUB_HEAD_REF",
-        "CI_COMMIT_BRANCH",
-        "GITHUB_REF_TYPE",
-    ):
+    for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH", "GITHUB_REF_TYPE"):
         monkeypatch.delenv(variable, raising=False)
 
 
@@ -40,24 +35,13 @@ def test_semantic_file_layout_flattens_manifest_roots(tmp_path: Path) -> None:
     source.write_text("// source\n", encoding="utf-8")
 
     assert _semantic_display_path(header, root=include, generated=False) == "include/kprof/cuda.hpp"
-    assert (
-        _semantic_display_path(source, root=library, generated=False) == "lib/kprof/synchronize.cu"
-    )
-    assert (
-        _semantic_display_path(header, root=include, generated=True)
-        == "_generated/include/kprof/cuda.hpp"
-    )
-    assert (
-        _semantic_display_path(source, root=library, generated=True)
-        == "_generated/lib/kprof/synchronize.cu"
-    )
+    assert _semantic_display_path(source, root=library, generated=False) == "lib/kprof/synchronize.cu"
+    assert _semantic_display_path(header, root=include, generated=True) == "_generated/include/kprof/cuda.hpp"
+    assert _semantic_display_path(source, root=library, generated=True) == "_generated/lib/kprof/synchronize.cu"
 
 
 def test_build_runs_feature_sets_once_then_build_once_per_feature_set(tmp_path: Path) -> None:
-    project = fake_project(
-        tmp_path / "p",
-        feature_sets=[[], ["a", "b"]],
-    )
+    project = fake_project(tmp_path / "p", feature_sets=[[], ["a", "b"]])
     graph = build_current(load_config(project / "docs" / "cpdocs.yml"), output=project / "build")
 
     work = project / "build" / "cpdocs" / "work" / "current" / "feature-sets"
@@ -110,9 +94,7 @@ def test_versions_are_built_in_exact_configured_order(tmp_path: Path) -> None:
     git(project, "add", "-A")
     git(project, "commit", "-q", "-m", "later")
     git(project, "tag", "1.1")
-    (project / "src" / "pkg" / "uncommitted.py").write_text(
-        '"""Only in the working tree."""\n', encoding="utf-8"
-    )
+    (project / "src" / "pkg" / "uncommitted.py").write_text('"""Only in the working tree."""\n', encoding="utf-8")
 
     built = build_versions(load_config(project / "docs" / "cpdocs.yml"), output=project / "build")
     assert built == ["main", "1.1", "1.0"]
@@ -137,19 +119,13 @@ def test_versions_include_working_tree_for_local_preview(tmp_path: Path) -> None
     project = fake_project(tmp_path / "p", config="versions: [main]\n")
     init_repository(project)
     git(project, "checkout", "-q", "-b", "topic")
-    (project / "src" / "pkg" / "local.py").write_text(
-        '"""Only in the local working tree."""\n', encoding="utf-8"
-    )
+    (project / "src" / "pkg" / "local.py").write_text('"""Only in the local working tree."""\n', encoding="utf-8")
 
     built = build_versions(
-        load_config(project / "docs" / "cpdocs.yml"),
-        output=project / "build",
-        include_working_tree=True,
+        load_config(project / "docs" / "cpdocs.yml"), output=project / "build", include_working_tree=True
     )
     assert built == ["topic", "main"]
-    metadata = json.loads(
-        (project / "build" / "cpdocs" / "versions" / "versions.json").read_text(encoding="utf-8")
-    )
+    metadata = json.loads((project / "build" / "cpdocs" / "versions" / "versions.json").read_text(encoding="utf-8"))
     assert metadata["default"] == "topic"
     assert [entry["kind"] for entry in metadata["versions"]] == ["worktree", "branch"]
 
@@ -172,9 +148,7 @@ def test_obsolete_cpdocs_cmake_placeholder_is_rejected(tmp_path: Path) -> None:
     project = fake_project(tmp_path / "p")
     config = project / "docs" / "cpdocs.yml"
     config.write_text(
-        config.read_text(encoding="utf-8").replace(
-            '"{{output-file}}"', '"{{output-file}}" "{{cpdocs-cmake}}"', 1
-        ),
+        config.read_text(encoding="utf-8").replace('"{{output-file}}"', '"{{output-file}}" "{{cpdocs-cmake}}"', 1),
         encoding="utf-8",
     )
     with pytest.raises(RuntimeError, match="cpdocs-cmake"):

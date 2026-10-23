@@ -30,8 +30,7 @@ _MODULE = re.compile(r"^\s*module\s+(?!procedure\b)([a-z_]\w*)\b", re.IGNORECASE
 _END_MODULE = re.compile(r"^\s*end\s*module\b", re.IGNORECASE)
 _TYPE = re.compile(r"^\s*type\s*(?:,\s*([^:]+))?\s*::\s*([a-z_]\w*)\b", re.IGNORECASE)
 _ROUTINE = re.compile(
-    r"^\s*(.*?)\b(function|subroutine)\s+([a-z_]\w*)\s*\(([^)]*)\)\s*(?:result\s*\(\s*([a-z_]\w*)\s*\))?",
-    re.IGNORECASE,
+    r"^\s*(.*?)\b(function|subroutine)\s+([a-z_]\w*)\s*\(([^)]*)\)\s*(?:result\s*\(\s*([a-z_]\w*)\s*\))?", re.IGNORECASE
 )
 _END_ROUTINE = re.compile(r"^\s*end\s*(?:function|subroutine)\b", re.IGNORECASE)
 _VISIBILITY = re.compile(r"^\s*(public|private)\s*(?:::\s*(.*))?$", re.IGNORECASE)
@@ -50,9 +49,7 @@ def _source_files(roots: list[Path], project_root: Path) -> list[Path]:
             continue
         for path in root.rglob("*"):
             # A link out of the declared root and the project is not followed.
-            if path.suffix.casefold() in _FORTRAN_SUFFIXES and readable_file(
-                path, (root, project_root)
-            ):
+            if path.suffix.casefold() in _FORTRAN_SUFFIXES and readable_file(path, (root, project_root)):
                 values.add(path.resolve())
     return sorted(values)
 
@@ -83,12 +80,7 @@ def _names(text: str) -> list[str]:
 def _declaration_type(prefix: str) -> str:
     value = prefix.strip()
     # Remove routine attributes while preserving the declared result type.
-    value = re.sub(
-        r"\b(?:pure|elemental|recursive|impure|module)\b",
-        "",
-        value,
-        flags=re.IGNORECASE,
-    )
+    value = re.sub(r"\b(?:pure|elemental|recursive|impure|module)\b", "", value, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -103,10 +95,7 @@ def _argument_types(lines: list[str], start: int, end: int, arguments: list[str]
         declaration = re.sub(r"\s+", " ", match.group(1).strip())
         # Intent/optional/value are argument attributes, not part of the type shown in compact API.
         type_text = re.split(
-            r"\s*,\s*(?:intent\s*\(|optional\b|value\b)",
-            declaration,
-            maxsplit=1,
-            flags=re.IGNORECASE,
+            r"\s*,\s*(?:intent\s*\(|optional\b|value\b)", declaration, maxsplit=1, flags=re.IGNORECASE
         )[0].strip()
         for item in match.group(2).split(","):
             name = item.split("=", 1)[0].strip()
@@ -142,12 +131,7 @@ def _public(
 
 
 def extract_fortran_graph(
-    *,
-    project: str,
-    version: str,
-    project_root: Path,
-    api_roots: list[Path],
-    feature_set: str,
+    *, project: str, version: str, project_root: Path, api_roots: list[Path], feature_set: str
 ) -> ApiGraph:
     """Extract public module/type/routine declarations from Fortran source roots."""
 
@@ -248,24 +232,14 @@ def extract_fortran_graph(
             if routine:
                 prefix, kind_text, name, arguments_text, _result_name = routine.groups()
                 end = _routine_end(lines, index)
-                if _public(
-                    name,
-                    default_public=default_public,
-                    public=public_names,
-                    private=private_names,
-                ):
-                    arguments = [
-                        value.strip() for value in arguments_text.split(",") if value.strip()
-                    ]
+                if _public(name, default_public=default_public, public=public_names, private=private_names):
+                    arguments = [value.strip() for value in arguments_text.split(",") if value.strip()]
                     types = _argument_types(lines, index + 1, end, arguments)
                     parameters = tuple(
-                        ApiParameter(name=value, type=types.get(value.casefold(), ""))
-                        for value in arguments
+                        ApiParameter(name=value, type=types.get(value.casefold(), "")) for value in arguments
                     )
                     kind = "function" if kind_text.casefold() == "function" else "subroutine"
-                    returns = (
-                        _declaration_type(prefix) if kind_text.casefold() == "function" else ""
-                    )
+                    returns = _declaration_type(prefix) if kind_text.casefold() == "function" else ""
                     qualified = f"{module_name}::{name}"
                     signature = ApiSignature(
                         parameters=parameters,

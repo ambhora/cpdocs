@@ -87,7 +87,7 @@ def test_failing_build_command_reports_its_output(tmp_path: Path) -> None:
     project = fake_project(tmp_path / "p")
     (project / "docs" / "cpdocs.yml").write_text(
         "contract: 3\nbuild:\n"
-        "  feature-sets: >-\n    python -c \"import sys; print('boom'); sys.exit(3)\"\n"
+        "  feature-sets: >\n    python -c \"import sys; print('boom'); sys.exit(3)\"\n"
         '  build: "true"\n',
         encoding="utf-8",
     )
@@ -188,9 +188,9 @@ def test_tmp_directory_separates_work_from_output(tmp_path, monkeypatch):
     config_file.write_text(
         "contract: 3\nproject: demo\nlanguages: [python]\n"
         "build:\n"
-        "  feature-sets: >-\n"
+        "  feature-sets: >\n"
         "    python -c \"import pathlib; pathlib.Path(r'{{output-file}}').write_text('[]')\"\n"
-        "  build: >-\n"
+        "  build: >\n"
         "    python -c \"import pathlib; pathlib.Path(r'{{output-file}}').write_text('[]')\"\n",
         encoding="utf-8",
     )

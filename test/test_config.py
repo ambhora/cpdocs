@@ -154,7 +154,8 @@ def test_theme_of_current_tree_applies_to_other_versions(tmp_path: Path) -> None
         ("    stylesheet: share/icon.svg\n", "site.theme.stylesheet must be one of .css"),
         ("    colors:\n      sepia: {}\n", "unknown site.theme.colors schemes: sepia"),
         ("    colors:\n      light:\n        link: '#ffffff'\n", "colours: link"),
-        ("    colors:\n      light:\n        accent: #266c7c\n", "quoted in YAML"),
+        # An unquoted "#" starts a comment, which leaves the key without a value.
+        ("    colors:\n      light:\n        accent: #266c7c\n", "cpdocs.yml: ParseError"),
         ("    colors:\n      light:\n        accent: teal\n", "hexadecimal colour"),
     ],
 )

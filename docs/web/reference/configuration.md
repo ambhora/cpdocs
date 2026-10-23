@@ -8,6 +8,12 @@ SPDX-License-Identifier: Apache-2.0
 all project semantics: features, valid feature combinations, generated code, targets, headers and
 sources.
 
+The file is read as [Korml](https://ambhora.github.io/korml/), the JSON-shaped subset of YAML:
+mappings, sequences, scalars, comments, flow collections and block scalars. Anchors, aliases, tags,
+complex keys and duplicate keys are errors. Every scalar is text, so `versions: [1.10]` names the
+version `1.10` and does not become the number 1.1; cpdocs decodes the few values it needs as numbers,
+such as the bounds of a Keyso `_interval`.
+
 A minimal configuration is:
 
 ```yaml
@@ -82,7 +88,7 @@ every entry of `versions`, so older versions are presented the way the project l
 The API site has a light and a dark scheme, and the reader switches between them. `colors.light`
 and `colors.dark` each set any of the colours below; a colour that a scheme does not set keeps its
 cpdocs value in that scheme. Values are hexadecimal, `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`, and
-must be quoted, because an unquoted `#` starts a YAML comment.
+must be quoted, because an unquoted `#` starts a comment.
 
 | Colour | Used for |
 | --- | --- |

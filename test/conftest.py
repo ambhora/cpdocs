@@ -102,8 +102,8 @@ def fake_project(
     (root / "docs" / "cpdocs.yml").write_text(
         "contract: 3\n"
         "build:\n"
-        f'  feature-sets: >-\n    {python} fake_build.py feature-sets "{{{{output-file}}}}"\n'
-        f'  build: >-\n    {python} fake_build.py build "{{{{feature-set}}}}" "{{{{output-file}}}}"\n'
+        f'  feature-sets: >\n    {python} fake_build.py feature-sets "{{{{output-file}}}}"\n'
+        f'  build: >\n    {python} fake_build.py build "{{{{feature-set}}}}" "{{{{output-file}}}}"\n'
         + config,
         encoding="utf-8",
     )

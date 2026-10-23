@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -347,9 +347,9 @@ source = { editable = "." }
 dependencies = [
     { name = "brandgen" },
     { name = "keyso" },
+    { name = "korml" },
     { name = "markdown-it-py" },
     { name = "pygments" },
-    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -357,16 +357,17 @@ dev = [
     { name = "mkdocs-materialx" },
     { name = "properdocs" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "brandgen" },
-    { name = "keyso" },
+    { name = "keyso", specifier = ">=0.2.0" },
+    { name = "korml", specifier = ">=0.2.0" },
     { name = "markdown-it-py", specifier = ">=3" },
     { name = "pygments", specifier = ">=2.17" },
-    { name = "pyyaml", specifier = ">=6" },
 ]
 
 [package.metadata.requires-dev]
@@ -374,6 +375,7 @@ dev = [
     { name = "mkdocs-materialx" },
     { name = "properdocs", specifier = ">=1.6.7" },
     { name = "pytest", specifier = ">=8" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.8" },
 ]
 
@@ -513,6 +515,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/87/43/ff63005ae78f60d3859c3769e1c7b103cd4f78518ad131b0862267c9da51/keyso-0.2.0.tar.gz", hash = "sha256:2ed780cb1e36e76227e6da9faf58d2fae1da9a36d673250f919934a9c1797eec", size = 111079, upload-time = "2026-10-14T21:47:06.874Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/ff/2ed5c7984a4b262405429496fe9e087765b860535e705d54b03232a1e159/keyso-0.2.0-py2.py3-none-any.whl", hash = "sha256:4177d8dc659d2b0ee4addad6916b50ac15c45627c8cb4312deaa19b411b19338", size = 14767, upload-time = "2026-10-14T21:47:08.896Z" },
+]
+
+[[package]]
+name = "korml"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/7b/ce9b3b74234fc0300b1999e2a56d8630f344f731dca270a76476aa62daeb/korml-0.2.0.tar.gz", hash = "sha256:4e6ebf400dc1121029dcc4c8f3bee1bacfc1bd2719a96a681c7a68603f5c9dd6", size = 342520, upload-time = "2026-10-22T06:57:19.264Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/e1/06c744594ee451dbf70e5c5d0b35d66180fbfe0854ba27afc659836f2560/korml-0.2.0-py3-none-any.whl", hash = "sha256:50a13b78faf72b1b13cbec1a61a6868c0299cc235e5df0fc95b700d545830488", size = 53563, upload-time = "2026-10-22T06:57:09.877Z" },
 ]
 
 [[package]]

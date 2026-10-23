@@ -15,11 +15,13 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Jayesh Badwaik", email = "j.badwaik@fz-juelich.de" }]
 dependencies = [
+  "brandgen",
+  "keyso>=0.2.0",
+  # The Python implementation of Korml, published from ambhora/pykorml; 0.2.0 rejects duplicate
+  # keys and bounds input size, token count, parse work and nesting depth.
+  "korml>=0.2.0",
   "markdown-it-py>=3",
   "Pygments>=2.17",
-  "PyYAML>=6",
-  "keyso",
-  "brandgen"
 ]
 
 [project.urls]
@@ -32,7 +34,9 @@ cpdocs = "cpdocs.cli:main"
 cpdocs = "cpdocs.plugins.properdocs.plugin:CpdocsPlugin"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.8", "properdocs>=1.6.7", "mkdocs-materialx"]
+# PyYAML reads the GitHub workflows in tests and checks that Korml reads every cpdocs.yml the way
+# YAML did.
+dev = ["pytest>=8", "ruff>=0.8", "properdocs>=1.6.7", "mkdocs-materialx", "PyYAML>=6"]
 
 [tool.hatch.version]
 path = "src/cpdocs/__init__.py"

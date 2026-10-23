@@ -7,6 +7,10 @@
 The configuration tells cpdocs how to ask the project for its feature sets, how to build one
 selected feature set, and which Git versions to document. Project structure remains owned by the
 build system and is communicated through JSON manifests.
+
+``cpdocs.yml`` is read as Korml, the JSON-shaped subset of YAML: mappings, sequences and text
+scalars, without anchors, aliases, tags, complex keys or duplicate keys. Every scalar arrives as
+text and this module decodes it, so ``1.10`` stays ``"1.10"`` instead of becoming the float 1.1.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+import korml
 
 CONTRACT_VERSION = 3
 DEFAULT_CONFIG = Path("docs/cpdocs.yml")
@@ -149,11 +153,11 @@ def _theme_colors(value: object) -> dict[str, dict[str, str]]:
                 f"cpdocs.yml: unknown site.theme.colors.{scheme} colours: {', '.join(unknown)}"
             )
         for name, color in colors.items():
-            # An unquoted "#266c7c" is a YAML comment, which leaves the value empty.
+            # An unquoted "#266c7c" starts a comment, so the value must be quoted.
             if not isinstance(color, str) or not _HEX_COLOR.fullmatch(color):
                 raise RuntimeError(
-                    f"cpdocs.yml: site.theme.colors.{scheme}.{name} must be a hexadecimal "
-                    'colour such as "#2f62b5", quoted in YAML'
+                    f"cpdocs.yml: site.theme.colors.{scheme}.{name} must be a quoted hexadecimal "
+                    'colour such as "#2f62b5"'
                 )
         result[scheme] = {name: colors[name].lower() for name in THEME_COLORS if name in colors}
     return result
@@ -179,12 +183,37 @@ def _theme(value: object, root: Path) -> SiteTheme:
     )
 
 
+def _keyso_integers(value: object, name: str) -> Any:
+    """Decode the integer bounds of Keyso ``_interval`` operators; every other scalar stays text.
+
+    Korml scalars are text, and Keyso needs integers only for ``_interval``. Values that become
+    placeholders are text either way.
+    """
+
+    if isinstance(value, list):
+        return [_keyso_integers(item, f"{name}[{index}]") for index, item in enumerate(value)]
+    if not isinstance(value, dict):
+        return value
+    result: dict[str, Any] = {}
+    for key, child in value.items():
+        if key == "_interval" and isinstance(child, dict):
+            bounds: dict[str, Any] = {}
+            for bound, text in child.items():
+                if not isinstance(text, str) or not re.fullmatch(r"[+-]?[0-9]+", text):
+                    raise RuntimeError(f"cpdocs.yml: {name}._interval.{bound} must be an integer")
+                bounds[bound] = int(text)
+            result[key] = bounds
+        else:
+            result[key] = _keyso_integers(child, f"{name}.{key}")
+    return result
+
+
 def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     """Expand the optional Keyso language space, preserving the original default build."""
 
     if "languages" not in raw:
         return ({},)
-    expression = _mapping(raw["languages"], "languages")
+    expression = _keyso_integers(_mapping(raw["languages"], "languages"), "languages")
     try:
         import keyso
     except ImportError as error:
@@ -200,14 +229,27 @@ def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     return tuple(configurations)
 
 
+def _read(config_file: Path) -> dict[str, Any]:
+    """Read the single Korml document of ``config_file`` as a mapping of text scalars."""
+
+    try:
+        documents = korml.load(config_file).to_builtin()
+    except korml.KormlError as error:
+        raise RuntimeError(f"cpdocs.yml: {error}") from error
+    if len(documents) > 1:
+        raise RuntimeError("cpdocs.yml: the configuration must be a single document")
+    raw = documents[0] if documents else {}
+    if not isinstance(raw, dict):
+        raise RuntimeError("cpdocs.yml: top level must be a mapping")
+    return raw
+
+
 def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
     config_file = Path(path).expanduser().resolve()
     if not config_file.is_file():
         raise RuntimeError(f"cpdocs configuration does not exist: {config_file}")
-    raw = yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise RuntimeError("cpdocs.yml: top level must be a mapping")
-    if raw.get("contract") != CONTRACT_VERSION:
+    raw = _read(config_file)
+    if raw.get("contract") != str(CONTRACT_VERSION):
         raise RuntimeError(
             f"cpdocs.yml: contract must be {CONTRACT_VERSION}, found {raw.get('contract')!r}"
         )

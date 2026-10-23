@@ -41,11 +41,11 @@ languages:
           version: ["3.11", "3.12"]
 
 build:
-  feature-sets: >-
+  feature-sets: >
     cmake -S "{{source}}" -B "{{tmpdir}}"
     -DCMAKE_CXX_STANDARD="{{cxx.standard}}"
     -DPROJECT_FEATURE_SETS_OUTPUT="{{output-file}}"
-  build: >-
+  build: >
     cmake -S "{{source}}" -B "{{tmpdir}}"
     -DCMAKE_CXX_STANDARD="{{cxx.standard}}"
     -DPROJECT_FEATURE_SET="{{feature-set}}"

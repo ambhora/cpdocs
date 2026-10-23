@@ -108,8 +108,9 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
     assert graph.project == "cpdocs-cxx-standards"
     assert len(graph.feature_sets) == 3
 
+    # Korml scalars are text; the standards are compared as numbers.
     def standards(keys: list[str]) -> set[int]:
-        return {graph.feature_sets[key]["languages"]["cxx"]["standard"] for key in keys}
+        return {int(graph.feature_sets[key]["languages"]["cxx"]["standard"]) for key in keys}
 
     expected = {
         "demo::always": {17, 20, 23},
@@ -345,13 +346,10 @@ def test_broken_api_reference_fails_when_configured(tmp_path: Path) -> None:
     if properdocs is None:
         pytest.skip("properdocs is required")
     project = copy_example(tmp_path, "cpp-features")
+    # The example already fails on broken references. Appending the key a second time used to
+    # pass silently under YAML, where the last duplicate wins; Korml rejects duplicate keys.
     config = project / "docs" / "cpdocs.yml"
-    config.write_text(
-        config.read_text(encoding="utf-8").replace(
-            "  undocumented: fail\n", "  undocumented: fail\n  broken-references: fail\n"
-        ),
-        encoding="utf-8",
-    )
+    assert "  broken-references: fail\n" in config.read_text(encoding="utf-8")
     (project / "docs" / "web" / "index.md").write_text(
         "See @apidocs::demo::nonexistent.\n", encoding="utf-8"
     )

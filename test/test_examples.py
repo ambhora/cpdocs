@@ -79,6 +79,40 @@ def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> Non
     assert selected == [[], ["mpi"], ["mpi", "cuda"]]
 
 
+def test_plain_cmake_variants_example_marks_variants_and_languages(tmp_path: Path) -> None:
+    _cmake_toolchain()
+    _project, graph = _build(tmp_path, "cmake-variants")
+    assert [selection["features"] for selection in graph.metadata["feature_sets"]] == [
+        ["host"],
+        ["host", "mpi"],
+        ["gpu"],
+        ["gpu", "mpi"],
+    ]
+
+    def variants(keys: list[str]) -> set[tuple[str, ...]]:
+        return {tuple(graph.feature_sets[key]["features"]) for key in keys}
+
+    host = graph.entities[stable_entity_id("cpp", "function", "demo::scale")]
+    by_parameters = dict(
+        zip((signature.compact for signature in host.signatures), host.signature_feature_sets, strict=True)
+    )
+    assert variants(by_parameters["(double *, std::size_t, double)"]) == {
+        ("host",),
+        ("host", "mpi"),
+        ("gpu",),
+        ("gpu", "mpi"),
+    }
+    assert variants(by_parameters["(double *, std::size_t, double, int)"]) == {("host", "mpi"), ("gpu", "mpi")}
+    # The GPU implementation is a separate CUDA entry with its own availability.
+    device = graph.entities[stable_entity_id("cuda", "function", "demo::scale")]
+    assert device.language == "cuda"
+    assert variants(device.feature_sets) == {("gpu",), ("gpu", "mpi")}
+    assert variants(graph.entities[stable_entity_id("cuda", "struct", "demo::stream")].feature_sets) == {
+        ("gpu",),
+        ("gpu", "mpi"),
+    }
+
+
 def test_a_different_build_system_gives_the_same_reference(tmp_path: Path) -> None:
     _cmake_toolchain()
     project = copy_example(tmp_path, "cpp-features")
@@ -306,6 +340,7 @@ def test_root_properdocs_config_mounts_example_sites() -> None:
         "examples/cpp-templates",
         "examples/cpp-features",
         "examples/cpp-standards",
+        "examples/cmake-variants",
         "examples/generated-cpp",
         "examples/c-basic",
         "examples/mixed",

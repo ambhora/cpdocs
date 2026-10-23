@@ -14,6 +14,7 @@ own build. Each example site is versioned with its explicit `versions:` list.
 | `cpp-templates` | specializations, concepts, requires-clauses, SFINAE and deduction guides | [cpp-templates](cpp-templates/) |
 | `cpp-features` | feature-dependent API across three feature sets; the same project through `tools/minibuild.py` | [cpp-features](cpp-features/) |
 | `cpp-standards` | C++17, C++20 and C++23 APIs with standard-dependent functions and overloads | [cpp-standards](cpp-standards/) |
+| `cmake-variants` | build variants in plain CMake: one of two implementations, MPI optionally, and a CUDA unit for the GPU implementation | [cmake-variants](cmake-variants/) |
 | `generated-cpp` | headers generated during the build | [generated-cpp](generated-cpp/) |
 | `c-basic` | a C library | [c-basic](c-basic/) |
 | `mixed` | a C++ unit and a Python unit in one project | [mixed](mixed/) |

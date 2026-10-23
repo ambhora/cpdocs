@@ -40,6 +40,7 @@ plugins:
         - examples/cpp-templates
         - examples/cpp-features
         - examples/cpp-standards
+        - examples/cmake-variants
         - examples/generated-cpp
         - examples/c-basic
         - examples/mixed

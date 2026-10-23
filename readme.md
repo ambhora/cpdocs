@@ -4,120 +4,64 @@ SPDX-License-Identifier: Apache-2.0
 -->
 # cpdocs
 
-cpdocs generates semantic, versioned API documentation for C, C++, CUDA, HIP, Fortran, Python and Rust projects.
+cpdocs generates semantic, versioned API documentation for C, C++, CUDA, HIP, Fortran, Python and
+Rust projects.
 
-It asks the project's build system, through a small JSON contract, for the concrete feature sets to
-document. It builds each feature set independently, consumes the resulting manifest, extracts the API
-with Clang for C-family languages, source modules for Fortran, `ast` for Python or rustdoc JSON for
-Rust, and merges the results. Implementation files from the manifest are kept in the file hierarchy
-without becoming API entities.
-Feature-set availability and API language are tracked independently. The versions
-to publish are an explicit ordered list in `cpdocs.yml`.
+- **Semantic.** cpdocs reads the source with each language's own tools, Clang for the C family,
+  Python's `ast`, rustdoc for Rust and a module reader for Fortran, and works from the resulting
+  comment-preserving syntax tree. The reference shows declarations as the compiler sees them:
+  namespaces, types, overloads, templates and their documentation, rendered as HTML.
+- **Versions.** It documents the branches and tags you list, each as its own version of the
+  reference, with a version switcher between them.
+- **Build variants.** Projects often expose different APIs in different builds, for example with
+  or without MPI. Two hooks, commands run by cpdocs, connect it to the project's build system: the
+  first lists every variant worth documenting, and the second builds one variant and describes its
+  API. cpdocs runs the second hook once per variant.
+- **One merged reference.** The APIs of all variants are merged into one reference. Every
+  declaration and every overload shows the variants it is available in, and definitions in
+  different languages, such as a C++ and a CUDA implementation, stay separate entries.
+- **Language standards.** The same project can be documented for several language standards or
+  versions, such as C++17, C++20 and C++23 or Python 3.11 and 3.12, with availability marked the
+  same way.
+- **ProperDocs.** The reference is a standalone HTML site, and cpdocs integrates with
+  [ProperDocs](https://properdocs.org) for the project website around it.
+- **Versioned API in an unversioned website.** The cpdocs ProperDocs plugin embeds the versioned
+  API reference in the project website. Every version of the API lives below one mount point, so
+  the website itself needs no versioning and links such as `@apidocs::demo::solve` resolve to the
+  right page.
 
-```console
-cpdocs build          # document the working tree into build/cpdocs/current
-cpdocs versions       # document the configured versions
-properdocs build      # project website with the versioned API mounted
-```
+cpdocs keeps no knowledge of the project's features or build: everything it knows about a variant
+comes from the build system through the hooks.
 
-## Language configurations
+## Quick start
 
-The optional `languages` field in `docs/cpdocs.yml` is a [Keyso configuration
-space](https://ambhora.github.io/keyso/language/syntax/). cpdocs expands it using pykeyso,
-then runs `build.feature-sets` once per concrete configuration and `build.build` once per
-feature set discovered for that configuration. Both command templates receive dotted placeholders
-from the resulting nested dictionaries, such as `{{cxx.standard}}`, `{{c.standard}}`,
-`{{fortran.standard}}`, `{{python.version}}`, or `{{rust.edition}}`. The build system decides
-how to apply each value; cpdocs does not translate them into compiler flags.
+`docs/cpdocs.yml` names the two hooks and the versions to publish:
 
 ```yaml
-languages:
-  _product:
-    - cxx:
-        _nested:
-          standard: [17, 20, 23]
-    - python:
-        _nested:
-          version: ["3.11", "3.12"]
+contract: 3
 
 build:
   feature-sets: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DCMAKE_CXX_STANDARD="{{cxx.standard}}"
-    -DPROJECT_FEATURE_SETS_OUTPUT="{{output-file}}"
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SETS_OUTPUT="{{output-file}}"
   build: >
-    cmake -S "{{source}}" -B "{{tmpdir}}"
-    -DCMAKE_CXX_STANDARD="{{cxx.standard}}"
-    -DPROJECT_FEATURE_SET="{{feature-set}}"
-    -DPROJECT_CPDOCS_OUTPUT="{{output-file}}"
-    && cmake --build "{{tmpdir}}" --target project.cpdocs
+    cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
+    -DCPDOCS_FEATURE_SET="{{feature-set}}"
+    -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
+
+versions: [main, v2.0.0, v1.0.0]
 ```
 
-Use `_set` for explicitly paired combinations rather than the `_product` Cartesian product:
-
-```yaml
-languages:
-  _set:
-    - cxx: {standard: 17}
-      python: {version: "3.11"}
-    - cxx: {standard: 23}
-      python: {version: "3.12"}
+```console
+cpdocs build          # document the working tree into build/cpdocs/current
+cpdocs versions       # document every listed version into build/cpdocs/versions
+properdocs build      # build the project website with the versioned API mounted
 ```
 
-Each concrete configuration has its own work directory. The merged API records both the
-language configuration and feature set in symbol availability, including overload signatures.
-If `languages` is omitted, cpdocs performs the original single build configuration, and the
-existing `{{source}}`, `{{tmpdir}}`, `{{output-file}}`, `{{feature-set}}`, and `{{python}}`
-placeholders continue to work unchanged.
-
-### Language-version availability
-
-cpdocs determines availability from the public declarations extracted for **each concrete
-language configuration and discovered feature set**. It does not inspect or require any
-cpdocs-specific annotations. C/C++ projects can use their usual `#if __cplusplus` or
-`__STDC_VERSION__` guards; Clang analyzes the resulting declarations using the standard and
-flags supplied by the project's manifest. Rust and Fortran availability likewise follows the
-API that the configured provider extracts.
-
-For Python, the static extractor recognizes native `sys.version_info` comparisons (including
-`sys.version_info[:2]`, `.major`/`.minor`, imported aliases, `elif`/`else`, and simple boolean
-combinations) for a configured `python.version`. It selects those branches without importing
-or executing project code. Guards it cannot evaluate are not interpreted as unconditional
-availability; API definitions nested in such guards are omitted as before. Projects with
-complex dynamic exports should provide a version-specific manifest/provider rather than
-rely on this limited static analysis. Python source parsing uses the host cpdocs interpreter,
-so syntax introduced after that interpreter's release may require running cpdocs with a newer
-interpreter; this is not equivalent to testing the package on each target interpreter.
-
-The generated API displays language versions/standards separately from feature sets for each
-function and overload, with links to the exact combinations of the two. Only configurations
-actually analyzed are shown: `C++20` and `C++23` do **not** imply `C++20+`, and API presence
-does not assert that functionality was tested.
-
-See [`examples/cpp-standards`](examples/cpp-standards/readme.md) for a runnable
-CMake example building C++17, C++20, and C++23 from one Keyso configuration. It includes
-functions added and removed between standards and standard-dependent overloads, with
-an end-to-end test for their generated availability documentation.
-
-The configuration lives in `docs/cpdocs.yml`, the API introduction in `docs/api/index.md` and the
-ProperDocs pages in `docs/web`. The documentation starts at `docs/web/index.md`; the `examples/`
-directory holds standalone projects that the test suite builds.
-
-## API renderer resources
-
-The standalone API renderer keeps its nontrivial static content under the repository-level `share/cpdocs/api/`:
-HTML page and redirect templates (`layout.html`, `redirect.html`, `versions-redirect.html`),
-the default `index.md` introduction, reusable page fragments, `cpdocs-api.css`, and
-`cpdocs-api.js` plus the early-loading `cpdocs-api-init.js`. Python loads these using the
-shared `cpdocs.resources.shared_text` and `shared_template` helpers (based on
-`importlib.resources`), without relying on a source checkout. The wheel configuration
-force-includes `share/` at the wheel root (`"share" = "share"`), so unrelated programs can also read the files through the shared `share` namespace. The `cpdocs/` prefix avoids collisions with resources owned by other programs.
-
-Browser assets are copied into the published site's `assets/` directory with content-derived
-cache keys. Small dynamically assembled HTML fragments and Python docstrings remain in code;
-static, substantive prose, templates, stylesheets, and scripts should be file-backed rather
-than embedded as multiline Python string literals. Test-only example source and fake-provider
-scripts live separately in `test/share/` so they are not installed with the runtime package.
+The [documentation](https://ambhora.github.io/cpdocs/) starts with a tutorial and explains each
+capability in a how-to guide. The `examples/` directory holds standalone projects, all built by the
+test suite, covering plain CMake, generated headers, build variants, language standards, Python,
+Fortran and Rust.
 
 ## Development
 
@@ -127,5 +71,6 @@ uv run pytest
 uv run ruff check && uv run ruff format --check
 ```
 
-The C and C++ tests need `clang++`, `cmake` and `ninja`. Building the Rust example/site also needs
-the nightly toolchain pinned by `examples/rust-basic/rust-toolchain.toml`.
+The C and C++ tests need `clang++`, `cmake` and `ninja`. Building the Rust example also needs the
+nightly toolchain pinned by `examples/rust-basic/rust-toolchain.toml`. How the code is organized is
+described in the [architecture](https://ambhora.github.io/cpdocs/explanation/architecture/) page.

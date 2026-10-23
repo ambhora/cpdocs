@@ -8,12 +8,20 @@ on:
   push:
   pull_request:
 
+# The tests build and run the example projects; they need to read the repository and nothing more.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      # v4.4.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      # v6.8.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
       - name: Install toolchain for the C and C++ examples
         run: sudo apt-get install -y --no-install-recommends clang ninja-build
       - name: Install CMake 4.3
@@ -27,6 +35,6 @@ jobs:
       - name: Install toolchain for the Rust example
         run: rustup toolchain install nightly-2026-10-01 --profile minimal
       - name: Lint
-        run: uv run ruff check && uv run ruff format --check
+        run: uv run --locked ruff check && uv run --locked ruff format --check
       - name: Test
-        run: uv run pytest -q
+        run: uv run --locked pytest -q

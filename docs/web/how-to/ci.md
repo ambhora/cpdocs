@@ -14,6 +14,7 @@ units.
 - uses: actions/checkout@v4
   with:
     fetch-depth: 0
+    persist-credentials: false
 - run: pip install 'cpdocs[properdocs]' mkdocs-materialx
 - run: properdocs build
 - uses: actions/upload-pages-artifact@v3
@@ -49,3 +50,18 @@ A build system that runs cpdocs itself passes its own build directory:
 ```console
 cpdocs versions --output "$BUILD_DIR"
 ```
+
+## What a documentation build trusts
+
+Building documentation runs code. cpdocs runs the `build.feature-sets` and `build.build` commands
+from `cpdocs.yml`, which build the project, for every documented ref; the build scripts of an older
+tag run as they are in that tag; and the compiler flags a compile database supplies, plugins
+included, are passed to Clang. Treat `cpdocs.yml`, the build system and every documented ref as
+code the job executes:
+
+- do not build documentation for untrusted changes in a job that holds secrets or write
+  permissions, and never under `pull_request_target`;
+- give the documentation job read-only repository permissions and no persisted Git credentials,
+  and deploy from a separate job that does not build;
+- keep secrets out of the checkout: cpdocs publishes the source files units declare, limited to
+  files Git tracks in the checkout and to symbolic links that stay inside the project.

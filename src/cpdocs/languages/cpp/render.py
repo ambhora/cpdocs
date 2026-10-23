@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ...model import ApiEntity, ApiSignature
 from ..base import LanguageRendering, assigned_property, parameter_spelling, typed_property
+from .entities import ENTITY_KINDS
 
 
 def entity_declaration(entity: ApiEntity) -> str:
@@ -72,47 +73,11 @@ def member_summary(entity: ApiEntity) -> str:
     return entity.name
 
 
-def member_group(entity: ApiEntity) -> str | None:
-    if entity.kind in {"class", "struct", "union", "enum", "type_alias", "concept"}:
-        return "Public Types"
-    if entity.kind == "deduction_guide":
-        return "Deduction Guides"
-    if entity.kind in {"function", "method", "constructor"}:
-        return "Public Functions"
-    if entity.kind in {"attribute", "variable", "constant"}:
-        return "Public Members"
-    return None
-
-
 RENDERING = LanguageRendering(
     separator="::",
-    container_kinds=frozenset({"namespace"}),
-    class_like_kinds=frozenset({"class", "struct", "union"}),
-    type_page_kinds=frozenset({"class", "struct", "union", "enum"}),
-    type_like_kinds=frozenset({"class", "struct", "union", "enum", "type_alias", "concept"}),
-    function_kinds=frozenset({"function", "method", "constructor", "deduction_guide"}),
-    member_value_kinds=frozenset({"attribute", "variable", "constant"}),
+    kinds=ENTITY_KINDS,
     source_suffixes=frozenset({".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh", ".hip"}),
-    kind_markers={
-        "namespace": "N",
-        "class": "C",
-        "struct": "S",
-        "union": "U",
-        "enum": "E",
-        "function": "F",
-        "method": "F",
-        "constructor": "F",
-        "type_alias": "T",
-        "variable": "V",
-        "attribute": "A",
-        "constant": "C",
-        "macro": "D",
-        "concept": "K",
-        "deduction_guide": "G",
-    },
-    kind_labels={"deduction_guide": "deduction guide", "type_alias": "type alias"},
     signature_spelling=signature_spelling,
     entity_declaration=entity_declaration,
     member_summary=member_summary,
-    member_group=member_group,
 )

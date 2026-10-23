@@ -13,6 +13,7 @@ from .cpp.extract import extract_unit as _extract_c_family
 from .cpp.render import RENDERING as CPP
 from .fortran.extract import extract_unit as _extract_fortran
 from .fortran.render import RENDERING as FORTRAN
+from .kinds import EntityKind, EntityKinds, Role
 from .python.extract import extract_unit as _extract_python
 from .python.render import RENDERING as PYTHON
 from .rust.extract import extract_unit as _extract_rust
@@ -42,56 +43,6 @@ _LANGUAGE_LABELS = {
     "rust": "Rust",
 }
 
-_KIND_LABELS = {
-    "namespace": "namespace",
-    "module": "module",
-    "package": "package",
-    "class": "class",
-    "struct": "struct",
-    "derived_type": "derived type",
-    "union": "union",
-    "enum": "enum",
-    "trait": "trait",
-    "protocol": "protocol",
-    "type_alias": "type alias",
-    "concept": "concept",
-    "function": "function",
-    "subroutine": "subroutine",
-    "method": "method",
-    "constructor": "constructor",
-    "property": "property",
-    "attribute": "attribute",
-    "variable": "variable",
-    "constant": "constant",
-    "macro": "macro",
-    "deduction_guide": "deduction guide",
-}
-
-_KIND_MARKERS = {
-    "namespace": "N",
-    "module": "M",
-    "package": "P",
-    "class": "C",
-    "struct": "S",
-    "derived_type": "T",
-    "union": "U",
-    "enum": "E",
-    "trait": "T",
-    "protocol": "P",
-    "function": "F",
-    "subroutine": "F",
-    "method": "F",
-    "constructor": "F",
-    "type_alias": "T",
-    "variable": "V",
-    "attribute": "A",
-    "property": "P",
-    "constant": "C",
-    "macro": "D",
-    "concept": "K",
-    "deduction_guide": "G",
-}
-
 
 def extractor_for(language: str) -> UnitExtractor:
     """Return the function that extracts manifest units of one semantic language."""
@@ -115,20 +66,26 @@ def language_label(language: str) -> str:
     return _LANGUAGE_LABELS.get(language, language)
 
 
-def kind_label(kind: str, language: str | None = None) -> str:
-    if language in _RENDERINGS:
-        specific = _RENDERINGS[language].kind_labels.get(kind)
-        if specific is not None:
-            return specific
-    return _KIND_LABELS.get(kind, kind.replace("_", " "))
+def entity_kind(language: str, kind: str) -> EntityKind:
+    """The declaration of ``kind`` in the kind table of ``language``.
+
+    Raises ``ValueError`` for an unknown language and ``KeyError`` for a kind the language does
+    not declare.
+    """
+
+    return rendering_for(language).kinds[kind]
 
 
-def kind_marker(kind: str, language: str | None = None) -> str:
-    if language in _RENDERINGS:
-        specific = _RENDERINGS[language].kind_markers.get(kind)
-        if specific is not None:
-            return specific
-    return _KIND_MARKERS.get(kind, "·")
+def kind_label(kind: str, language: str) -> str:
+    """The name of a kind shown to readers, such as ``type alias``."""
+
+    return entity_kind(language, kind).label
+
+
+def kind_marker(kind: str, language: str) -> str:
+    """The letter on the badge of a kind."""
+
+    return entity_kind(language, kind).marker
 
 
 def source_language(path: str) -> str:
@@ -148,9 +105,13 @@ def source_language(path: str) -> str:
 
 
 __all__ = [
+    "EntityKind",
+    "EntityKinds",
     "LanguageRendering",
+    "Role",
     "UnitContext",
     "UnitExtractor",
+    "entity_kind",
     "extractor_for",
     "kind_label",
     "kind_marker",

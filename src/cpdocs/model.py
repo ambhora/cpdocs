@@ -75,6 +75,16 @@ class ApiEntity:
     # Feature sets of each signature, parallel to ``signatures``; empty when unknown.
     signature_feature_sets: list[list[str]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        # Each language declares its kinds in cpdocs.languages.<language>.entities; an entity of a
+        # kind its language does not declare could not be presented, so it is rejected here.
+        from .languages import entity_kind
+
+        try:
+            entity_kind(self.language, self.kind)
+        except (KeyError, ValueError) as error:
+            raise ValueError(f"API entity {self.qualified_name!r}: {error.args[0]}") from None
+
     @property
     def navigation_label(self) -> str:
         # The outline is deliberately name-only.  Detailed/overload signatures belong to the
@@ -163,31 +173,11 @@ class ApiGraph:
 
 
 def entity_sort_key(entity: ApiEntity) -> tuple[int, str, str]:
-    order = {
-        "package": 0,
-        "module": 1,
-        "namespace": 1,
-        "class": 2,
-        "struct": 2,
-        "derived_type": 2,
-        "union": 2,
-        "trait": 2,
-        "protocol": 2,
-        "enum": 3,
-        "type_alias": 4,
-        "constructor": 5,
-        "method": 6,
-        "function": 6,
-        "subroutine": 6,
-        "property": 7,
-        "attribute": 8,
-        "variable": 8,
-        "constant": 8,
-        "macro": 9,
-        "concept": 4,
-        "deduction_guide": 5,
-    }
-    return (order.get(entity.kind, 50), entity.name.casefold(), entity.qualified_name)
+    """Sort entities in member lists: by the order their language gives their kind, then by name."""
+
+    from .languages import entity_kind
+
+    return (entity_kind(entity.language, entity.kind).order, entity.name.casefold(), entity.qualified_name)
 
 
 def stable_entity_id(language: str, kind: str, qualified_name: str, signature_key: str = "") -> str:

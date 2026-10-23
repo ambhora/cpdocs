@@ -195,11 +195,11 @@ def _source_href(source_document: Path, entity: ApiEntity, graph: ApiGraph) -> s
 # ---------------------------------------------------------------------------
 
 
-def _kind_label(kind: str, language: str | None = None) -> str:
+def _kind_label(kind: str, language: str) -> str:
     return language_kind_label(kind, language)
 
 
-def _kind_badge(kind: str, language: str | None = None) -> str:
+def _kind_badge(kind: str, language: str) -> str:
     marker = html.escape(_kind_marker(kind, language))
     return f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
 
@@ -382,7 +382,7 @@ def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, curr
                 '<li><div class="api-outline-row'
                 + (" is-current" if active else "")
                 + '">'
-                + _kind_badge("macro")
+                + _kind_badge("macro", macro.language)
                 + f'<a class="api-outline-link" href="{html.escape(_entity_href(document, macro, graph))}">{html.escape(macro.name)}</a>'
                 + "</div></li>"
             )
@@ -681,7 +681,7 @@ def _member_anchor_for_signature(entity: ApiEntity, index: int) -> str:
 
 
 def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
-    title = f"{_kind_label(entity.kind).title()} {entity.qualified_name}"
+    title = f"{_kind_label(entity.kind, entity.language).title()} {entity.qualified_name}"
     body = [f"<h1>{html.escape(title)}</h1>"]
     if entity.documentation.strip():
         body.append('<div class="api-namespace-doc">' + _documentation(entity, graph, document) + "</div>")
@@ -987,7 +987,7 @@ def _home_page(
         for macro in macros:
             body.append(
                 "<li>"
-                + _kind_badge("macro")
+                + _kind_badge("macro", macro.language)
                 + f'<a href="{html.escape(_entity_href(document, macro, graph))}">{html.escape(macro.name)}</a></li>'
             )
         body.append("</ul></li>")
@@ -1082,7 +1082,7 @@ def _macros_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, 
     for macro in macros:
         body.append(
             "<li>"
-            + _kind_badge("macro")
+            + _kind_badge("macro", macro.language)
             + f'<a href="{html.escape(_entity_href(document, macro, graph))}">{html.escape(macro.name)}</a></li>'
         )
     body.append("</ul>")
@@ -1364,7 +1364,7 @@ def _search_index(graph: ApiGraph) -> list[dict[str, str]]:
             {
                 "label": entity.member_label,
                 "qualified": entity.qualified_name,
-                "kind": _kind_label(entity.kind),
+                "kind": _kind_label(entity.kind, entity.language),
                 "url": url,
             }
         )

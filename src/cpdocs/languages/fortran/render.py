@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ...model import ApiEntity, ApiSignature
 from ..base import LanguageRendering, parameter_spelling
+from .entities import ENTITY_KINDS
 
 
 def entity_declaration(entity: ApiEntity) -> str:
@@ -36,37 +37,11 @@ def member_summary(entity: ApiEntity) -> str:
     return entity.name
 
 
-def member_group(entity: ApiEntity) -> str | None:
-    if entity.kind == "derived_type":
-        return "Public Types"
-    if entity.kind in {"function", "subroutine"}:
-        return "Public Functions"
-    if entity.kind in {"variable", "attribute", "constant"}:
-        return "Public Members"
-    return None
-
-
 RENDERING = LanguageRendering(
     separator="::",
-    container_kinds=frozenset({"module"}),
-    class_like_kinds=frozenset({"derived_type"}),
-    type_page_kinds=frozenset({"derived_type"}),
-    type_like_kinds=frozenset({"derived_type"}),
-    function_kinds=frozenset({"function", "subroutine"}),
-    member_value_kinds=frozenset({"variable", "attribute", "constant"}),
+    kinds=ENTITY_KINDS,
     source_suffixes=frozenset({".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}),
-    kind_markers={
-        "module": "M",
-        "derived_type": "T",
-        "function": "F",
-        "subroutine": "F",
-        "variable": "V",
-        "attribute": "A",
-        "constant": "C",
-    },
-    kind_labels={"derived_type": "derived type"},
     signature_spelling=signature_spelling,
     entity_declaration=entity_declaration,
     member_summary=member_summary,
-    member_group=member_group,
 )

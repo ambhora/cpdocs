@@ -637,5 +637,5 @@ def _relative_link(source: Path, target: Path) -> str:
     return "./" if value == "." else value.rstrip("/") + "/"
 
 
-def _kind_marker(kind: str, language: str | None = None) -> str:
+def _kind_marker(kind: str, language: str) -> str:
     return kind_marker(kind, language)

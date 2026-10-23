@@ -63,6 +63,7 @@ nav:
       - Command line: reference/cli.md
       - CMake integration: reference/cmake.md
       - Extraction: reference/extraction.md
+      - Entity kinds: reference/entity-kinds.md
       - Documentation comments: reference/comments.md
       - Semantic links: reference/links.md
       - Python API: reference/api.md

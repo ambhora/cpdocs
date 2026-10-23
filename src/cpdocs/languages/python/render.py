@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ...model import ApiEntity, ApiSignature
 from ..base import LanguageRendering, assigned_property, typed_property
+from .entities import ENTITY_KINDS
 
 
 def _parameters(signature: ApiSignature) -> str:
@@ -76,42 +77,11 @@ def member_summary(entity: ApiEntity) -> str:
     return entity.name
 
 
-def member_group(entity: ApiEntity) -> str | None:
-    if entity.kind in {"class", "protocol", "type_alias"}:
-        return "Public Types"
-    if entity.kind in {"function", "method", "constructor"}:
-        return "Public Functions"
-    if entity.kind in {"property", "attribute", "variable", "constant"}:
-        return "Public Members"
-    return None
-
-
 RENDERING = LanguageRendering(
     separator=".",
-    container_kinds=frozenset({"module", "package"}),
-    class_like_kinds=frozenset({"class", "protocol"}),
-    type_page_kinds=frozenset({"class", "protocol"}),
-    type_like_kinds=frozenset({"class", "protocol", "type_alias"}),
-    function_kinds=frozenset({"function", "method", "constructor"}),
-    member_value_kinds=frozenset({"property", "attribute", "variable", "constant"}),
+    kinds=ENTITY_KINDS,
     source_suffixes=frozenset({".py", ".pyi"}),
-    kind_markers={
-        "module": "M",
-        "package": "P",
-        "class": "C",
-        "protocol": "P",
-        "function": "F",
-        "method": "F",
-        "constructor": "F",
-        "type_alias": "T",
-        "variable": "V",
-        "attribute": "A",
-        "property": "P",
-        "constant": "C",
-    },
-    kind_labels={"type_alias": "type alias"},
     signature_spelling=signature_spelling,
     entity_declaration=entity_declaration,
     member_summary=member_summary,
-    member_group=member_group,
 )

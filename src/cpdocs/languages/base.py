@@ -8,28 +8,55 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import cached_property
 
 from ..model import ApiEntity, ApiSignature
+from .kinds import EntityKinds, Role
 
 
 @dataclass(frozen=True)
 class LanguageRendering:
-    """Rendering rules that belong to a programming language, not to HTML."""
+    """Presentation rules that belong to a programming language, not to HTML.
+
+    ``kinds`` is the language's table of entity kinds; the kind sets the renderer asks for, such as
+    ``function_kinds``, are derived from the roles declared there.
+    """
 
     separator: str
-    container_kinds: frozenset[str]
-    class_like_kinds: frozenset[str]
-    type_page_kinds: frozenset[str]
-    type_like_kinds: frozenset[str]
-    function_kinds: frozenset[str]
-    member_value_kinds: frozenset[str]
+    kinds: EntityKinds
     source_suffixes: frozenset[str]
-    kind_markers: dict[str, str]
-    kind_labels: dict[str, str]
     signature_spelling: Callable[[ApiEntity, ApiSignature], str]
     entity_declaration: Callable[[ApiEntity], str]
     member_summary: Callable[[ApiEntity], str]
-    member_group: Callable[[ApiEntity], str | None]
+
+    @cached_property
+    def container_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.CONTAINER)
+
+    @cached_property
+    def class_like_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.CLASS_LIKE)
+
+    @cached_property
+    def type_page_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.TYPE_PAGE)
+
+    @cached_property
+    def type_like_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.TYPE)
+
+    @cached_property
+    def function_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.CALLABLE)
+
+    @cached_property
+    def member_value_kinds(self) -> frozenset[str]:
+        return self.kinds.with_role(Role.VALUE)
+
+    def member_group(self, entity: ApiEntity) -> str | None:
+        """The heading an entity is listed under on the page of its type, if it is listed there."""
+
+        return self.kinds[entity.kind].group
 
 
 def parameter_spelling(signature: ApiSignature) -> str:

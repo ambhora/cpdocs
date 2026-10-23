@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ...contract import UnitManifest
 from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
@@ -19,6 +20,7 @@ from ...model import (
     relative_source_path,
     stable_entity_id,
 )
+from ..unit import UnitContext
 
 _KIND_MAP = {
     "module": "module",
@@ -388,3 +390,15 @@ def build_rust_graph(
 
     graph.rebuild_children()
     return graph
+
+
+def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+    """Extract a Rust unit: read the rustdoc JSON the build system produced for its crate."""
+
+    assert unit.rustdoc_json is not None
+    return build_rust_graph(
+        rustdoc_json=unit.rustdoc_json,
+        project=context.project,
+        version=context.version,
+        project_root=context.project_root,
+    )

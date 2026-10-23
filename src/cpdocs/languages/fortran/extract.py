@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ...contract import UnitManifest
 from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
@@ -24,6 +25,7 @@ from ...model import (
     relative_source_path,
     stable_entity_id,
 )
+from ..unit import UnitContext
 
 _FORTRAN_SUFFIXES = {".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}
 _MODULE = re.compile(r"^\s*module\s+(?!procedure\b)([a-z_]\w*)\b", re.IGNORECASE)
@@ -269,3 +271,17 @@ def extract_fortran_graph(
 
     graph.rebuild_children()
     return graph
+
+
+def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+    """Extract a Fortran unit: read the public modules below its API roots and module roots."""
+
+    roots = [root.path for root in unit.api]
+    roots.extend(path for path in unit.modules if path not in roots)
+    return extract_fortran_graph(
+        project=context.project,
+        version=context.version,
+        project_root=context.project_root,
+        api_roots=roots,
+        feature_set=context.feature_set,
+    )

@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 from pathlib import Path
 from typing import Any
 
+from ...contract import UnitManifest
 from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
@@ -26,6 +28,7 @@ from ...model import (
     relative_source_path,
     stable_entity_id,
 )
+from ..unit import UnitContext
 
 
 def _version_imports(tree: ast.Module) -> tuple[set[str], set[str]]:
@@ -606,3 +609,34 @@ def build_python_graph(
 
     graph.rebuild_children()
     return graph
+
+
+def target_python_version(language_configuration: dict[str, object]) -> tuple[int, int] | None:
+    """The ``python.version`` of a language configuration as ``(major, minor)``, if it names one.
+
+    The extractor evaluates ``sys.version_info`` guards for this version. Without one, guarded
+    definitions are left out rather than guessed.
+    """
+
+    python = language_configuration.get("python")
+    if not isinstance(python, dict) or "version" not in python:
+        return None
+    value = str(python["version"])
+    if not re.fullmatch(r"[0-9]+\.[0-9]+", value):
+        raise RuntimeError(f"cpdocs.yml: python.version must be MAJOR.MINOR, found {value!r}")
+    major, minor = value.split(".")
+    return int(major), int(minor)
+
+
+def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+    """Extract a Python unit: read its one package statically, without importing it."""
+
+    assert unit.package is not None
+    return build_python_graph(
+        project_root=context.project_root,
+        package_root=unit.api[0].path,
+        package=unit.package,
+        version=context.version,
+        include_private=not context.config.hide_private_python,
+        python_version=target_python_version(context.language_configuration),
+    )

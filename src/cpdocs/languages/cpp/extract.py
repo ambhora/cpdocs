@@ -13,15 +13,17 @@ versioning, or availability handling.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
+import shutil
 import subprocess
 from collections.abc import Iterable
 from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
-from ...contract import ParseOptions
+from ...contract import ParseOptions, UnitManifest
 from ...filesystem import readable_file
 from ...model import (
     ApiAttribute,
@@ -33,6 +35,7 @@ from ...model import (
     relative_source_path,
     stable_entity_id,
 )
+from ..unit import UnitContext
 
 _RECORD_KINDS = {
     "CXXRecordDecl": "class",
@@ -1245,4 +1248,55 @@ def extract_clang_graph(
     graph.rebuild_children()
     _relabel(graph, language)
     graph.rebuild_children()
+    return graph
+
+
+def find_clang_executable() -> str:
+    """The Clang driver cpdocs runs to parse C-family headers.
+
+    ``CPDOCS_CLANG`` names a specific driver, for example ``clang++-18`` or an absolute path; without
+    it cpdocs uses the first of ``clang++`` and ``clang`` found on ``PATH``.
+    """
+
+    for candidate in (os.environ.get("CPDOCS_CLANG"), "clang++", "clang"):
+        if candidate and shutil.which(candidate):
+            return candidate
+    raise RuntimeError(
+        "cpdocs needs clang to document C and C++ units; put clang++ on PATH (or name it in CPDOCS_CLANG)"
+    )
+
+
+def _generated_api_sources(unit: UnitManifest, graph: ApiGraph) -> list[str]:
+    """Logical paths of the extracted headers that lie in API roots the build system generated."""
+
+    values: list[str] = []
+    for root in unit.api:
+        if not root.generated:
+            continue
+        for path in root.path.rglob("*"):
+            if path.is_file():
+                logical = path.relative_to(root.path).as_posix()
+                if logical in graph.sources:
+                    values.append(logical)
+    return values
+
+
+def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+    """Extract a C, C++, CUDA or HIP unit: parse its public headers with Clang."""
+
+    assert unit.parse is not None and unit.language is not None
+    graph = extract_clang_graph(
+        project=context.project,
+        version=context.version,
+        project_root=context.project_root,
+        language=unit.language,
+        api_roots=[root.path for root in unit.api],
+        parse=unit.parse,
+        feature_set=context.feature_set,
+        clang_executable=find_clang_executable(),
+        work_directory=context.work_directory,
+    )
+    generated = _generated_api_sources(unit, graph)
+    if generated:
+        graph.metadata["generated_sources"] = generated
     return graph

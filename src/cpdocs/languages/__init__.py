@@ -9,12 +9,28 @@ from __future__ import annotations
 from pathlib import Path
 
 from .base import LanguageRendering
+from .cpp.extract import extract_unit as _extract_c_family
 from .cpp.render import RENDERING as CPP
+from .fortran.extract import extract_unit as _extract_fortran
 from .fortran.render import RENDERING as FORTRAN
+from .python.extract import extract_unit as _extract_python
 from .python.render import RENDERING as PYTHON
+from .rust.extract import extract_unit as _extract_rust
 from .rust.render import RENDERING as RUST
+from .unit import UnitContext, UnitExtractor
 
 _RENDERINGS = {"c": CPP, "cpp": CPP, "cuda": CPP, "hip": CPP, "fortran": FORTRAN, "python": PYTHON, "rust": RUST}
+
+# The extractor of each semantic manifest language. C, CUDA and HIP units share the Clang frontend.
+_EXTRACTORS: dict[str, UnitExtractor] = {
+    "c": _extract_c_family,
+    "cpp": _extract_c_family,
+    "cuda": _extract_c_family,
+    "hip": _extract_c_family,
+    "fortran": _extract_fortran,
+    "python": _extract_python,
+    "rust": _extract_rust,
+}
 
 _LANGUAGE_LABELS = {
     "c": "C",
@@ -77,6 +93,15 @@ _KIND_MARKERS = {
 }
 
 
+def extractor_for(language: str) -> UnitExtractor:
+    """Return the function that extracts manifest units of one semantic language."""
+
+    try:
+        return _EXTRACTORS[language]
+    except KeyError as error:
+        raise ValueError(f"unsupported API language: {language}") from error
+
+
 def rendering_for(language: str) -> LanguageRendering:
     """Return rendering semantics for one programming language."""
 
@@ -122,4 +147,14 @@ def source_language(path: str) -> str:
     return "text"
 
 
-__all__ = ["LanguageRendering", "kind_label", "kind_marker", "language_label", "rendering_for", "source_language"]
+__all__ = [
+    "LanguageRendering",
+    "UnitContext",
+    "UnitExtractor",
+    "extractor_for",
+    "kind_label",
+    "kind_marker",
+    "language_label",
+    "rendering_for",
+    "source_language",
+]

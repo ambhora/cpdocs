@@ -1,0 +1,21 @@
+// --------------------------------------------------------------------------------------------------
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 cpdocs developers
+// --------------------------------------------------------------------------------------------------
+// Template of acme/version.hpp. CMake fills in the version of project() when the build is
+// configured and writes the header to the build directory.
+#pragma once
+
+/// The version of the acme library, set when the build is configured.
+namespace acme::version {
+
+/// The major version: incompatible API changes.
+inline constexpr int major = @PROJECT_VERSION_MAJOR@;
+/// The minor version: compatible additions.
+inline constexpr int minor = @PROJECT_VERSION_MINOR@;
+/// The patch version: compatible fixes.
+inline constexpr int patch = @PROJECT_VERSION_PATCH@;
+/// The full version as text, such as "1.4.2".
+inline constexpr char const* text = "@PROJECT_VERSION@";
+
+} // namespace acme::version

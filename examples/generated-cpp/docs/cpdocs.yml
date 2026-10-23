@@ -12,9 +12,10 @@ build:
     cmake -S "{{source}}" -B "{{tmpdir}}" -G Ninja
     -DCPDOCS_FEATURE_SET="{{feature-set}}"
     -DCPDOCS_MANIFEST_OUTPUT="{{output-file}}"
-    && cmake --build "{{tmpdir}}" --target generate-api-header
+    && cmake --build "{{tmpdir}}" --target acme-generated-headers
 
 checks:
   broken-references: fail
+  undocumented: fail
 
 versions: [main]

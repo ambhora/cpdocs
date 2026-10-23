@@ -1,0 +1,11 @@
+# --------------------------------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 cpdocs developers
+# --------------------------------------------------------------------------------------------------
+# The status codes of acme. cmake/generate-status.cmake turns this table into the C++ header
+# acme/status.hpp in the build directory; the header itself is never checked in.
+#
+# name        value  description
+ok            0      The operation succeeded.
+overflow      1      The result does not fit into the result type.
+negative      2      An argument that must not be negative was negative.

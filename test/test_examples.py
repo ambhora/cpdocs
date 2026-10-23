@@ -7,40 +7,40 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
-from conftest import EXAMPLES, REPOSITORY, copy_example, fixture_text, git, init_repository, require
-from cpdocs.build import build_current
-from cpdocs.config import load_config
-from cpdocs.languages.fortran.extract import extract_fortran_graph
-from cpdocs.model import stable_entity_id
+import conftest
+import cpdocs.build
+import cpdocs.config
+import cpdocs.languages.fortran.extract
+import cpdocs.model
 
 
-def _build(tmp_path: Path, name: str, config: str = "docs/cpdocs.yml", output: str = "build"):
-    project = copy_example(tmp_path, name)
-    return project, build_current(load_config(project / config), output=project / output)
+def _build(tmp_path: pathlib.Path, name: str, config: str = "docs/cpdocs.yml", output: str = "build"):
+    project = conftest.copy_example(tmp_path, name)
+    return project, cpdocs.build.build_current(cpdocs.config.load_config(project / config), output=project / output)
 
 
 def _cmake_toolchain() -> None:
-    require("cmake", "ninja", "clang++")
+    conftest.require("cmake", "ninja", "clang++")
 
 
-def test_python_example_needs_no_compiler(tmp_path: Path) -> None:
+def test_python_example_needs_no_compiler(tmp_path: pathlib.Path) -> None:
     _project, graph = _build(tmp_path, "python-basic")
     assert graph.project == "dice"
-    assert stable_entity_id("python", "class", "dice.core.Die") in graph.entities
-    assert graph.entities[stable_entity_id("python", "constant", "dice.SIDES")].documentation
+    assert cpdocs.model.stable_entity_id("python", "class", "dice.core.Die") in graph.entities
+    assert graph.entities[cpdocs.model.stable_entity_id("python", "constant", "dice.SIDES")].documentation
     assert not any("_rng" in key for key in graph.entities)
     assert list(graph.feature_sets) == ["feature-set-001"]
     assert graph.feature_sets["feature-set-001"]["features"] == []
 
 
-def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> None:
+def test_cpp_features_example_documents_every_feature_set(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, graph = _build(tmp_path, "cpp-features")
     assert graph.project == "demo-solver"
@@ -48,13 +48,13 @@ def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> Non
     assert graph.metadata["feature_sets"][-1]["features"] == ["mpi", "cuda"]
 
     def feature_sets(kind: str, name: str) -> set[tuple[str, ...]]:
-        entity = graph.entities[stable_entity_id("cpp", kind, name)]
+        entity = graph.entities[cpdocs.model.stable_entity_id("cpp", kind, name)]
         return {tuple(graph.feature_sets[key]["features"]) for key in entity.feature_sets}
 
     assert feature_sets("struct", "demo::settings") == {(), ("mpi",), ("mpi", "cuda")}
     assert feature_sets("struct", "demo::communicator") == {("mpi",), ("mpi", "cuda")}
     assert feature_sets("struct", "demo::device") == {("mpi", "cuda")}
-    solve = graph.entities[stable_entity_id("cpp", "function", "demo::solve")]
+    solve = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::solve")]
     assert len(solve.signatures) == 3
     by_parameters = {
         signature.compact: (set(feature_sets), signature.documentation)
@@ -79,7 +79,7 @@ def test_cpp_features_example_documents_every_feature_set(tmp_path: Path) -> Non
     assert selected == [[], ["mpi"], ["mpi", "cuda"]]
 
 
-def test_plain_cmake_variants_example_marks_variants_and_languages(tmp_path: Path) -> None:
+def test_plain_cmake_variants_example_marks_variants_and_languages(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     _project, graph = _build(tmp_path, "cmake-variants")
     assert [selection["features"] for selection in graph.metadata["feature_sets"]] == [
@@ -92,7 +92,7 @@ def test_plain_cmake_variants_example_marks_variants_and_languages(tmp_path: Pat
     def variants(keys: list[str]) -> set[tuple[str, ...]]:
         return {tuple(graph.feature_sets[key]["features"]) for key in keys}
 
-    host = graph.entities[stable_entity_id("cpp", "function", "demo::scale")]
+    host = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::scale")]
     by_parameters = dict(
         zip((signature.compact for signature in host.signatures), host.signature_feature_sets, strict=True)
     )
@@ -104,27 +104,31 @@ def test_plain_cmake_variants_example_marks_variants_and_languages(tmp_path: Pat
     }
     assert variants(by_parameters["(double *, std::size_t, double, int)"]) == {("host", "mpi"), ("gpu", "mpi")}
     # The GPU implementation is a separate CUDA entry with its own availability.
-    device = graph.entities[stable_entity_id("cuda", "function", "demo::scale")]
+    device = graph.entities[cpdocs.model.stable_entity_id("cuda", "function", "demo::scale")]
     assert device.language == "cuda"
     assert variants(device.feature_sets) == {("gpu",), ("gpu", "mpi")}
-    assert variants(graph.entities[stable_entity_id("cuda", "struct", "demo::stream")].feature_sets) == {
+    assert variants(graph.entities[cpdocs.model.stable_entity_id("cuda", "struct", "demo::stream")].feature_sets) == {
         ("gpu",),
         ("gpu", "mpi"),
     }
 
 
-def test_a_different_build_system_gives_the_same_reference(tmp_path: Path) -> None:
+def test_a_different_build_system_gives_the_same_reference(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
-    project = copy_example(tmp_path, "cpp-features")
-    with_cmake = build_current(load_config(project / "docs" / "cpdocs.yml"), output=project / "a")
-    with_minibuild = build_current(load_config(project / "docs" / "cpdocs-minibuild.yml"), output=project / "b")
+    project = conftest.copy_example(tmp_path, "cpp-features")
+    with_cmake = cpdocs.build.build_current(
+        cpdocs.config.load_config(project / "docs" / "cpdocs.yml"), output=project / "a"
+    )
+    with_minibuild = cpdocs.build.build_current(
+        cpdocs.config.load_config(project / "docs" / "cpdocs-minibuild.yml"), output=project / "b"
+    )
     assert with_cmake.entities == with_minibuild.entities
     assert [value["features"] for value in with_cmake.feature_sets.values()] == [
         value["features"] for value in with_minibuild.feature_sets.values()
     ]
 
 
-def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
+def test_cpp_standards_example_infers_api_availability(tmp_path: pathlib.Path) -> None:
     """Build real C++17/20/23 libraries and check function/overload availability."""
 
     pytest.importorskip("keyso")
@@ -144,10 +148,10 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
         "demo::cxx23_only": {23},
     }
     for name, available in expected.items():
-        entity = graph.entities[stable_entity_id("cpp", "function", name)]
+        entity = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", name)]
         assert standards(entity.feature_sets) == available
 
-    overloads = graph.entities[stable_entity_id("cpp", "function", "demo::convert")]
+    overloads = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::convert")]
     by_signature = {
         signature.compact: standards(feature_sets)
         for signature, feature_sets in zip(overloads.signatures, overloads.signature_feature_sets, strict=True)
@@ -179,67 +183,67 @@ def test_cpp_standards_example_infers_api_availability(tmp_path: Path) -> None:
         assert manifest["units"][0]["parse"]["standard"] == f"c++{standard}"
 
 
-def test_basic_cpp_example(tmp_path: Path) -> None:
+def test_basic_cpp_example(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, graph = _build(tmp_path, "basic-cpp")
     assert graph.project == "cpdocs-basic-example"
-    assert stable_entity_id("cpp", "struct", "acme::division_result") in graph.entities
-    assert stable_entity_id("cpp", "macro", "ACME_API_VERSION_MAJOR") in graph.entities
-    family = graph.entities[stable_entity_id("cpp", "function", "acme::to_string")]
+    assert cpdocs.model.stable_entity_id("cpp", "struct", "acme::division_result") in graph.entities
+    assert cpdocs.model.stable_entity_id("cpp", "macro", "ACME_API_VERSION_MAJOR") in graph.entities
+    family = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "acme::to_string")]
     assert {signature.compact for signature in family.signatures} == {"(status)", "(bool)"}
     site = project / "build" / "cpdocs" / "current"
     assert (site / "api" / "acme" / "function-to_string" / "index.html").is_file()
 
 
-def test_generated_headers_are_built_before_extraction(tmp_path: Path) -> None:
+def test_generated_headers_are_built_before_extraction(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, graph = _build(tmp_path, "generated-cpp")
-    assert stable_entity_id("cpp", "struct", "acme::generated::configuration") in graph.entities
+    assert cpdocs.model.stable_entity_id("cpp", "struct", "acme::generated::configuration") in graph.entities
     assert graph.metadata["generated_sources"] == ["acme/generated.hpp"]
     page = project / "build" / "cpdocs" / "current" / "_sources" / "acme" / "generated.hpp" / "index.html"
     assert "Generated by the build" in page.read_text(encoding="utf-8")
 
 
-def test_c_example(tmp_path: Path) -> None:
+def test_c_example(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     _project, graph = _build(tmp_path, "c-basic")
     assert graph.language == "c"
-    assert stable_entity_id("c", "function", "ring_push") in graph.entities
-    ring = graph.entities[stable_entity_id("c", "struct", "ring")]
+    assert cpdocs.model.stable_entity_id("c", "function", "ring_push") in graph.entities
+    ring = graph.entities[cpdocs.model.stable_entity_id("c", "struct", "ring")]
     assert ring.documentation == "A fixed-capacity ring buffer of bytes."
     # ``typedef struct ring {...} ring;`` documents the tag once.
-    assert stable_entity_id("c", "type_alias", "ring") not in graph.entities
+    assert cpdocs.model.stable_entity_id("c", "type_alias", "ring") not in graph.entities
 
 
-def test_mixed_example_merges_cpp_and_python_units(tmp_path: Path) -> None:
+def test_mixed_example_merges_cpp_and_python_units(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     _project, graph = _build(tmp_path, "mixed")
     assert graph.language == "mixed"
     assert [unit["id"] for unit in graph.metadata["units"]] == ["geom", "pygeom"]
-    dot_many = graph.entities[stable_entity_id("cpp", "function", "geom::dot_many")]
+    dot_many = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "geom::dot_many")]
     assert {tuple(graph.feature_sets[key]["features"]) for key in dot_many.feature_sets} == {("simd",)}
-    assert stable_entity_id("python", "function", "pygeom.dot") in graph.entities
+    assert cpdocs.model.stable_entity_id("python", "function", "pygeom.dot") in graph.entities
 
 
-def test_fortran_doc_comments_ignore_license_preamble(tmp_path: Path) -> None:
+def test_fortran_doc_comments_ignore_license_preamble(tmp_path: pathlib.Path) -> None:
     source = tmp_path / "geometry.f90"
-    source.write_text(fixture_text("fortran-license-preamble.f90"), encoding="utf-8")
-    graph = extract_fortran_graph(
+    source.write_text(conftest.fixture_text("fortran-license-preamble.f90"), encoding="utf-8")
+    graph = cpdocs.languages.fortran.extract.extract_fortran_graph(
         project="example", version="0", project_root=tmp_path, api_roots=[source], feature_set="default"
     )
-    module = graph.entities[stable_entity_id("fortran", "module", "geometry")]
+    module = graph.entities[cpdocs.model.stable_entity_id("fortran", "module", "geometry")]
     assert module.documentation == "Geometry primitives.\nAdditional detail."
 
 
-def test_fortran_example_and_implementation_file_browser(tmp_path: Path) -> None:
-    require("cmake", "ninja")
+def test_fortran_example_and_implementation_file_browser(tmp_path: pathlib.Path) -> None:
+    conftest.require("cmake", "ninja")
     project, graph = _build(tmp_path, "fortran-basic")
     assert graph.language == "fortran"
-    module = graph.entities[stable_entity_id("fortran", "module", "geometry")]
+    module = graph.entities[cpdocs.model.stable_entity_id("fortran", "module", "geometry")]
     assert module.documentation == "Geometry primitives."
-    vector = graph.entities[stable_entity_id("fortran", "derived_type", "geometry::vector3")]
+    vector = graph.entities[cpdocs.model.stable_entity_id("fortran", "derived_type", "geometry::vector3")]
     assert vector.documentation == "A three-dimensional vector."
-    dot = graph.entities[stable_entity_id("fortran", "function", "geometry::dot")]
+    dot = graph.entities[cpdocs.model.stable_entity_id("fortran", "function", "geometry::dot")]
     assert dot.language == "fortran"
     assert dot.signatures[0].returns == "real"
     assert [parameter.type for parameter in dot.signatures[0].parameters] == ["type(vector3)", "type(vector3)"]
@@ -256,7 +260,7 @@ def test_fortran_example_and_implementation_file_browser(tmp_path: Path) -> None
     assert '<span class="api-language-badge">Fortran</span>' in dot_page
 
 
-def test_cpp_file_hierarchy_includes_implementation_sources(tmp_path: Path) -> None:
+def test_cpp_file_hierarchy_includes_implementation_sources(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, graph = _build(tmp_path, "basic-cpp")
     assert "src/math.cpp" in graph.files
@@ -266,23 +270,23 @@ def test_cpp_file_hierarchy_includes_implementation_sources(tmp_path: Path) -> N
 
 
 def test_examples_do_not_use_besa() -> None:
-    for path in EXAMPLES.rglob("CMakeLists.txt"):
+    for path in conftest.EXAMPLES.rglob("CMakeLists.txt"):
         text = path.read_text(encoding="utf-8")
         assert "find_package(besa" not in text
-    for path in (REPOSITORY / "src").rglob("*.py"):
+    for path in (conftest.REPOSITORY / "src").rglob("*.py"):
         assert "besa" not in path.read_text(encoding="utf-8").lower()
 
 
-def test_properdocs_site_with_versions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_properdocs_site_with_versions(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _cmake_toolchain()
     properdocs = shutil.which("properdocs")
     if properdocs is None:
         pytest.skip("properdocs is required")
     for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH", "GITHUB_REF_TYPE"):
         monkeypatch.delenv(variable, raising=False)
-    project = copy_example(tmp_path, "cpp-features")
-    init_repository(project)
-    git(project, "tag", "1.0.0")
+    project = conftest.copy_example(tmp_path, "cpp-features")
+    conftest.init_repository(project)
+    conftest.git(project, "tag", "1.0.0")
     config_file = project / "docs" / "cpdocs.yml"
     config_file.write_text(
         config_file.read_text(encoding="utf-8").replace("versions: [main]", "versions: [1.0.0, main]"), encoding="utf-8"
@@ -309,18 +313,18 @@ def test_properdocs_site_with_versions(tmp_path: Path, monkeypatch: pytest.Monke
     assert 'href="../reference/api/1.0.0/"' in api_page
 
 
-def test_broken_api_reference_fails_when_configured(tmp_path: Path) -> None:
+def test_broken_api_reference_fails_when_configured(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     properdocs = shutil.which("properdocs")
     if properdocs is None:
         pytest.skip("properdocs is required")
-    project = copy_example(tmp_path, "cpp-features")
+    project = conftest.copy_example(tmp_path, "cpp-features")
     # The example already fails on broken references. Appending the key a second time used to
     # pass silently under YAML, where the last duplicate wins; Korml rejects duplicate keys.
     config = project / "docs" / "cpdocs.yml"
     assert "  broken-references: fail\n" in config.read_text(encoding="utf-8")
     (project / "docs" / "web" / "index.md").write_text("See @apidocs::demo::nonexistent.\n", encoding="utf-8")
-    init_repository(project)
+    conftest.init_repository(project)
     result = subprocess.run(
         [properdocs, "build"], cwd=project, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
@@ -331,7 +335,7 @@ def test_broken_api_reference_fails_when_configured(tmp_path: Path) -> None:
 def test_root_properdocs_config_mounts_example_sites() -> None:
     import yaml
 
-    configured = yaml.safe_load((REPOSITORY / "properdocs.yml").read_text(encoding="utf-8"))
+    configured = yaml.safe_load((conftest.REPOSITORY / "properdocs.yml").read_text(encoding="utf-8"))
     cpdocs_plugin = next(
         plugin["cpdocs"] for plugin in configured["plugins"] if isinstance(plugin, dict) and "cpdocs" in plugin
     )
@@ -354,26 +358,26 @@ def test_root_properdocs_config_mounts_example_sites() -> None:
     configured_subsites = set(cpdocs_plugin["subsites"])
     example_projects = {
         f"examples/{project.name}"
-        for project in EXAMPLES.iterdir()
+        for project in conftest.EXAMPLES.iterdir()
         if project.is_dir() and (project / "properdocs.yml").is_file()
     }
     assert configured_subsites == example_projects
 
-    examples_index = (REPOSITORY / "docs/web/examples/index.md").read_text(encoding="utf-8")
+    examples_index = (conftest.REPOSITORY / "docs/web/examples/index.md").read_text(encoding="utf-8")
     for subsite in configured_subsites:
-        name = Path(subsite).name
+        name = pathlib.Path(subsite).name
         assert f"| `{name}` |" in examples_index
         assert f"[{name}]({name}/)" in examples_index
 
-    assert not (REPOSITORY / "tools" / "build_example_sites.py").exists()
+    assert not (conftest.REPOSITORY / "tools" / "build_example_sites.py").exists()
 
 
-def test_templates_are_shown_as_written(tmp_path: Path) -> None:
+def test_templates_are_shown_as_written(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, graph = _build(tmp_path, "cpp-templates")
 
     def entity(kind: str, name: str):
-        return graph.entities[stable_entity_id("cpp", kind, name)]
+        return graph.entities[cpdocs.model.stable_entity_id("cpp", kind, name)]
 
     assert entity("struct", "meta::vec").template == "template <typename T, std::size_t N>"
     assert entity("struct", "meta::vec<T, 0>").template == "template <typename T>"
@@ -396,7 +400,7 @@ def test_templates_are_shown_as_written(tmp_path: Path) -> None:
     assert "Specializations" in text and 'href="../struct-vec-t-0/"' in text
 
 
-def test_introduction_license_header_is_not_rendered(tmp_path: Path) -> None:
+def test_introduction_license_header_is_not_rendered(tmp_path: pathlib.Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     home = (project / "build" / "cpdocs" / "current" / "index.html").read_text(encoding="utf-8")
     # The document shell may carry a REUSE license comment; the rendered introduction must not.
@@ -405,7 +409,7 @@ def test_introduction_license_header_is_not_rendered(tmp_path: Path) -> None:
     assert "&lt;!--" not in rendered_content
 
 
-def test_api_pages_work_on_small_screens_and_keep_the_theme(tmp_path: Path) -> None:
+def test_api_pages_work_on_small_screens_and_keep_the_theme(tmp_path: pathlib.Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     home = (project / "build" / "cpdocs" / "current" / "index.html").read_text(encoding="utf-8")
     head = home[: home.index("</head>")]
@@ -422,33 +426,33 @@ def test_api_pages_work_on_small_screens_and_keep_the_theme(tmp_path: Path) -> N
     assert "@view-transition" not in css
 
 
-def test_examples_are_versioned_from_the_enclosing_repository(tmp_path: Path, monkeypatch) -> None:
+def test_examples_are_versioned_from_the_enclosing_repository(tmp_path: pathlib.Path, monkeypatch) -> None:
     for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH", "GITHUB_REF_TYPE"):
         monkeypatch.delenv(variable, raising=False)
-    from cpdocs.build import build_versions
+    import cpdocs.build
 
     repository = tmp_path / "repository"
     repository.mkdir()
     (repository / "readme.md").write_text("before the example\n", encoding="utf-8")
-    init_repository(repository)
-    git(repository, "tag", "v0.1.0")
+    conftest.init_repository(repository)
+    conftest.git(repository, "tag", "v0.1.0")
 
     example = repository / "examples" / "python-basic"
-    shutil.copytree(EXAMPLES / "python-basic", example, ignore=shutil.ignore_patterns("build"))
-    git(repository, "add", "-A")
-    git(repository, "commit", "-q", "-m", "add example")
-    git(repository, "tag", "v0.2.0")
+    shutil.copytree(conftest.EXAMPLES / "python-basic", example, ignore=shutil.ignore_patterns("build"))
+    conftest.git(repository, "add", "-A")
+    conftest.git(repository, "commit", "-q", "-m", "add example")
+    conftest.git(repository, "tag", "v0.2.0")
     (example / "src" / "dice" / "extra.py").write_text('"""Added in 0.3."""\n', encoding="utf-8")
-    git(repository, "add", "-A")
-    git(repository, "commit", "-q", "-m", "extend example")
-    git(repository, "tag", "v0.3.0")
+    conftest.git(repository, "add", "-A")
+    conftest.git(repository, "commit", "-q", "-m", "extend example")
+    conftest.git(repository, "tag", "v0.3.0")
 
     config_file = example / "docs" / "cpdocs.yml"
     config_file.write_text(
         config_file.read_text(encoding="utf-8").replace("versions: [main]", "versions: [v0.3.0, v0.2.0, main]"),
         encoding="utf-8",
     )
-    built = build_versions(load_config(config_file), output=example / "build")
+    built = cpdocs.build.build_versions(cpdocs.config.load_config(config_file), output=example / "build")
     assert built == ["v0.3.0", "v0.2.0", "main"]
 
     def modules(ref: str) -> set[str]:
@@ -461,7 +465,7 @@ def test_examples_are_versioned_from_the_enclosing_repository(tmp_path: Path, mo
     assert metadata["default"] == "v0.3.0"
 
 
-def test_specialization_rows_link_their_name(tmp_path: Path) -> None:
+def test_specialization_rows_link_their_name(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, _graph = _build(tmp_path, "cpp-templates")
     page = project / "build" / "cpdocs" / "current" / "api" / "meta" / "struct-storage_traits"
@@ -473,7 +477,7 @@ def test_specialization_rows_link_their_name(tmp_path: Path) -> None:
     assert "Full specialization: booleans are stored as one byte." in section
 
 
-def test_outline_collapses_on_small_screens(tmp_path: Path) -> None:
+def test_outline_collapses_on_small_screens(tmp_path: pathlib.Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     site = project / "build" / "cpdocs" / "current"
     page = next((site / "api").rglob("class-die/index.html")).read_text(encoding="utf-8")
@@ -487,36 +491,36 @@ def test_outline_collapses_on_small_screens(tmp_path: Path) -> None:
 
 
 def test_urls_are_readable_and_collisions_stay_apart() -> None:
-    from cpdocs.model import ApiEntity
-    from cpdocs.rendering.common import _slug, assign_documents, entity_document
+    import cpdocs.model
+    import cpdocs.rendering.common
 
-    assert _slug("storage_traits<bool>") == "storage_traits-bool"
-    assert _slug("storage_traits<bool*>") == "storage_traits-bool-ptr"
-    assert _slug("vec<T, 0>") == "vec-t-0"
-    assert _slug("operator[]") == "operator-subscript"
-    assert _slug("operator<<") == "operator-shl"
-    assert _slug("operator<") == "operator-lt"
-    assert _slug("operator bool") == "operator-bool"
+    assert cpdocs.rendering.common._slug("storage_traits<bool>") == "storage_traits-bool"
+    assert cpdocs.rendering.common._slug("storage_traits<bool*>") == "storage_traits-bool-ptr"
+    assert cpdocs.rendering.common._slug("vec<T, 0>") == "vec-t-0"
+    assert cpdocs.rendering.common._slug("operator[]") == "operator-subscript"
+    assert cpdocs.rendering.common._slug("operator<<") == "operator-shl"
+    assert cpdocs.rendering.common._slug("operator<") == "operator-lt"
+    assert cpdocs.rendering.common._slug("operator bool") == "operator-bool"
 
-    def struct(name: str) -> ApiEntity:
-        return ApiEntity(
+    def struct(name: str) -> cpdocs.model.ApiEntity:
+        return cpdocs.model.ApiEntity(
             id=f"cpp:struct:n::{name}", language="cpp", kind="struct", name=name, qualified_name=f"n::{name}"
         )
 
     plain, ref, spaced = struct("pair<int&>"), struct("pair<int>"), struct("pair< int >")
-    assign_documents([plain, ref, spaced])
+    cpdocs.rendering.common.assign_documents([plain, ref, spaced])
     try:
-        assert entity_document(plain).as_posix() == "api/n/struct-pair-int-ref/index.md"
+        assert cpdocs.rendering.common.entity_document(plain).as_posix() == "api/n/struct-pair-int-ref/index.md"
         # ``pair<int>`` and ``pair< int >`` share a readable path, so both get a digest.
-        first, second = entity_document(ref), entity_document(spaced)
+        first, second = cpdocs.rendering.common.entity_document(ref), cpdocs.rendering.common.entity_document(spaced)
         assert first != second
         assert first.parent.name.startswith("struct-pair-int-")
         assert second.parent.name.startswith("struct-pair-int-")
     finally:
-        assign_documents([])
+        cpdocs.rendering.common.assign_documents([])
 
 
-def test_parameter_documentation_is_a_list(tmp_path: Path) -> None:
+def test_parameter_documentation_is_a_list(tmp_path: pathlib.Path) -> None:
     _cmake_toolchain()
     project, _graph = _build(tmp_path, "cpp-templates")
     page = project / "build" / "cpdocs" / "current" / "api" / "meta" / "struct-vec" / "index.html"
@@ -528,9 +532,9 @@ def test_parameter_documentation_is_a_list(tmp_path: Path) -> None:
 
 
 def test_documentation_fields_and_strong_text() -> None:
-    from cpdocs.rendering.html import _documentation_description
+    import cpdocs.rendering.html
 
-    rendered = _documentation_description(
+    rendered = cpdocs.rendering.html._documentation_description(
         "Add **two** values.\n\n@param left Left operand.\n\n@param right Right operand."
         "\n\n@return Their sum.\n\n@throws std::overflow_error on overflow."
     )
@@ -540,7 +544,7 @@ def test_documentation_fields_and_strong_text() -> None:
     assert '<p class="api-doc-field-title">Throws</p><p>std::overflow_error on overflow.</p>' in rendered
 
 
-def test_sidebars_are_resizable(tmp_path: Path) -> None:
+def test_sidebars_are_resizable(tmp_path: pathlib.Path) -> None:
     project, _graph = _build(tmp_path, "python-basic")
     site = project / "build" / "cpdocs" / "current"
     home = (site / "index.html").read_text(encoding="utf-8")
@@ -554,7 +558,7 @@ def test_sidebars_are_resizable(tmp_path: Path) -> None:
     assert 'querySelectorAll(".api-resizer")' in script and "setPointerCapture" in script
 
 
-def test_assets_are_versioned_so_browsers_do_not_keep_stale_styles(tmp_path: Path) -> None:
+def test_assets_are_versioned_so_browsers_do_not_keep_stale_styles(tmp_path: pathlib.Path) -> None:
     import hashlib
     import re
 

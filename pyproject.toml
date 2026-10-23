@@ -62,8 +62,20 @@ line-length = 120
 skip-magic-trailing-comma = true
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# TID252 rejects relative imports. Modules are imported whole and their members named where they
+# are used, ``import pathlib`` and ``pathlib.Path``; ruff cannot express that rule in general, so
+# test/test_import_style.py enforces it.
+select = ["E", "F", "I", "UP", "B", "TID252"]
 ignore = ["E501", "UP022"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# The example packages and the Python fixtures in test/share are documentation inputs: user code,
+# in the style such code is written in.
+[tool.ruff.lint.per-file-ignores]
+"examples/**" = ["TID252"]
+"test/share/python-*.py" = ["TID252"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["cpdocs", "conftest"]

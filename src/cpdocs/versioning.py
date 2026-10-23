@@ -6,13 +6,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
+import pathlib
 import subprocess
-from dataclasses import dataclass
-from pathlib import Path
 
 
-def _git_ref_names(project_root: Path, namespace: str) -> list[str]:
+def _git_ref_names(project_root: pathlib.Path, namespace: str) -> list[str]:
     result = subprocess.run(
         ["git", "for-each-ref", "--format=%(refname:short)", f"refs/{namespace}/"],
         cwd=project_root,
@@ -26,7 +26,7 @@ def _git_ref_names(project_root: Path, namespace: str) -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SelectedRef:
     """One configured version and the Git object used to build it."""
 
@@ -35,7 +35,7 @@ class SelectedRef:
     checkout: str | None
 
 
-def _branches(project_root: Path) -> dict[str, str]:
+def _branches(project_root: pathlib.Path) -> dict[str, str]:
     values: dict[str, str] = {}
     for remote_ref in _git_ref_names(project_root, "remotes"):
         remote, _, name = remote_ref.partition("/")
@@ -46,7 +46,7 @@ def _branches(project_root: Path) -> dict[str, str]:
     return values
 
 
-def current_branch(project_root: Path) -> str | None:
+def current_branch(project_root: pathlib.Path) -> str | None:
     """Name of the checked-out branch, including common detached-CI environments."""
 
     for variable in ("CPDOCS_CURRENT_BRANCH", "GITHUB_HEAD_REF", "CI_COMMIT_BRANCH"):
@@ -67,7 +67,7 @@ def current_branch(project_root: Path) -> str | None:
     return value or None
 
 
-def select_refs(project_root: Path, versions: tuple[str, ...]) -> list[SelectedRef]:
+def select_refs(project_root: pathlib.Path, versions: tuple[str, ...]) -> list[SelectedRef]:
     """Resolve the configured version names exactly and preserve their order."""
 
     branches = _branches(project_root)

@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import shlex
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
-REPOSITORY = Path(__file__).resolve().parents[1]
+REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
 EXAMPLES = REPOSITORY / "examples"
 
 # Make Git-driven tests independent of the developer/CI Git configuration and
@@ -36,14 +36,14 @@ os.environ.update(
 )
 
 
-def git(project: Path, *arguments: str) -> str:
+def git(project: pathlib.Path, *arguments: str) -> str:
     result = subprocess.run(
         ["git", *arguments], cwd=project, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     return result.stdout
 
 
-def init_repository(project: Path) -> None:
+def init_repository(project: pathlib.Path) -> None:
     if shutil.which("git") is None:
         pytest.skip("Git is required")
     git(project, "init", "-q", "-b", "main")
@@ -59,7 +59,7 @@ def require(*tools: str) -> None:
             pytest.skip(f"{tool} is required")
 
 
-def copy_example(tmp_path: Path, name: str) -> Path:
+def copy_example(tmp_path: pathlib.Path, name: str) -> pathlib.Path:
     project = tmp_path / name
     shutil.copytree(EXAMPLES / name, project, ignore=shutil.ignore_patterns("build"))
     return project
@@ -67,14 +67,14 @@ def copy_example(tmp_path: Path, name: str) -> Path:
 
 def fixture_text(name: str) -> str:
     """Load a self-contained fixture from test/share, never from runtime package assets."""
-    return (Path(__file__).parent / "share" / name).read_text(encoding="utf-8")
+    return (pathlib.Path(__file__).parent / "share" / name).read_text(encoding="utf-8")
 
 
 # A tiny build-system provider used by orchestration tests.
 FAKE_BUILD = fixture_text("fake-build.py")
 
 
-def fake_project(root: Path, *, feature_sets: list[list[str]] | None = None, config: str = "") -> Path:
+def fake_project(root: pathlib.Path, *, feature_sets: list[list[str]] | None = None, config: str = "") -> pathlib.Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / "src" / "pkg").mkdir(parents=True)
     (root / "src" / "pkg" / "__init__.py").write_text(

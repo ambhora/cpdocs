@@ -7,19 +7,19 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import subprocess
-from pathlib import Path
 
 import yaml
 
-from conftest import git, init_repository
-from cpdocs.config import load_config
+import conftest
+import cpdocs.config
 
-REPOSITORY = Path(__file__).resolve().parents[1]
+REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
 
 
 def test_historical_tags_are_in_documented_versions() -> None:
-    config = load_config(REPOSITORY / "docs" / "cpdocs.yml")
+    config = cpdocs.config.load_config(REPOSITORY / "docs" / "cpdocs.yml")
     assert config.versions[0] == "main"
     assert "0.0.1" in config.versions
     assert "0.3.7" in config.versions
@@ -40,20 +40,20 @@ def test_legacy_tag_rebuild_stays_on_default_branch() -> None:
     assert "gh workflow run docs.yml" in steps[-1]["run"]
 
 
-def test_tag_detection_handles_legacy_and_current_tags(tmp_path: Path) -> None:
+def test_tag_detection_handles_legacy_and_current_tags(tmp_path: pathlib.Path) -> None:
     repository = tmp_path / "repository"
     workflow_file = repository / ".github" / "workflows" / "docs.yml"
     workflow_file.parent.mkdir(parents=True)
     workflow_file.write_text("name: documentation\njobs:\n  build:\n", encoding="utf-8")
-    init_repository(repository)
-    git(repository, "tag", "0.0.1")
-    old_commit = git(repository, "rev-parse", "HEAD").strip()
+    conftest.init_repository(repository)
+    conftest.git(repository, "tag", "0.0.1")
+    old_commit = conftest.git(repository, "rev-parse", "HEAD").strip()
 
     workflow_file.write_text("name: documentation\njobs:\n  rebuild-for-tag:\n", encoding="utf-8")
-    git(repository, "add", "-A")
-    git(repository, "commit", "-q", "-m", "relay tagged documentation")
-    git(repository, "tag", "0.3.7")
-    new_commit = git(repository, "rev-parse", "HEAD").strip()
+    conftest.git(repository, "add", "-A")
+    conftest.git(repository, "commit", "-q", "-m", "relay tagged documentation")
+    conftest.git(repository, "tag", "0.3.7")
+    new_commit = conftest.git(repository, "rev-parse", "HEAD").strip()
 
     workflow = yaml.safe_load(
         (REPOSITORY / ".github" / "workflows" / "docs-tag-rebuild.yml").read_text(encoding="utf-8")

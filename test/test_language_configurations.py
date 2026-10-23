@@ -7,42 +7,40 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import shlex
 import sys
-from pathlib import Path
 
 import pytest
 
-from conftest import fake_project, fixture_text
-from cpdocs.build import build_current
-from cpdocs.config import load_config
-from cpdocs.providers.contract import language_template_values
+import conftest
+import cpdocs.build
+import cpdocs.config
+import cpdocs.providers.contract
 
 
 def test_flatten_language_template_values_and_reject_non_scalars() -> None:
-    assert language_template_values({"cxx": {"standard": 23}, "python": {"version": "3.12"}, "optimized": True}) == {
-        "cxx.standard": "23",
-        "python.version": "3.12",
-        "optimized": "true",
-    }
+    assert cpdocs.providers.contract.language_template_values(
+        {"cxx": {"standard": 23}, "python": {"version": "3.12"}, "optimized": True}
+    ) == {"cxx.standard": "23", "python.version": "3.12", "optimized": "true"}
     with pytest.raises(RuntimeError, match="scalar"):
-        language_template_values({"python": {"version": ["3.11", "3.12"]}})
+        cpdocs.providers.contract.language_template_values({"python": {"version": ["3.11", "3.12"]}})
     with pytest.raises(RuntimeError, match="reserved"):
-        language_template_values({"source": "untrusted"})
+        cpdocs.providers.contract.language_template_values({"source": "untrusted"})
 
 
-def test_unspecified_languages_keep_single_legacy_configuration(tmp_path: Path) -> None:
-    project = fake_project(tmp_path / "project")
-    config = load_config(project / "docs" / "cpdocs.yml")
+def test_unspecified_languages_keep_single_legacy_configuration(tmp_path: pathlib.Path) -> None:
+    project = conftest.fake_project(tmp_path / "project")
+    config = cpdocs.config.load_config(project / "docs" / "cpdocs.yml")
     assert config.language_configurations == ({},)
-    result = build_current(config, output=project / "build")
+    result = cpdocs.build.build_current(config, output=project / "build")
     assert list(result.feature_sets) == ["feature-set-001"]
     assert result.metadata["language_configurations"] == [{}]
 
 
-def _project_with_language_variants(root: Path, expression: str) -> Path:
-    project = fake_project(root)
-    (project / "language_provider.py").write_text(fixture_text("language-provider.py"), encoding="utf-8")
+def _project_with_language_variants(root: pathlib.Path, expression: str) -> pathlib.Path:
+    project = conftest.fake_project(root)
+    (project / "language_provider.py").write_text(conftest.fixture_text("language-provider.py"), encoding="utf-8")
     command = shlex.quote(sys.executable) + " language_provider.py"
     (project / "docs" / "cpdocs.yml").write_text(
         "contract: 3\nlanguages:\n"
@@ -57,7 +55,7 @@ def _project_with_language_variants(root: Path, expression: str) -> Path:
     return project
 
 
-def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> None:
+def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: pathlib.Path) -> None:
     pytest.importorskip("keyso")
     project = _project_with_language_variants(
         tmp_path / "project",
@@ -65,7 +63,7 @@ def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> N
         "    - cxx: {standard: 17}\n      python: {version: '3.11'}\n"
         "    - cxx: {standard: 23}\n      python: {version: '3.12'}\n",
     )
-    graph = build_current(load_config(project / "docs/cpdocs.yml"), output=project / "build")
+    graph = cpdocs.build.build_current(cpdocs.config.load_config(project / "docs/cpdocs.yml"), output=project / "build")
     assert len(graph.feature_sets) == 3  # one feature set for C++17, two for C++23
     records = [json.loads(line) for line in (project / "build-records.jsonl").read_text().splitlines()]
     assert {(item["cxx"], item["python"]) for item in records} == {("17", "3.11"), ("23", "3.12")}
@@ -85,7 +83,7 @@ def test_explicit_keyso_pairs_and_variant_feature_discovery(tmp_path: Path) -> N
     assert "python.version=3.11" in feature_page
 
 
-def test_keyso_product_without_implicit_cross_language_constraints(tmp_path: Path) -> None:
+def test_keyso_product_without_implicit_cross_language_constraints(tmp_path: pathlib.Path) -> None:
     pytest.importorskip("keyso")
     project = _project_with_language_variants(
         tmp_path / "project",
@@ -93,7 +91,7 @@ def test_keyso_product_without_implicit_cross_language_constraints(tmp_path: Pat
         "    - cxx:\n        _nested:\n          standard: [17, 23]\n"
         "    - python:\n        _nested:\n          version: ['3.11', '3.12']\n",
     )
-    configuration = load_config(project / "docs/cpdocs.yml")
+    configuration = cpdocs.config.load_config(project / "docs/cpdocs.yml")
     assert len(configuration.language_configurations) == 4
-    graph = build_current(configuration, output=project / "build")
+    graph = cpdocs.build.build_current(configuration, output=project / "build")
     assert len(graph.feature_sets) == 6

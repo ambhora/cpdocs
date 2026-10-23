@@ -7,14 +7,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import pathlib
 
 import pytest
 
-from conftest import REPOSITORY
-from cpdocs.contract import ContractError, read_manifest
-from cpdocs.languages.python.extract import build_python_graph
-from cpdocs.rendering.html import _inline_documentation, safe_link_destination
+import conftest
+import cpdocs.contract
+import cpdocs.languages.python.extract
+import cpdocs.rendering.html
 
 
 @pytest.mark.parametrize(
@@ -33,8 +33,8 @@ from cpdocs.rendering.html import _inline_documentation, safe_link_destination
     ],
 )
 def test_executable_and_unknown_destinations_are_refused(href: str) -> None:
-    assert safe_link_destination(href) is None
-    rendered = _inline_documentation(f"[label]({href})")
+    assert cpdocs.rendering.html.safe_link_destination(href) is None
+    rendered = cpdocs.rendering.html._inline_documentation(f"[label]({href})")
     assert "<a" not in rendered
     assert "label" in rendered
 
@@ -52,17 +52,17 @@ def test_executable_and_unknown_destinations_are_refused(href: str) -> None:
     ],
 )
 def test_ordinary_destinations_are_kept(href: str) -> None:
-    assert safe_link_destination(href) == href
-    assert "<a href=" in _inline_documentation(f"[label]({href})")
+    assert cpdocs.rendering.html.safe_link_destination(href) == href
+    assert "<a href=" in cpdocs.rendering.html._inline_documentation(f"[label]({href})")
 
 
 def test_search_results_are_built_from_text_nodes() -> None:
-    script = (REPOSITORY / "share" / "cpdocs" / "api" / "cpdocs-api.js").read_text(encoding="utf-8")
+    script = (conftest.REPOSITORY / "share" / "cpdocs" / "api" / "cpdocs-api.js").read_text(encoding="utf-8")
     assert "innerHTML" not in script
     assert "insertAdjacentHTML" not in script
 
 
-def test_python_files_that_cannot_be_imported_are_not_api(tmp_path: Path) -> None:
+def test_python_files_that_cannot_be_imported_are_not_api(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "demo"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text('"""Demo."""\n', encoding="utf-8")
@@ -71,7 +71,9 @@ def test_python_files_that_cannot_be_imported_are_not_api(tmp_path: Path) -> Non
     (package / "not-a-module").mkdir()
     (package / "not-a-module" / "inner.py").write_text("y = 2\n", encoding="utf-8")
 
-    graph = build_python_graph(project_root=tmp_path, package_root=package, package="demo")
+    graph = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="demo"
+    )
 
     names = {entity.qualified_name for entity in graph.entities.values()}
     assert "demo.real" in names
@@ -80,7 +82,7 @@ def test_python_files_that_cannot_be_imported_are_not_api(tmp_path: Path) -> Non
     assert "src/demo/<img src=x onerror=alert(1)>.py" in graph.sources
 
 
-def test_python_package_names_must_be_identifiers(tmp_path: Path) -> None:
+def test_python_package_names_must_be_identifiers(tmp_path: pathlib.Path) -> None:
     (tmp_path / "src").mkdir()
     manifest = tmp_path / "manifest.json"
     manifest.write_text(
@@ -92,5 +94,5 @@ def test_python_package_names_must_be_identifiers(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    with pytest.raises(ContractError, match="dotted Python identifier"):
-        read_manifest(manifest, source=tmp_path)
+    with pytest.raises(cpdocs.contract.ContractError, match="dotted Python identifier"):
+        cpdocs.contract.read_manifest(manifest, source=tmp_path)

@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from ...model import ApiEntity, ApiSignature
-from ..base import LanguageRendering, parameter_spelling
-from .entities import ENTITY_KINDS
+import cpdocs.languages.base
+import cpdocs.languages.fortran.entities
+import cpdocs.model
 
 
-def entity_declaration(entity: ApiEntity) -> str:
+def entity_declaration(entity: cpdocs.model.ApiEntity) -> str:
     if entity.declaration:
         return entity.declaration
     if entity.kind == "module":
@@ -21,25 +21,25 @@ def entity_declaration(entity: ApiEntity) -> str:
     return entity.qualified_name
 
 
-def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
+def signature_spelling(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> str:
     if signature.spelling:
         return signature.spelling
     keyword = "subroutine" if entity.kind == "subroutine" else "function"
-    value = f"{keyword} {entity.qualified_name}({parameter_spelling(signature)})"
+    value = f"{keyword} {entity.qualified_name}({cpdocs.languages.base.parameter_spelling(signature)})"
     if signature.returns and entity.kind != "subroutine":
         value += f" result({signature.returns})"
     return value
 
 
-def member_summary(entity: ApiEntity) -> str:
+def member_summary(entity: cpdocs.model.ApiEntity) -> str:
     if entity.kind == "derived_type":
         return f"type {entity.name}"
     return entity.name
 
 
-RENDERING = LanguageRendering(
+RENDERING = cpdocs.languages.base.LanguageRendering(
     separator="::",
-    kinds=ENTITY_KINDS,
+    kinds=cpdocs.languages.fortran.entities.ENTITY_KINDS,
     source_suffixes=frozenset({".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}),
     signature_spelling=signature_spelling,
     entity_declaration=entity_declaration,

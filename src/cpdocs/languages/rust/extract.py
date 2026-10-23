@@ -7,20 +7,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import pathlib
 
-from ...contract import UnitManifest
-from ...filesystem import readable_file
-from ...model import (
-    ApiEntity,
-    ApiGraph,
-    ApiParameter,
-    ApiSignature,
-    SourceLocation,
-    relative_source_path,
-    stable_entity_id,
-)
-from ..unit import UnitContext
+import cpdocs.contract
+import cpdocs.filesystem
+import cpdocs.languages.unit
+import cpdocs.model
 
 _KIND_MAP = {
     "module": "module",
@@ -116,7 +108,7 @@ def _rust_type(value: object) -> str:
     return next((_rust_type(item) for item in value.values() if _rust_type(item)), "")
 
 
-def _function_signature(item: dict[str, object]) -> tuple[ApiSignature | None, list[str]]:
+def _function_signature(item: dict[str, object]) -> tuple[cpdocs.model.ApiSignature | None, list[str]]:
     inner = item.get("inner")
     if not isinstance(inner, dict):
         return None, []
@@ -124,14 +116,14 @@ def _function_signature(item: dict[str, object]) -> tuple[ApiSignature | None, l
     if not isinstance(function, dict):
         return None, []
     signature = function.get("sig")
-    parameters: list[ApiParameter] = []
+    parameters: list[cpdocs.model.ApiParameter] = []
     returns = ""
     if isinstance(signature, dict):
         inputs = signature.get("inputs")
         if isinstance(inputs, list):
             for raw in inputs:
                 if isinstance(raw, list) and len(raw) >= 2:
-                    parameters.append(ApiParameter(name=str(raw[0]), type=_rust_type(raw[1])))
+                    parameters.append(cpdocs.model.ApiParameter(name=str(raw[0]), type=_rust_type(raw[1])))
         returns = _rust_type(signature.get("output"))
     properties: list[str] = []
     header = function.get("header")
@@ -142,7 +134,9 @@ def _function_signature(item: dict[str, object]) -> tuple[ApiSignature | None, l
         abi = header.get("abi")
         if isinstance(abi, str) and abi.casefold() not in {"", "rust"}:
             properties.append(f'extern "{abi}"')
-    return ApiSignature(parameters=tuple(parameters), returns=returns, qualifiers=tuple(properties)), properties
+    return cpdocs.model.ApiSignature(
+        parameters=tuple(parameters), returns=returns, qualifiers=tuple(properties)
+    ), properties
 
 
 def _inner_kind(item: dict[str, object]) -> str | None:
@@ -253,8 +247,8 @@ def _ownership(index: dict[str, object]) -> tuple[dict[str, str], set[str], set[
 
 
 def build_rust_graph(
-    *, rustdoc_json: Path, project: str, version: str = "main", project_root: Path | None = None
-) -> ApiGraph:
+    *, rustdoc_json: pathlib.Path, project: str, version: str = "main", project_root: pathlib.Path | None = None
+) -> cpdocs.model.ApiGraph:
     try:
         raw = json.loads(rustdoc_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -303,7 +297,7 @@ def build_rust_graph(
         qualified_cache[rust_id] = result
         return result
 
-    graph = ApiGraph(project=project, version=version, language="rust")
+    graph = cpdocs.model.ApiGraph(project=project, version=version, language="rust")
     rust_to_entity: dict[str, str] = {}
     path_to_id: dict[str, str] = {}
 
@@ -332,14 +326,14 @@ def build_rust_graph(
         if not qualified:
             continue
         name = str(raw_item.get("name") or qualified.rsplit("::", 1)[-1])
-        entity_id = stable_entity_id("rust", kind, qualified)
+        entity_id = cpdocs.model.stable_entity_id("rust", kind, qualified)
         source = None
         span = raw_item.get("span")
         if isinstance(span, dict) and isinstance(span.get("filename"), str):
-            filename = Path(str(span["filename"]))
+            filename = pathlib.Path(str(span["filename"]))
             if project_root is not None:
                 physical = filename if filename.is_absolute() else project_root / filename
-                filename_text = relative_source_path(physical, project_root)
+                filename_text = cpdocs.model.relative_source_path(physical, project_root)
             else:
                 filename_text = filename.as_posix()
             begin = span.get("begin")
@@ -350,16 +344,16 @@ def build_rust_graph(
                     line = begin[0]
                 if isinstance(begin[1], int):
                     column = begin[1]
-            source = SourceLocation(filename_text, line, column)
+            source = cpdocs.model.SourceLocation(filename_text, line, column)
             # Only the project's own files are published, not dependency sources a span may name.
-            if project_root is not None and readable_file(physical, (project_root,)):
+            if project_root is not None and cpdocs.filesystem.readable_file(physical, (project_root,)):
                 try:
                     graph.sources.setdefault(filename_text, physical.read_text(encoding="utf-8"))
                 except (OSError, UnicodeDecodeError):
                     pass
         function_signature, function_properties = _function_signature(raw_item)
         properties = (["pub"] if visibility == "public" else []) + function_properties
-        entity = ApiEntity(
+        entity = cpdocs.model.ApiEntity(
             id=entity_id,
             language="rust",
             kind=kind,
@@ -392,7 +386,9 @@ def build_rust_graph(
     return graph
 
 
-def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+def extract_unit(
+    unit: cpdocs.contract.UnitManifest, context: cpdocs.languages.unit.UnitContext
+) -> cpdocs.model.ApiGraph:
     """Extract a Rust unit: read the rustdoc JSON the build system produced for its crate."""
 
     assert unit.rustdoc_json is not None

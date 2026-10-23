@@ -13,17 +13,17 @@ while walking a source tree may be read and published.
 
 from __future__ import annotations
 
+import collections.abc
 import hashlib
+import pathlib
 import re
 import shutil
 import subprocess
-from collections.abc import Iterable
-from pathlib import Path
 
 _SAFE_COMPONENT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]*")
 
 
-def contained_path(root: Path, relative: Path) -> Path:
+def contained_path(root: pathlib.Path, relative: pathlib.Path) -> pathlib.Path:
     """Return ``root / relative``, refusing any result that is not below ``root``.
 
     ``relative`` must be relative and free of ``..``. The joined path must also stay below the
@@ -52,7 +52,7 @@ def path_component(value: str) -> str:
     return f"{slug}-{hashlib.sha1(value.encode('utf-8')).hexdigest()[:8]}"
 
 
-def remove_tree(path: Path, *, owner: Path) -> None:
+def remove_tree(path: pathlib.Path, *, owner: pathlib.Path) -> None:
     """Delete the directory ``path`` below ``owner`` if it exists.
 
     ``owner`` is a directory the caller chose, such as the output root, and may itself be reached
@@ -74,7 +74,7 @@ def remove_tree(path: Path, *, owner: Path) -> None:
         shutil.rmtree(path)
 
 
-def readable_file(path: Path, roots: Iterable[Path]) -> bool:
+def readable_file(path: pathlib.Path, roots: collections.abc.Iterable[pathlib.Path]) -> bool:
     """Whether a file found while walking a tree may be read and published.
 
     The file, after following symbolic links, must lie below one of ``roots``. A link between
@@ -91,7 +91,7 @@ def readable_file(path: Path, roots: Iterable[Path]) -> bool:
     return any(resolved.is_relative_to(root.resolve()) for root in roots)
 
 
-def git_tracked_files(directory: Path) -> frozenset[Path] | None:
+def git_tracked_files(directory: pathlib.Path) -> frozenset[pathlib.Path] | None:
     """The resolved paths of files Git tracks below ``directory``, or ``None`` outside Git.
 
     Files in a checkout that Git does not track, such as a local ``.env`` or credentials a CI job

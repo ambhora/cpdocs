@@ -17,41 +17,20 @@ import functools
 import hashlib
 import html
 import json
+import pathlib
 import posixpath
 import re
 import secrets
 import shutil
-from pathlib import Path, PurePosixPath
 
-from markdown_it import MarkdownIt
+import markdown_it
 
-from ..config import THEME_COLORS, SiteTheme
-from ..filesystem import contained_path, remove_tree
-from ..languages import kind_label as language_kind_label
-from ..languages import language_label as semantic_language_label
-from ..languages import rendering_for
-from ..model import ApiEntity, ApiGraph, ApiSignature, entity_sort_key
-from ..resources import resource, shared_template, shared_text
-from .common import (
-    _documentation_blocks,
-    _embedded_member_parent,
-    _entity_declaration,
-    _feature_set_anchor,
-    _highlight_declaration,
-    _highlight_source_lines,
-    _is_container,
-    _is_function,
-    _is_type_page,
-    _kind_marker,
-    _member_anchor,
-    _member_summary_spelling,
-    _relative_link,
-    _signature_spelling,
-    _source_document,
-    _source_language,
-    assign_documents,
-    entity_document,
-)
+import cpdocs.config
+import cpdocs.filesystem
+import cpdocs.languages
+import cpdocs.model
+import cpdocs.rendering.common
+import cpdocs.resources
 
 _INLINE_DOCUMENTATION = re.compile(
     r"`(?P<code>[^`]+)`"
@@ -61,7 +40,7 @@ _INLINE_DOCUMENTATION = re.compile(
 )
 _PROJECTDOCS_HREF = re.compile(r'href=(?P<quote>["\'])projectdocs:(?P<path>[^"\']*)(?P=quote)')
 
-_MARKDOWN = MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
+_MARKDOWN = markdown_it.MarkdownIt("commonmark", {"html": False, "linkify": False, "typographer": False})
 
 # A browser drops ASCII tab and newline anywhere in a URL, and leading C0 controls and spaces, before
 # it reads the scheme, so ``java\tscript:`` and ``\x01javascript:`` both reach it as ``javascript:``.
@@ -92,17 +71,17 @@ def safe_link_destination(href: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _output_directory(document: Path) -> Path:
+def _output_directory(document: pathlib.Path) -> pathlib.Path:
     if document.name == "index.md":
         return document.parent
     return document.with_suffix("")
 
 
-def _output_file(document: Path) -> Path:
+def _output_file(document: pathlib.Path) -> pathlib.Path:
     return _output_directory(document) / "index.html"
 
 
-def _root_relative(document: Path, target: str) -> str:
+def _root_relative(document: pathlib.Path, target: str) -> str:
     directory = _output_directory(document)
     value = posixpath.relpath(target, directory.as_posix() or ".")
     if target.endswith("/") and not value.endswith("/"):
@@ -110,12 +89,12 @@ def _root_relative(document: Path, target: str) -> str:
     return value
 
 
-def _page_href(source: Path, target: Path, anchor: str = "") -> str:
-    value = _relative_link(source, target)
+def _page_href(source: pathlib.Path, target: pathlib.Path, anchor: str = "") -> str:
+    value = cpdocs.rendering.common._relative_link(source, target)
     return value + (f"#{anchor}" if anchor else "")
 
 
-def _project_docs_target(document: Path, project_docs_url: str, target: str = "") -> str:
+def _project_docs_target(document: pathlib.Path, project_docs_url: str, target: str = "") -> str:
     """Resolve one semantic ``projectdocs:`` target for the current API page.
 
     ``target`` is always interpreted relative to the root of the non-versioned project site.  This
@@ -139,7 +118,7 @@ def _project_docs_target(document: Path, project_docs_url: str, target: str = ""
     return value
 
 
-def _resolve_projectdocs_links(fragment: str, document: Path, project_docs_url: str) -> str:
+def _resolve_projectdocs_links(fragment: str, document: pathlib.Path, project_docs_url: str) -> str:
     """Resolve semantic project-site links after a page has been placed in the API tree."""
 
     def replace(match: re.Match[str]) -> str:
@@ -150,19 +129,19 @@ def _resolve_projectdocs_links(fragment: str, document: Path, project_docs_url: 
     return _PROJECTDOCS_HREF.sub(replace, fragment)
 
 
-def _entity_target(entity: ApiEntity, graph: ApiGraph) -> tuple[Path, str]:
-    parent = _embedded_member_parent(entity, graph)
+def _entity_target(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph) -> tuple[pathlib.Path, str]:
+    parent = cpdocs.rendering.common._embedded_member_parent(entity, graph)
     if parent is not None:
-        return entity_document(parent), _member_anchor(entity)
-    return entity_document(entity), ""
+        return cpdocs.rendering.common.entity_document(parent), cpdocs.rendering.common._member_anchor(entity)
+    return cpdocs.rendering.common.entity_document(entity), ""
 
 
-def _entity_href(source: Path, entity: ApiEntity, graph: ApiGraph) -> str:
+def _entity_href(source: pathlib.Path, entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph) -> str:
     target, anchor = _entity_target(entity, graph)
     return _page_href(source, target, anchor)
 
 
-def _display_source_path(source_path: str, graph: ApiGraph) -> str:
+def _display_source_path(source_path: str, graph: cpdocs.model.ApiGraph) -> str:
     """Return the semantic path shown to readers while preserving internal source keys for links."""
     display_paths = graph.metadata.get("source_display_paths", {})
     if isinstance(display_paths, dict):
@@ -171,20 +150,22 @@ def _display_source_path(source_path: str, graph: ApiGraph) -> str:
             return value
 
     source_root = str(graph.metadata.get("source_root") or "").strip("/")
-    logical = PurePosixPath(source_path)
+    logical = pathlib.PurePosixPath(source_path)
     if not source_root:
         return logical.as_posix()
-    root = PurePosixPath(source_root)
+    root = pathlib.PurePosixPath(source_root)
     try:
         return logical.relative_to(root).as_posix()
     except ValueError:
         return logical.as_posix()
 
 
-def _source_href(source_document: Path, entity: ApiEntity, graph: ApiGraph) -> str | None:
+def _source_href(
+    source_document: pathlib.Path, entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> str | None:
     if entity.source is None or entity.source.path not in graph.sources:
         return None
-    value = _page_href(source_document, _source_document(entity.source.path))
+    value = _page_href(source_document, cpdocs.rendering.common._source_document(entity.source.path))
     if entity.source.line:
         value += f"#L{entity.source.line}"
     return value
@@ -196,26 +177,26 @@ def _source_href(source_document: Path, entity: ApiEntity, graph: ApiGraph) -> s
 
 
 def _kind_label(kind: str, language: str) -> str:
-    return language_kind_label(kind, language)
+    return cpdocs.languages.kind_label(kind, language)
 
 
 def _kind_badge(kind: str, language: str) -> str:
-    marker = html.escape(_kind_marker(kind, language))
+    marker = html.escape(cpdocs.rendering.common._kind_marker(kind, language))
     return f'<span class="api-kind" title="{html.escape(_kind_label(kind, language))}">{marker}</span>'
 
 
 def _language_label(language: str) -> str:
-    return semantic_language_label(language)
+    return cpdocs.languages.language_label(language)
 
 
-def _language_badge(entity: ApiEntity) -> str:
-    if _is_container(entity):
+def _language_badge(entity: cpdocs.model.ApiEntity) -> str:
+    if cpdocs.rendering.common._is_container(entity):
         return ""
     label = _language_label(entity.language)
     return f'<span class="api-language-badge">{html.escape(label)}</span>'
 
 
-def _feature_set_features(graph: ApiGraph, key: str) -> tuple[str, ...]:
+def _feature_set_features(graph: cpdocs.model.ApiGraph, key: str) -> tuple[str, ...]:
     metadata = graph.feature_sets.get(key, {})
     if not isinstance(metadata, dict):
         return ()
@@ -225,7 +206,7 @@ def _feature_set_features(graph: ApiGraph, key: str) -> tuple[str, ...]:
     return tuple(str(feature) for feature in features)
 
 
-def _language_configuration_inline(graph: ApiGraph, key: str) -> str:
+def _language_configuration_inline(graph: cpdocs.model.ApiGraph, key: str) -> str:
     configuration = graph.feature_sets.get(key, {}).get("languages", {})
     if not isinstance(configuration, dict) or not configuration:
         return ""
@@ -243,22 +224,22 @@ def _language_configuration_inline(graph: ApiGraph, key: str) -> str:
     return " ".join(f"<code>{html.escape(item)}</code>" for item in entries(configuration))
 
 
-def _feature_set_text(graph: ApiGraph, key: str) -> str:
+def _feature_set_text(graph: cpdocs.model.ApiGraph, key: str) -> str:
     features = _feature_set_features(graph, key)
     return ", ".join(features) if features else "default"
 
 
-def _feature_set_inline(graph: ApiGraph, key: str) -> str:
+def _feature_set_inline(graph: cpdocs.model.ApiGraph, key: str) -> str:
     features = _feature_set_features(graph, key)
     if not features:
         return '<span class="api-feature-set-empty">default (no features enabled)</span>'
     return " ".join(f"<code>{html.escape(feature)}</code>" for feature in features)
 
 
-def _legend(graph: ApiGraph) -> str:
+def _legend(graph: cpdocs.model.ApiGraph) -> str:
     kinds: list[tuple[str, str]] = []
     seen: set[str] = set()
-    for entity in sorted(graph.entities.values(), key=entity_sort_key):
+    for entity in sorted(graph.entities.values(), key=cpdocs.model.entity_sort_key):
         if entity.kind in seen:
             continue
         seen.add(entity.kind)
@@ -270,20 +251,24 @@ def _legend(graph: ApiGraph) -> str:
     return '<div class="api-legend">' + '<span class="api-legend-separator">·</span>'.join(entries) + "</div>"
 
 
-def _visible_outline_children(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
+def _visible_outline_children(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> list[cpdocs.model.ApiEntity]:
     # Public members of records live on the record page and should not duplicate themselves in the
     # global API outline.  Namespaces/modules/packages retain their recursive API tree.
-    if _is_type_page(entity):
+    if cpdocs.rendering.common._is_type_page(entity):
         return []
     values = [
         graph.entities[child_id]
         for child_id in entity.children
         if child_id in graph.entities and graph.entities[child_id].kind != "macro"
     ]
-    return sorted(values, key=entity_sort_key)
+    return sorted(values, key=cpdocs.model.entity_sort_key)
 
 
-def _is_ancestor(candidate: ApiEntity, current: ApiEntity | None, graph: ApiGraph) -> bool:
+def _is_ancestor(
+    candidate: cpdocs.model.ApiEntity, current: cpdocs.model.ApiEntity | None, graph: cpdocs.model.ApiGraph
+) -> bool:
     entity = current
     while entity is not None:
         if entity.id == candidate.id:
@@ -294,7 +279,12 @@ def _is_ancestor(candidate: ApiEntity, current: ApiEntity | None, graph: ApiGrap
     return False
 
 
-def _outline_entity(entity: ApiEntity, graph: ApiGraph, document: Path, current: ApiEntity | None) -> str:
+def _outline_entity(
+    entity: cpdocs.model.ApiEntity,
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
+    current: cpdocs.model.ApiEntity | None,
+) -> str:
     children = _visible_outline_children(entity, graph)
     expanded = bool(children and _is_ancestor(entity, current, graph))
     active = current is not None and entity.id == current.id
@@ -325,9 +315,17 @@ def _outline_entity(entity: ApiEntity, graph: ApiGraph, document: Path, current:
     return "".join(row) + child_html
 
 
-def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, current_special: str = "") -> str:
+def _outline(
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
+    current: cpdocs.model.ApiEntity | None,
+    *,
+    current_special: str = "",
+) -> str:
     roots = [entity for entity in graph.roots() if entity.kind != "macro"]
-    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
+    macros = sorted(
+        (entity for entity in graph.entities.values() if entity.kind == "macro"), key=cpdocs.model.entity_sort_key
+    )
     current_label = (
         current.name
         if current is not None
@@ -347,7 +345,7 @@ def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, curr
         '<ul class="api-outline-root" id="api-outline-tree">',
         '<li><div class="api-outline-row' + (" is-current" if home_current else "") + '">',
         '<span class="api-kind api-kind-home">H</span>',
-        f'<a class="api-outline-link" href="{html.escape(_page_href(document, Path("index.md")))}">Home</a>',
+        f'<a class="api-outline-link" href="{html.escape(_page_href(document, pathlib.Path("index.md")))}">Home</a>',
         "</div></li>",
     ]
     if graph.feature_sets:
@@ -355,7 +353,7 @@ def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, curr
             [
                 '<li><div class="api-outline-row' + (" is-current" if feature_sets_current else "") + '">',
                 '<span class="api-kind api-kind-empty"></span>',
-                f'<a class="api-outline-link" href="{html.escape(_page_href(document, Path("feature-sets.md")))}">Feature Sets</a>',
+                f'<a class="api-outline-link" href="{html.escape(_page_href(document, pathlib.Path("feature-sets.md")))}">Feature Sets</a>',
                 "</div></li>",
             ]
         )
@@ -369,7 +367,7 @@ def _outline(graph: ApiGraph, document: Path, current: ApiEntity | None, *, curr
                 '<div class="api-outline-row">',
                 '<span class="api-kind api-kind-empty"></span>',
                 '<a class="api-outline-link" href="'
-                + html.escape(_page_href(document, Path("macros.md")))
+                + html.escape(_page_href(document, pathlib.Path("macros.md")))
                 + '">Macros</a>',
                 f'<button class="api-outline-toggle" type="button" aria-expanded="{"true" if macro_open else "false"}" aria-label="{"Collapse" if macro_open else "Expand"} Macros"></button>',
                 "</div>",
@@ -486,8 +484,8 @@ def _documentation_description(text: str) -> str:
     return "".join(paragraphs)
 
 
-def _documentation(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
-    _, related = _documentation_blocks(entity, graph)
+def _documentation(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> str:
+    _, related = cpdocs.rendering.common._documentation_blocks(entity, graph)
     description = _documentation_description(entity.documentation)
     if not description and not related:
         description = '<p class="api-undocumented">No API documentation has been provided.</p>'
@@ -504,7 +502,7 @@ def _documentation(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
     return description + '<p class="api-related"><strong>Related:</strong> ' + " · ".join(links) + "</p>"
 
 
-def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
+def _language_configuration_labels(graph: cpdocs.model.ApiGraph, key: str) -> list[str]:
     """Human-facing labels for the *observed* build configuration, not a range claim."""
 
     configuration = graph.feature_sets.get(key, {}).get("languages", {})
@@ -540,14 +538,19 @@ def _language_configuration_labels(graph: ApiGraph, key: str) -> list[str]:
     return labels
 
 
-def _availability(entity: ApiEntity, graph: ApiGraph, document: Path, feature_sets: list[str] | None = None) -> str:
+def _availability(
+    entity: cpdocs.model.ApiEntity,
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
+    feature_sets: list[str] | None = None,
+) -> str:
     # A supplied empty signature list means *no observed build*, not entity-wide availability.
     keys = list(dict.fromkeys(entity.feature_sets if feature_sets is None else feature_sets))
     if not keys:
         return ""
 
     def link(key: str, contents: str) -> str:
-        href = _page_href(document, Path("feature-sets.md"), _feature_set_anchor(key))
+        href = _page_href(document, pathlib.Path("feature-sets.md"), cpdocs.rendering.common._feature_set_anchor(key))
         return f'<a href="{html.escape(href)}">{contents}</a>'
 
     parts = ['<div class="api-availability">']
@@ -586,17 +589,17 @@ def _availability(entity: ApiEntity, graph: ApiGraph, document: Path, feature_se
     return "".join(parts)
 
 
-def _defined_in(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
-    if _is_container(entity) or entity.source is None:
+def _defined_in(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> str:
+    if cpdocs.rendering.common._is_container(entity) or entity.source is None:
         return ""
     href = _source_href(document, entity, graph)
-    label = Path(entity.source.path).name
+    label = pathlib.Path(entity.source.path).name
     if href:
         return f'<p class="api-defined">Defined in <a href="{html.escape(href)}">{html.escape(label)}</a></p>'
     return f'<p class="api-defined">Defined in <code>{html.escape(label)}</code></p>'
 
 
-def _definition_row(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
+def _definition_row(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> str:
     if entity.source is None:
         return ""
     href = _source_href(document, entity, graph)
@@ -612,10 +615,10 @@ def _definition_row(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
 
 
 def _signature_card(
-    entity: ApiEntity,
-    signature: ApiSignature,
-    graph: ApiGraph,
-    document: Path,
+    entity: cpdocs.model.ApiEntity,
+    signature: cpdocs.model.ApiSignature,
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
     *,
     anchor: str,
     documentation: bool = True,
@@ -626,8 +629,10 @@ def _signature_card(
             documentation=signature.documentation or entity.documentation,
             source=signature.source or entity.source,
         )
-    spelling = _signature_spelling(entity, signature)
-    declaration = _highlight_declaration(spelling, entity.language, entity=entity, graph=graph, document_path=document)
+    spelling = cpdocs.rendering.common._signature_spelling(entity, signature)
+    declaration = cpdocs.rendering.common._highlight_declaration(
+        spelling, entity.language, entity=entity, graph=graph, document_path=document
+    )
     properties = list(
         dict.fromkeys(
             [*entity.properties, *signature.qualifiers, *(attribute.name for attribute in signature.attributes)]
@@ -653,7 +658,7 @@ def _signature_card(
     )
 
 
-def _signature_feature_sets(entity: ApiEntity, signature: ApiSignature) -> list[str]:
+def _signature_feature_sets(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> list[str]:
     if signature not in entity.signatures:
         return []
     index = entity.signatures.index(signature)
@@ -663,15 +668,15 @@ def _signature_feature_sets(entity: ApiEntity, signature: ApiSignature) -> list[
     return entity.feature_sets
 
 
-def _compact_signature_label(entity: ApiEntity, signature: ApiSignature) -> str:
+def _compact_signature_label(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> str:
     if entity.kind == "macro":
         return entity.name
     values = [parameter.type or parameter.name for parameter in signature.parameters]
     return f"{entity.name}({', '.join(values)})"
 
 
-def _member_anchor_for_signature(entity: ApiEntity, index: int) -> str:
-    base = _member_anchor(entity)
+def _member_anchor_for_signature(entity: cpdocs.model.ApiEntity, index: int) -> str:
+    base = cpdocs.rendering.common._member_anchor(entity)
     return base if index == 0 else f"{base}-{index + 1}"
 
 
@@ -680,14 +685,16 @@ def _member_anchor_for_signature(entity: ApiEntity, index: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _container_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
     title = f"{_kind_label(entity.kind, entity.language).title()} {entity.qualified_name}"
     body = [f"<h1>{html.escape(title)}</h1>"]
     if entity.documentation.strip():
         body.append('<div class="api-namespace-doc">' + _documentation(entity, graph, document) + "</div>")
     else:
         body.append(
-            shared_template("api/namespace-description.html").substitute(
+            cpdocs.resources.shared_template("api/namespace-description.html").substitute(
                 qualified_name=html.escape(entity.qualified_name),
                 kind=html.escape(_kind_label(entity.kind, entity.language)),
             )
@@ -704,7 +711,7 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
     toc: list[tuple[str, str, int]] = [("Members", "members", 1)]
     anchors: set[str] = set()
 
-    def render_container_children(container: ApiEntity, *, listed: bool) -> str:
+    def render_container_children(container: cpdocs.model.ApiEntity, *, listed: bool) -> str:
         """Render the members of ``container``; ``listed`` adds them to "On this page"."""
 
         children = [
@@ -712,12 +719,12 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
             for value in container.children
             if value in graph.entities and graph.entities[value].kind != "macro"
         ]
-        children.sort(key=entity_sort_key)
+        children.sort(key=cpdocs.model.entity_sort_key)
         parts: list[str] = []
         for child in children:
             row_id = ""
             if listed:
-                anchor = _member_anchor(child)
+                anchor = cpdocs.rendering.common._member_anchor(child)
                 if anchor not in anchors:
                     anchors.add(anchor)
                     toc.append((child.member_label, anchor, 2))
@@ -729,7 +736,7 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
             )
             parts.append(_language_badge(child))
             parts.append("</div>")
-            if _is_container(child):
+            if cpdocs.rendering.common._is_container(child):
                 nested = render_container_children(child, listed=False)
                 if nested:
                     parts.append("<ul>" + nested + "</ul>")
@@ -741,16 +748,18 @@ def _container_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple
     return "".join(body), toc
 
 
-def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _record_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
     children = [graph.entities[value] for value in entity.children if value in graph.entities]
-    children.sort(key=entity_sort_key)
+    children.sort(key=cpdocs.model.entity_sort_key)
     body = [
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
     ]
     display_entity = dataclasses.replace(entity, qualified_name=entity.name)
-    declaration_text = _entity_declaration(display_entity)
-    declaration = _highlight_declaration(
+    declaration_text = cpdocs.rendering.common._entity_declaration(display_entity)
+    declaration = cpdocs.rendering.common._highlight_declaration(
         declaration_text, entity.language, entity=entity, graph=graph, document_path=document
     )
     body.append(
@@ -774,7 +783,7 @@ def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[st
         for other in specializations:
             # Only the specialization's name is a link, as in every other member row; the
             # highlighted prefix must not contain links of its own, since links cannot nest.
-            prefix = _highlight_declaration(
+            prefix = cpdocs.rendering.common._highlight_declaration(
                 f"{other.template} {other.kind}".strip(),
                 other.language,
                 entity=other,
@@ -795,9 +804,9 @@ def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[st
             )
         body.append("</div></section>")
 
-    grouped: dict[str, list[ApiEntity]] = {}
+    grouped: dict[str, list[cpdocs.model.ApiEntity]] = {}
     for child in children:
-        heading = rendering_for(child.language).member_group(child)
+        heading = cpdocs.languages.rendering_for(child.language).member_group(child)
         if heading is not None:
             grouped.setdefault(heading, []).append(child)
     for heading, values in grouped.items():
@@ -808,17 +817,17 @@ def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[st
         toc.append((heading, section_anchor, 1))
         body.append('<div class="api-record-members">')
         for child in values:
-            if _is_function(child) and child.signatures:
+            if cpdocs.rendering.common._is_function(child) and child.signatures:
                 for index, signature in enumerate(child.signatures):
                     anchor = _member_anchor_for_signature(child, index)
                     label = _compact_signature_label(child, signature)
                     toc.append((label, anchor, 2))
                     body.append(_signature_card(child, signature, graph, document, anchor=anchor))
             elif heading == "Public Members":
-                anchor = _member_anchor(child)
+                anchor = cpdocs.rendering.common._member_anchor(child)
                 toc.append((child.name, anchor, 2))
-                summary = _member_summary_spelling(child)
-                highlighted = _highlight_declaration(
+                summary = cpdocs.rendering.common._member_summary_spelling(child)
+                highlighted = cpdocs.rendering.common._highlight_declaration(
                     summary, child.language, entity=child, graph=graph, document_path=document
                 )
                 body.append(
@@ -833,7 +842,7 @@ def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[st
                     + "</div>"
                 )
             else:
-                anchor = _member_anchor(child)
+                anchor = cpdocs.rendering.common._member_anchor(child)
                 toc.append((child.name, anchor, 2))
                 body.append(
                     f'<div class="api-member-row" id="{html.escape(anchor)}">'
@@ -844,7 +853,7 @@ def _record_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[st
     return "".join(body), toc
 
 
-def _specializations(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
+def _specializations(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph) -> list[cpdocs.model.ApiEntity]:
     """Written specializations of a primary class template, which are its siblings."""
 
     if "<" in entity.name or not entity.template:
@@ -859,13 +868,15 @@ def _specializations(entity: ApiEntity, graph: ApiGraph) -> list[ApiEntity]:
     return sorted(values, key=lambda other: other.name)
 
 
-def _function_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _function_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
     body = [
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
     ]
     toc: list[tuple[str, str, int]] = []
-    signatures = entity.signatures or [ApiSignature()]
+    signatures = entity.signatures or [cpdocs.model.ApiSignature()]
     for index, signature in enumerate(signatures):
         anchor = f"overload-{index + 1}"
         label = _compact_signature_label(entity, signature)
@@ -874,11 +885,15 @@ def _function_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[
     return "".join(body), toc
 
 
-def _enum_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _enum_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
     return _record_page(entity, graph, document)
 
 
-def _simple_entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _simple_entity_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
     body = [
         f'<h1 class="api-entity-title">{html.escape(entity.name)} {_language_badge(entity)}</h1>',
         _defined_in(entity, graph, document),
@@ -887,8 +902,12 @@ def _simple_entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> t
         for index, signature in enumerate(entity.signatures):
             body.append(_signature_card(entity, signature, graph, document, anchor=f"signature-{index + 1}"))
     else:
-        declaration = _highlight_declaration(
-            _entity_declaration(entity), entity.language, entity=entity, graph=graph, document_path=document
+        declaration = cpdocs.rendering.common._highlight_declaration(
+            cpdocs.rendering.common._entity_declaration(entity),
+            entity.language,
+            entity=entity,
+            graph=graph,
+            document_path=document,
         )
         body.append(
             '<article class="api-entity-card">'
@@ -903,17 +922,19 @@ def _simple_entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> t
     return "".join(body), []
 
 
-def _entity_page(entity: ApiEntity, graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
-    if _is_container(entity):
+def _entity_page(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> tuple[str, list[tuple[str, str, int]]]:
+    if cpdocs.rendering.common._is_container(entity):
         return _container_page(entity, graph, document)
-    if _is_type_page(entity):
+    if cpdocs.rendering.common._is_type_page(entity):
         return _record_page(entity, graph, document)
-    if _is_function(entity):
+    if cpdocs.rendering.common._is_function(entity):
         return _function_page(entity, graph, document)
     return _simple_entity_page(entity, graph, document)
 
 
-def _hierarchy_entity(entity: ApiEntity, graph: ApiGraph, document: Path) -> str:
+def _hierarchy_entity(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> str:
     children = _visible_outline_children(entity, graph)
     parts = [
         "<li>",
@@ -929,26 +950,26 @@ def _hierarchy_entity(entity: ApiEntity, graph: ApiGraph, document: Path) -> str
     return "".join(parts)
 
 
-def _file_tree(graph: ApiGraph) -> dict[str, object]:
+def _file_tree(graph: cpdocs.model.ApiGraph) -> dict[str, object]:
     root: dict[str, object] = {}
     for source in sorted(set(graph.sources) | set(graph.files)):
         node = root
         display_source = _display_source_path(source, graph)
-        parts = PurePosixPath(display_source).parts
+        parts = pathlib.PurePosixPath(display_source).parts
         for part in parts[:-1]:
             node = node.setdefault(part, {})  # type: ignore[assignment]
         node.setdefault("__files__", []).append((parts[-1], source))  # type: ignore[union-attr]
     return root
 
 
-def _file_tree_html(node: dict[str, object], document: Path) -> str:
+def _file_tree_html(node: dict[str, object], document: pathlib.Path) -> str:
     parts = ['<ul class="api-file-tree">']
     files = node.get("__files__", [])
     if isinstance(files, list):
         for filename, source_path in sorted(files, key=lambda item: str(item[0]).casefold()):
             parts.append(
                 '<li><span class="api-kind file-kind" title="file">F</span>'
-                f'<a href="{html.escape(_page_href(document, _source_document(str(source_path))))}">{html.escape(str(filename))}</a></li>'
+                f'<a href="{html.escape(_page_href(document, cpdocs.rendering.common._source_document(str(source_path))))}">{html.escape(str(filename))}</a></li>'
             )
     for name, child in sorted(node.items()):
         if name == "__files__" or not isinstance(child, dict):
@@ -963,7 +984,7 @@ def _file_tree_html(node: dict[str, object], document: Path) -> str:
 _HTML_COMMENT = re.compile(r"<!--.*?-->[ \t]*\n?", re.DOTALL)
 
 
-def _render_markdown(text: str, graph: ApiGraph) -> str:
+def _render_markdown(text: str, graph: cpdocs.model.ApiGraph) -> str:
     """Render human-authored Markdown used by the standalone API site.
 
     Raw HTML is not rendered, so HTML comments such as the SPDX header of the introduction file
@@ -980,13 +1001,15 @@ def _render_markdown(text: str, graph: ApiGraph) -> str:
 
 
 def _home_page(
-    graph: ApiGraph, document: Path, project_docs_url: str, *, introduction: str | None = None
+    graph: cpdocs.model.ApiGraph, document: pathlib.Path, project_docs_url: str, *, introduction: str | None = None
 ) -> tuple[str, list[tuple[str, str, int]]]:
     del project_docs_url
     roots = [entity for entity in graph.roots() if entity.kind != "macro"]
-    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
+    macros = sorted(
+        (entity for entity in graph.entities.values() if entity.kind == "macro"), key=cpdocs.model.entity_sort_key
+    )
     if introduction is None:
-        introduction = shared_text("api/index.md")
+        introduction = cpdocs.resources.shared_text("api/index.md")
     body = [
         _render_markdown(introduction, graph),
         '<section id="api-hierarchy" class="api-section"><h2>API hierarchy</h2>',
@@ -1014,7 +1037,7 @@ def _home_page(
     return "".join(body), [("API hierarchy", "api-hierarchy", 1), ("File Hierarchy", "file-hierarchy", 1)]
 
 
-def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
+def _feature_sets_page(graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> tuple[str, list[tuple[str, str, int]]]:
     del document
     units = graph.metadata.get("units", [])
     if not isinstance(units, list):
@@ -1027,7 +1050,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
     has_language_configurations = any(_language_configuration_inline(graph, key) for key in graph.feature_sets)
     body = [
         "<h1>Feature Sets</h1>",
-        shared_text("api/feature-sets-intro.html"),
+        cpdocs.resources.shared_text("api/feature-sets-intro.html"),
         '<section id="overview" class="api-section"><h2>Overview</h2>',
         "<table><tbody>",
         f"<tr><th>Project</th><td><code>{html.escape(graph.project)}</code></td></tr>",
@@ -1051,7 +1074,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
     )
     toc: list[tuple[str, str, int]] = [("Overview", "overview", 1), ("Feature Sets", "feature-sets", 1)]
     for index, key in enumerate(graph.feature_sets, 1):
-        anchor = _feature_set_anchor(key)
+        anchor = cpdocs.rendering.common._feature_set_anchor(key)
         configuration_column = (
             "<td>" + (_language_configuration_inline(graph, key) or "default") + "</td>"
             if has_language_configurations
@@ -1074,7 +1097,7 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
                 [
                     '<section id="configuration-options" class="api-section">',
                     "<h2>Configuration options</h2>",
-                    shared_text("api/configuration-options-intro.html"),
+                    cpdocs.resources.shared_text("api/configuration-options-intro.html"),
                     "<table><thead><tr><th>Group</th><th>Option</th><th>Value</th><th>Description</th></tr></thead><tbody>",
                 ]
             )
@@ -1088,8 +1111,10 @@ def _feature_sets_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple
     return "".join(body), toc
 
 
-def _macros_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, str, int]]]:
-    macros = sorted((entity for entity in graph.entities.values() if entity.kind == "macro"), key=entity_sort_key)
+def _macros_page(graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> tuple[str, list[tuple[str, str, int]]]:
+    macros = sorted(
+        (entity for entity in graph.entities.values() if entity.kind == "macro"), key=cpdocs.model.entity_sort_key
+    )
     body = ['<h1>Macros</h1><ul class="api-member-list">']
     for macro in macros:
         body.append(
@@ -1102,9 +1127,9 @@ def _macros_page(graph: ApiGraph, document: Path) -> tuple[str, list[tuple[str, 
 
 
 def _source_page(
-    source_path: str, content: str, document: Path, graph: ApiGraph
+    source_path: str, content: str, document: pathlib.Path, graph: cpdocs.model.ApiGraph
 ) -> tuple[str, list[tuple[str, str, int]]]:
-    language = _source_language(source_path)
+    language = cpdocs.rendering.common._source_language(source_path)
     if language == "cpp":
         # Some generated headers align macro-continuation backslashes with large runs of spaces.
         # That is useful in raw source but produces visually detached backslashes in the browser.
@@ -1112,7 +1137,7 @@ def _source_page(
         content = "\n".join(re.sub(r"[ \t]+\\[ \t]*$", r" \\", line.rstrip()) for line in content.splitlines()) + (
             "\n" if content.endswith("\n") else ""
         )
-    highlighted = _highlight_source_lines(content, language)
+    highlighted = cpdocs.rendering.common._highlight_source_lines(content, language)
     display_path = _display_source_path(source_path, graph)
     generated_sources = graph.metadata.get("generated_sources", [])
     generated_files = graph.metadata.get("generated_files", [])
@@ -1137,7 +1162,7 @@ def _source_page(
 # ---------------------------------------------------------------------------
 
 
-def _page_title(entity: ApiEntity | None, graph: ApiGraph, special: str) -> str:
+def _page_title(entity: cpdocs.model.ApiEntity | None, graph: cpdocs.model.ApiGraph, special: str) -> str:
     if entity is not None:
         return f"{entity.name} — {graph.project} API documentation"
     if special == "feature_sets":
@@ -1147,7 +1172,7 @@ def _page_title(entity: ApiEntity | None, graph: ApiGraph, special: str) -> str:
     return f"{graph.project} API documentation"
 
 
-def _project_docs_href(document: Path, project_docs_url: str) -> str:
+def _project_docs_href(document: pathlib.Path, project_docs_url: str) -> str:
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", project_docs_url) or project_docs_url.startswith("/"):
         return project_docs_url
     root = _root_relative(document, ".")
@@ -1160,11 +1185,11 @@ def _project_docs_href(document: Path, project_docs_url: str) -> str:
 
 def _layout(
     *,
-    graph: ApiGraph,
-    document: Path,
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
     body: str,
     toc: list[tuple[str, str, int]],
-    current: ApiEntity | None,
+    current: cpdocs.model.ApiEntity | None,
     special: str,
     project_docs_url: str,
     copyright_text: str,
@@ -1176,7 +1201,7 @@ def _layout(
     stylesheet = _root_relative(document, "assets/cpdocs-api.css") + f"?v={_asset_version('cpdocs-api.css')}"
     script = _root_relative(document, "assets/cpdocs-api.js") + f"?v={_asset_version('cpdocs-api.js')}"
     init_script = _root_relative(document, "assets/cpdocs-api-init.js") + f"?v={_asset_version('cpdocs-api-init.js')}"
-    home = _page_href(document, Path("index.md"))
+    home = _page_href(document, pathlib.Path("index.md"))
     project_docs = _project_docs_href(document, project_docs_url)
     version_root = _root_relative(document, ".")
     if version_root == ".":
@@ -1187,7 +1212,7 @@ def _layout(
     current_route = _output_directory(document).as_posix().strip(".")
     if current_route and not current_route.endswith("/"):
         current_route += "/"
-    return shared_template("api/layout.html").substitute(
+    return cpdocs.resources.shared_template("api/layout.html").substitute(
         page_title=html.escape(_page_title(current, graph, special)),
         stylesheet=html.escape(stylesheet),
         theme_head=_theme_head(document, theme),
@@ -1213,7 +1238,7 @@ _ASSET_FILES = ("cpdocs-api.css", "cpdocs-api.js", "cpdocs-api-init.js")
 
 def _asset_resource(name: str):
     """Return a packaged API-rendering resource (also works outside a source checkout)."""
-    return resource("api", name)
+    return cpdocs.resources.resource("api", name)
 
 
 @functools.cache
@@ -1233,7 +1258,7 @@ _THEME_PROPERTIES = {
     "soft": "--api-soft",
     "selected": "--api-selected",
 }
-assert tuple(_THEME_PROPERTIES) == THEME_COLORS
+assert tuple(_THEME_PROPERTIES) == cpdocs.config.THEME_COLORS
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1243,7 +1268,7 @@ class _ThemeAsset:
     name: str
     version: str
 
-    def href(self, document: Path) -> str:
+    def href(self, document: pathlib.Path) -> str:
         return _root_relative(document, f"assets/{self.name}") + f"?v={self.version}"
 
 
@@ -1256,7 +1281,7 @@ class _ThemeAssets:
     favicon: _ThemeAsset | None = None
 
 
-def _theme_stylesheet(theme: SiteTheme) -> str:
+def _theme_stylesheet(theme: cpdocs.config.SiteTheme) -> str:
     """The colours of the theme as custom properties, followed by its own stylesheet."""
 
     blocks: list[str] = []
@@ -1270,12 +1295,12 @@ def _theme_stylesheet(theme: SiteTheme) -> str:
     return "\n".join(blocks)
 
 
-def _write_theme_asset(assets: Path, name: str, contents: bytes) -> _ThemeAsset:
+def _write_theme_asset(assets: pathlib.Path, name: str, contents: bytes) -> _ThemeAsset:
     (assets / name).write_bytes(contents)
     return _ThemeAsset(name=name, version=hashlib.sha1(contents).hexdigest()[:10])
 
 
-def _write_theme(assets: Path, theme: SiteTheme) -> _ThemeAssets:
+def _write_theme(assets: pathlib.Path, theme: cpdocs.config.SiteTheme) -> _ThemeAssets:
     stylesheet = _theme_stylesheet(theme)
     return _ThemeAssets(
         stylesheet=(_write_theme_asset(assets, "cpdocs-theme.css", stylesheet.encode("utf-8")) if stylesheet else None),
@@ -1292,7 +1317,7 @@ def _write_theme(assets: Path, theme: SiteTheme) -> _ThemeAssets:
     )
 
 
-def _theme_head(document: Path, theme: _ThemeAssets) -> str:
+def _theme_head(document: pathlib.Path, theme: _ThemeAssets) -> str:
     """Links of the theme in the page head, after the cpdocs stylesheet they override."""
 
     links = ""
@@ -1303,7 +1328,7 @@ def _theme_head(document: Path, theme: _ThemeAssets) -> str:
     return links
 
 
-def _theme_logo(document: Path, theme: _ThemeAssets) -> str:
+def _theme_logo(document: pathlib.Path, theme: _ThemeAssets) -> str:
     if theme.logo is None:
         return ""
     # The project name follows the logo, so the image itself is decorative.
@@ -1312,18 +1337,18 @@ def _theme_logo(document: Path, theme: _ThemeAssets) -> str:
 
 def _write_page(
     *,
-    output: Path,
-    graph: ApiGraph,
-    document: Path,
+    output: pathlib.Path,
+    graph: cpdocs.model.ApiGraph,
+    document: pathlib.Path,
     body: str,
     toc: list[tuple[str, str, int]],
-    current: ApiEntity | None,
+    current: cpdocs.model.ApiEntity | None,
     special: str,
     project_docs_url: str,
     copyright_text: str,
     theme: _ThemeAssets,
 ) -> None:
-    path = contained_path(output, _output_file(document))
+    path = cpdocs.filesystem.contained_path(output, _output_file(document))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         _layout(
@@ -1341,7 +1366,7 @@ def _write_page(
     )
 
 
-def _symbol_alias(parts: list[str]) -> Path | None:
+def _symbol_alias(parts: list[str]) -> pathlib.Path | None:
     """The stable ``_symbols/...`` alias of a qualified name, if every component is a plain name.
 
     Aliases keep the readable spelling of each component, so a component that a filesystem would
@@ -1351,21 +1376,21 @@ def _symbol_alias(parts: list[str]) -> Path | None:
 
     if any(not part or part in {".", ".."} or "/" in part or "\\" in part or "\0" in part for part in parts):
         return None
-    return Path("_symbols", *parts, "index.md")
+    return pathlib.Path("_symbols", *parts, "index.md")
 
 
-def _redirect(output: Path, document: Path, target: str) -> None:
-    path = contained_path(output, _output_file(document))
+def _redirect(output: pathlib.Path, document: pathlib.Path, target: str) -> None:
+    path = cpdocs.filesystem.contained_path(output, _output_file(document))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        shared_template("api/redirect.html").substitute(
+        cpdocs.resources.shared_template("api/redirect.html").substitute(
             target=html.escape(target, quote=True), target_json=json.dumps(target)
         ),
         encoding="utf-8",
     )
 
 
-def _search_index(graph: ApiGraph) -> list[dict[str, str]]:
+def _search_index(graph: cpdocs.model.ApiGraph) -> list[dict[str, str]]:
     values: list[dict[str, str]] = []
     for entity in sorted(graph.entities.values(), key=lambda value: value.qualified_name.casefold()):
         target, anchor = _entity_target(entity, graph)
@@ -1384,13 +1409,13 @@ def _search_index(graph: ApiGraph) -> list[dict[str, str]]:
 
 
 def render_html_site(
-    graph: ApiGraph,
+    graph: cpdocs.model.ApiGraph,
     *,
-    output_directory: Path,
+    output_directory: pathlib.Path,
     project_docs_url: str,
     copyright_text: str,
-    introduction_file: Path | None = None,
-    theme: SiteTheme | None = None,
+    introduction_file: pathlib.Path | None = None,
+    theme: cpdocs.config.SiteTheme | None = None,
 ) -> None:
     """Render one API version to a standalone HTML site in ``output_directory``.
 
@@ -1413,7 +1438,7 @@ def render_html_site(
             introduction_file=introduction_file,
             theme=theme,
         )
-        remove_tree(target, owner=target.parent)
+        cpdocs.filesystem.remove_tree(target, owner=target.parent)
         staging.rename(target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
@@ -1421,24 +1446,24 @@ def render_html_site(
 
 
 def _render_site(
-    graph: ApiGraph,
+    graph: cpdocs.model.ApiGraph,
     *,
-    output: Path,
+    output: pathlib.Path,
     project_docs_url: str,
     copyright_text: str,
-    introduction_file: Path | None,
-    theme: SiteTheme | None,
+    introduction_file: pathlib.Path | None,
+    theme: cpdocs.config.SiteTheme | None,
 ) -> None:
     """Render the pages, assets and indexes of one API version into the empty ``output``."""
 
-    assign_documents(graph.entities.values())
+    cpdocs.rendering.common.assign_documents(graph.entities.values())
     assets = output / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     for name in _ASSET_FILES:
         (assets / name).write_bytes(_asset_resource(name).read_bytes())
-    theme_assets = _write_theme(assets, theme if theme is not None else SiteTheme())
+    theme_assets = _write_theme(assets, theme if theme is not None else cpdocs.config.SiteTheme())
 
-    home_document = Path("index.md")
+    home_document = pathlib.Path("index.md")
     introduction = None
     if introduction_file is not None and introduction_file.is_file():
         introduction = introduction_file.read_text(encoding="utf-8")
@@ -1457,7 +1482,7 @@ def _render_site(
     )
 
     if graph.feature_sets:
-        feature_sets_document = Path("feature-sets.md")
+        feature_sets_document = pathlib.Path("feature-sets.md")
         body, toc = _feature_sets_page(graph, feature_sets_document)
         _write_page(
             output=output,
@@ -1473,7 +1498,7 @@ def _render_site(
         )
 
     if any(entity.kind == "macro" for entity in graph.entities.values()):
-        macros_document = Path("macros.md")
+        macros_document = pathlib.Path("macros.md")
         body, toc = _macros_page(graph, macros_document)
         _write_page(
             output=output,
@@ -1489,9 +1514,9 @@ def _render_site(
         )
 
     for entity in graph.entities.values():
-        if _embedded_member_parent(entity, graph) is not None:
+        if cpdocs.rendering.common._embedded_member_parent(entity, graph) is not None:
             continue
-        document = entity_document(entity)
+        document = cpdocs.rendering.common.entity_document(entity)
         body, toc = _entity_page(entity, graph, document)
         _write_page(
             output=output,
@@ -1509,7 +1534,7 @@ def _render_site(
     source_pages = dict(graph.files)
     source_pages.update(graph.sources)
     for source_path, content in source_pages.items():
-        document = _source_document(source_path)
+        document = cpdocs.rendering.common._source_document(source_path)
         body, toc = _source_page(source_path, content, document, graph)
         _write_page(
             output=output,

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import subprocess
-from pathlib import Path
-from typing import Any
+import typing
 
-from ..contract import CONTRACT_VERSION, read_feature_set
+import cpdocs.contract
 
 
 def _cargo_command(toolchain: str | None) -> list[str]:
@@ -23,7 +23,9 @@ def _cargo_command(toolchain: str | None) -> list[str]:
     return command
 
 
-def _run_cargo(source: Path, arguments: list[str], *, toolchain: str | None) -> subprocess.CompletedProcess[str]:
+def _run_cargo(
+    source: pathlib.Path, arguments: list[str], *, toolchain: str | None
+) -> subprocess.CompletedProcess[str]:
     command = [*_cargo_command(toolchain), *arguments]
     try:
         return subprocess.run(
@@ -37,7 +39,7 @@ def _run_cargo(source: Path, arguments: list[str], *, toolchain: str | None) -> 
         raise RuntimeError(f"cpdocs rust: cargo command failed{suffix}") from error
 
 
-def _metadata(source: Path, *, toolchain: str | None) -> dict[str, Any]:
+def _metadata(source: pathlib.Path, *, toolchain: str | None) -> dict[str, typing.Any]:
     manifest = source / "Cargo.toml"
     if not manifest.is_file():
         raise RuntimeError(f"cpdocs rust: {manifest} does not exist")
@@ -53,7 +55,7 @@ def _metadata(source: Path, *, toolchain: str | None) -> dict[str, Any]:
     return raw
 
 
-def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dict[str, Any]:
+def _package(metadata: dict[str, typing.Any], source: pathlib.Path, package: str | None) -> dict[str, typing.Any]:
     packages = [item for item in metadata["packages"] if isinstance(item, dict)]
     if package:
         matches = [item for item in packages if item.get("name") == package]
@@ -67,7 +69,7 @@ def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dic
         manifest_path = item.get("manifest_path")
         if isinstance(manifest_path, str):
             try:
-                if Path(manifest_path).resolve() == root_manifest:
+                if pathlib.Path(manifest_path).resolve() == root_manifest:
                     matches.append(item)
             except OSError:
                 pass
@@ -78,11 +80,11 @@ def _package(metadata: dict[str, Any], source: Path, package: str | None) -> dic
     raise RuntimeError("cpdocs rust: Cargo workspace contains multiple packages; pass --package explicitly")
 
 
-def _library_target(package: dict[str, Any]) -> dict[str, Any]:
+def _library_target(package: dict[str, typing.Any]) -> dict[str, typing.Any]:
     targets = package.get("targets")
     if not isinstance(targets, list):
         raise RuntimeError("cpdocs rust: cargo metadata package has no targets list")
-    libraries: list[dict[str, Any]] = []
+    libraries: list[dict[str, typing.Any]] = []
     for target in targets:
         if not isinstance(target, dict):
             continue
@@ -94,7 +96,7 @@ def _library_target(package: dict[str, Any]) -> dict[str, Any]:
     return libraries[0]
 
 
-def _feature_sets(package: dict[str, Any]) -> list[list[str]]:
+def _feature_sets(package: dict[str, typing.Any]) -> list[list[str]]:
     declared = package.get("features")
     declared_features = set(declared) if isinstance(declared, dict) else set()
     metadata = package.get("metadata")
@@ -130,16 +132,16 @@ def _feature_sets(package: dict[str, Any]) -> list[list[str]]:
     return result
 
 
-def _relative_or_absolute(path: Path, source: Path) -> str:
+def _relative_or_absolute(path: pathlib.Path, source: pathlib.Path) -> str:
     try:
         return path.resolve().relative_to(source.resolve()).as_posix()
     except (OSError, ValueError):
         return str(path.resolve())
 
 
-def _browse_roots(source: Path, package: dict[str, Any], target: dict[str, Any]) -> list[str]:
-    roots: list[Path] = []
-    manifest_path = Path(str(package["manifest_path"]))
+def _browse_roots(source: pathlib.Path, package: dict[str, typing.Any], target: dict[str, typing.Any]) -> list[str]:
+    roots: list[pathlib.Path] = []
+    manifest_path = pathlib.Path(str(package["manifest_path"]))
     package_root = manifest_path.parent
     for candidate in (
         source / "Cargo.toml",
@@ -155,17 +157,19 @@ def _browse_roots(source: Path, package: dict[str, Any], target: dict[str, Any])
 
     src_path = target.get("src_path")
     if isinstance(src_path, str):
-        src = Path(src_path)
+        src = pathlib.Path(src_path)
         if src.exists() and src not in roots and not any(root.is_dir() and root in src.parents for root in roots):
             roots.append(src)
     return [_relative_or_absolute(root, source) for root in roots]
 
 
-def write_feature_sets(source: Path, output: Path, *, package: str | None = None, toolchain: str | None = None) -> Path:
+def write_feature_sets(
+    source: pathlib.Path, output: pathlib.Path, *, package: str | None = None, toolchain: str | None = None
+) -> pathlib.Path:
     metadata = _metadata(source, toolchain=toolchain)
     selected = _package(metadata, source, package)
     manifest = {
-        "cpdocs-feature-sets": CONTRACT_VERSION,
+        "cpdocs-feature-sets": cpdocs.contract.CONTRACT_VERSION,
         "generator": "cpdocs rust",
         "project": {"name": str(selected.get("name") or ""), "version": str(selected.get("version") or "")},
         "feature-sets": [{"features": features} for features in _feature_sets(selected)],
@@ -176,9 +180,14 @@ def write_feature_sets(source: Path, output: Path, *, package: str | None = None
 
 
 def write_manifest(
-    source: Path, feature_set_file: Path, output: Path, *, package: str | None = None, toolchain: str | None = None
-) -> Path:
-    feature_set = read_feature_set(feature_set_file)
+    source: pathlib.Path,
+    feature_set_file: pathlib.Path,
+    output: pathlib.Path,
+    *,
+    package: str | None = None,
+    toolchain: str | None = None,
+) -> pathlib.Path:
+    feature_set = cpdocs.contract.read_feature_set(feature_set_file)
     metadata = _metadata(source, toolchain=toolchain)
     selected = _package(metadata, source, package)
     target = _library_target(selected)
@@ -216,7 +225,7 @@ def write_manifest(
         raise RuntimeError(f"cpdocs rust: cargo rustdoc succeeded but did not produce {rustdoc_json}")
 
     manifest = {
-        "cpdocs-manifest": CONTRACT_VERSION,
+        "cpdocs-manifest": cpdocs.contract.CONTRACT_VERSION,
         "units": [
             {
                 "id": target_name,

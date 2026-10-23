@@ -5,26 +5,26 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import sys
-from pathlib import Path
 
-from conftest import fixture_text
-from cpdocs.cli import main
-from cpdocs.contract import read_feature_sets
-from cpdocs.providers.cargo import _feature_sets
+import conftest
+import cpdocs.cli
+import cpdocs.contract
+import cpdocs.providers.cargo
 
 
-def _fake_cargo(path: Path) -> Path:
+def _fake_cargo(path: pathlib.Path) -> pathlib.Path:
     script = path / "cargo"
-    script.write_text(f"#!{sys.executable}\n" + fixture_text("fake-cargo.py"), encoding="utf-8")
+    script.write_text(f"#!{sys.executable}\n" + conftest.fixture_text("fake-cargo.py"), encoding="utf-8")
     script.chmod(script.stat().st_mode | 0o111)
     return script
 
 
 def test_default_cargo_features_are_disjoint_and_sorted() -> None:
     package = {"features": {"simd": [], "default": ["simd"], "mpi": []}, "metadata": {}}
-    assert _feature_sets(package) == [["default"], ["mpi"], ["simd"]]
-    assert _feature_sets({"features": {}, "metadata": {}}) == [[]]
+    assert cpdocs.providers.cargo._feature_sets(package) == [["default"], ["mpi"], ["simd"]]
+    assert cpdocs.providers.cargo._feature_sets({"features": {}, "metadata": {}}) == [[]]
 
 
 def test_metadata_can_override_disjoint_default() -> None:
@@ -32,10 +32,10 @@ def test_metadata_can_override_disjoint_default() -> None:
         "features": {"mpi": [], "cuda": []},
         "metadata": {"cpdocs": {"feature-sets": [["mpi"], ["mpi", "cuda"]]}},
     }
-    assert _feature_sets(package) == [["mpi"], ["mpi", "cuda"]]
+    assert cpdocs.providers.cargo._feature_sets(package) == [["mpi"], ["mpi", "cuda"]]
 
 
-def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(tmp_path: Path, monkeypatch) -> None:
+def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(tmp_path: pathlib.Path, monkeypatch) -> None:
     source = tmp_path / "project"
     (source / "src").mkdir(parents=True)
     (source / "Cargo.toml").write_text(
@@ -46,15 +46,17 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(tmp_path: Pat
     monkeypatch.setenv("CPDOCS_CARGO", str(cargo))
 
     feature_sets_file = tmp_path / "feature-sets.json"
-    assert main(["rust", "feature-sets", "--source", str(source), "--output", str(feature_sets_file)]) == 0
-    feature_sets = read_feature_sets(feature_sets_file)
+    assert cpdocs.cli.main(["rust", "feature-sets", "--source", str(source), "--output", str(feature_sets_file)]) == 0
+    feature_sets = cpdocs.contract.read_feature_sets(feature_sets_file)
     assert [item.features for item in feature_sets.feature_sets] == [("batch",), ("checked",)]
 
     selected = tmp_path / "feature-set.json"
     selected.write_text(json.dumps({"cpdocs-feature-set": 1, "features": ["batch"]}), encoding="utf-8")
     manifest_file = tmp_path / "manifest.json"
     assert (
-        main(["rust", "build", "--source", str(source), "--feature-set", str(selected), "--output", str(manifest_file)])
+        cpdocs.cli.main(
+            ["rust", "build", "--source", str(source), "--feature-set", str(selected), "--output", str(manifest_file)]
+        )
         == 0
     )
 
@@ -72,9 +74,9 @@ def test_rust_cli_provider_uses_cargo_metadata_and_nightly_rustdoc(tmp_path: Pat
     assert rustdoc[rustdoc.index("-Z") + 1] == "unstable-options"
 
 
-def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_path: Path) -> None:
-    from cpdocs.languages.rust.extract import build_rust_graph
-    from cpdocs.model import stable_entity_id
+def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_path: pathlib.Path) -> None:
+    import cpdocs.languages.rust.extract
+    import cpdocs.model
 
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(
@@ -107,16 +109,16 @@ def test_rustdoc_backend_keeps_local_public_api_and_default_public_members(tmp_p
         encoding="utf-8",
     )
 
-    graph = build_rust_graph(rustdoc_json=rustdoc, project="demo", project_root=tmp_path)
-    variant = stable_entity_id("rust", "enum_value", "demo::Mode::Fast")
+    graph = cpdocs.languages.rust.extract.build_rust_graph(rustdoc_json=rustdoc, project="demo", project_root=tmp_path)
+    variant = cpdocs.model.stable_entity_id("rust", "enum_value", "demo::Mode::Fast")
     assert variant in graph.entities
-    assert graph.entities[variant].parent == stable_entity_id("rust", "enum", "demo::Mode")
-    assert stable_entity_id("rust", "struct", "other::External") not in graph.entities
+    assert graph.entities[variant].parent == cpdocs.model.stable_entity_id("rust", "enum", "demo::Mode")
+    assert cpdocs.model.stable_entity_id("rust", "struct", "other::External") not in graph.entities
 
 
-def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path: Path) -> None:
-    from cpdocs.languages.rust.extract import build_rust_graph
-    from cpdocs.model import stable_entity_id
+def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path: pathlib.Path) -> None:
+    import cpdocs.languages.rust.extract
+    import cpdocs.model
 
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(
@@ -212,15 +214,15 @@ def test_rustdoc_backend_uses_semantic_owners_for_fields_and_impl_items(tmp_path
         encoding="utf-8",
     )
 
-    graph = build_rust_graph(rustdoc_json=rustdoc, project="demo", project_root=tmp_path)
-    vector = stable_entity_id("rust", "struct", "demo::Vector3")
+    graph = cpdocs.languages.rust.extract.build_rust_graph(rustdoc_json=rustdoc, project="demo", project_root=tmp_path)
+    vector = cpdocs.model.stable_entity_id("rust", "struct", "demo::Vector3")
     assert vector in graph.entities
     for field_name in ("x", "y", "z"):
-        field = stable_entity_id("rust", "field", f"demo::Vector3::{field_name}")
+        field = cpdocs.model.stable_entity_id("rust", "field", f"demo::Vector3::{field_name}")
         assert field in graph.entities
         assert graph.entities[field].parent == vector
-    method = stable_entity_id("rust", "method", "demo::Vector3::norm")
+    method = cpdocs.model.stable_entity_id("rust", "method", "demo::Vector3::norm")
     assert method in graph.entities
     assert graph.entities[method].parent == vector
-    assert stable_entity_id("rust", "function", "demo::clone") not in graph.entities
-    assert stable_entity_id("rust", "method", "demo::Vector3::clone") not in graph.entities
+    assert cpdocs.model.stable_entity_id("rust", "function", "demo::clone") not in graph.entities
+    assert cpdocs.model.stable_entity_id("rust", "method", "demo::Vector3::clone") not in graph.entities

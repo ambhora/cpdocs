@@ -15,9 +15,9 @@ a kind to a language is therefore one entry in that language's table.
 
 from __future__ import annotations
 
+import collections.abc
+import dataclasses
 import enum
-from collections.abc import Iterator
-from dataclasses import dataclass
 
 
 class Role(enum.Flag):
@@ -39,7 +39,7 @@ class Role(enum.Flag):
     VALUE = enum.auto()
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class EntityKind:
     """One kind of entity of a language.
 
@@ -79,7 +79,7 @@ class EntityKinds:
     def __contains__(self, name: object) -> bool:
         return name in self._kinds
 
-    def __iter__(self) -> Iterator[EntityKind]:
+    def __iter__(self) -> collections.abc.Iterator[EntityKind]:
         return iter(self._kinds.values())
 
     def with_role(self, role: Role) -> frozenset[str]:

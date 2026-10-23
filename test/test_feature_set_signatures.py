@@ -6,21 +6,21 @@
 
 from __future__ import annotations
 
+import pathlib
 import shlex
 import sys
-from pathlib import Path
 
-from conftest import fixture_text, require
-from cpdocs.build import build_current
-from cpdocs.config import load_config
-from cpdocs.model import stable_entity_id
-from cpdocs.rendering.common import entity_document
+import conftest
+import cpdocs.build
+import cpdocs.config
+import cpdocs.model
+import cpdocs.rendering.common
 
-PROVIDER = fixture_text("feature-set-provider.py")
+PROVIDER = conftest.fixture_text("feature-set-provider.py")
 
 
-def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None:
-    require("clang++")
+def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: pathlib.Path) -> None:
+    conftest.require("clang++")
     project = tmp_path / "project"
     for backend, declaration in {
         "cpp": "int backend_value(int value) noexcept;",
@@ -43,9 +43,11 @@ def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    graph = build_current(load_config(project / "docs" / "cpdocs.yml"), output=project / "build")
-    cpp = graph.entities[stable_entity_id("cpp", "function", "demo::backend_value")]
-    cuda = graph.entities[stable_entity_id("cuda", "function", "demo::backend_value")]
+    graph = cpdocs.build.build_current(
+        cpdocs.config.load_config(project / "docs" / "cpdocs.yml"), output=project / "build"
+    )
+    cpp = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::backend_value")]
+    cuda = graph.entities[cpdocs.model.stable_entity_id("cuda", "function", "demo::backend_value")]
 
     assert cpp.language == "cpp"
     assert cuda.language == "cuda"
@@ -59,8 +61,8 @@ def test_same_function_can_have_cpp_and_cuda_definitions(tmp_path: Path) -> None
 
     site = project / "build" / "cpdocs" / "current"
 
-    def html_page(entity) -> Path:
-        document = entity_document(entity)
+    def html_page(entity) -> pathlib.Path:
+        document = cpdocs.rendering.common.entity_document(entity)
         if document.name == "index.md":
             return site / document.parent / "index.html"
         return site / document.with_suffix("") / "index.html"

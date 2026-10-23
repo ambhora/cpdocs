@@ -6,42 +6,42 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pathlib
 import re
 import shutil
-from pathlib import Path
 
 import pytest
 
-from conftest import fixture_text
-from cpdocs.config import SiteTheme
-from cpdocs.contract import ParseOptions
-from cpdocs.languages.cpp.extract import extract_clang_graph
-from cpdocs.languages.python.extract import build_python_graph
-from cpdocs.languages.rust.extract import build_rust_graph
-from cpdocs.model import ApiAttribute, ApiEntity, ApiGraph, ApiParameter, ApiSignature, merge_graphs, stable_entity_id
-from cpdocs.rendering.common import entity_document
-from cpdocs.rendering.html import _theme_head, _ThemeAsset, _ThemeAssets, render_html_site
-from cpdocs.resources import resource
+import conftest
+import cpdocs.config
+import cpdocs.contract
+import cpdocs.languages.cpp.extract
+import cpdocs.languages.python.extract
+import cpdocs.languages.rust.extract
+import cpdocs.model
+import cpdocs.rendering.common
+import cpdocs.rendering.html
+import cpdocs.resources
 
 
-def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
+def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: pathlib.Path) -> None:
     clang = shutil.which("clang++") or shutil.which("clang")
     if clang is None:
         pytest.skip("Clang is required for the semantic API backend")
 
     include = tmp_path / "include"
     include.mkdir()
-    (include / "dice.hpp").write_text(fixture_text("conditional-api.hpp"), encoding="utf-8")
+    (include / "dice.hpp").write_text(conftest.fixture_text("conditional-api.hpp"), encoding="utf-8")
 
     graphs = []
     for feature_set, defines in (("cpu", ()), ("cuda", ("USE_CUDA=1",))):
-        graph = extract_clang_graph(
+        graph = cpdocs.languages.cpp.extract.extract_clang_graph(
             project="dice",
             version="main",
             project_root=tmp_path,
             language="cpp",
             api_roots=[include],
-            parse=ParseOptions(
+            parse=cpdocs.contract.ParseOptions(
                 standard="c++20", include=(), system_include=(), define=defines, flags=(), compile_database=None
             ),
             feature_set=feature_set,
@@ -52,41 +52,45 @@ def test_cpp_semantic_profiles_merge_conditional_api(tmp_path: Path) -> None:
             entity.feature_sets.append(feature_set)
         graphs.append((feature_set, graph))
 
-    merged = merge_graphs(graphs, project="dice", version="main", language="cpp")
-    foo = merged.entities[stable_entity_id("cpp", "function", "dice::foo")]
+    merged = cpdocs.model.merge_graphs(graphs, project="dice", version="main", language="cpp")
+    foo = merged.entities[cpdocs.model.stable_entity_id("cpp", "function", "dice::foo")]
     assert {signature.compact for signature in foo.signatures} == {"(cpu_view)", "(cuda_view)"}
     assert set(foo.feature_sets) == {"cpu", "cuda"}
-    backend_name = merged.entities[stable_entity_id("cpp", "function", "dice::backend_name")]
-    assert backend_name.signatures[0].attributes == (ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),)
-    assert stable_entity_id("cpp", "method", "visible::yes") in merged.entities
-    assert stable_entity_id("cpp", "method", "visible::no") not in merged.entities
+    backend_name = merged.entities[cpdocs.model.stable_entity_id("cpp", "function", "dice::backend_name")]
+    assert backend_name.signatures[0].attributes == (
+        cpdocs.model.ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),
+    )
+    assert cpdocs.model.stable_entity_id("cpp", "method", "visible::yes") in merged.entities
+    assert cpdocs.model.stable_entity_id("cpp", "method", "visible::no") not in merged.entities
 
-    macro = merged.entities[stable_entity_id("cpp", "macro", "DICE_BACKEND")]
+    macro = merged.entities[cpdocs.model.stable_entity_id("cpp", "macro", "DICE_BACKEND")]
     assert set(macro.feature_sets) == {"cpu", "cuda"}
     assert set(macro.properties) == {'"cpu"', '"cuda"'}
     assert macro.source is not None and macro.source.path == "dice.hpp"
 
 
-def test_python_backend_uses_same_graph_model(tmp_path: Path) -> None:
+def test_python_backend_uses_same_graph_model(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "dice"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text(
         '"""Dice package."""\nfrom .core import Solver\n__all__ = ["Solver"]\n', encoding="utf-8"
     )
-    (package / "core.py").write_text(fixture_text("python-public-api.py"), encoding="utf-8")
+    (package / "core.py").write_text(conftest.fixture_text("python-public-api.py"), encoding="utf-8")
 
-    graph = build_python_graph(project_root=tmp_path, package_root=package, package="dice", version="main")
-    assert graph.entities[stable_entity_id("python", "package", "dice")].documentation == "Dice package."
-    reader = graph.entities[stable_entity_id("python", "protocol", "dice.core.Reader")]
+    graph = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="dice", version="main"
+    )
+    assert graph.entities[cpdocs.model.stable_entity_id("python", "package", "dice")].documentation == "Dice package."
+    reader = graph.entities[cpdocs.model.stable_entity_id("python", "protocol", "dice.core.Reader")]
     assert reader.kind == "protocol"
-    constructor = graph.entities[stable_entity_id("python", "constructor", "dice.core.Solver.__init__")]
+    constructor = graph.entities[cpdocs.model.stable_entity_id("python", "constructor", "dice.core.Solver.__init__")]
     assert constructor.signatures[0].parameters[0].type == "int"
-    solve = graph.entities[stable_entity_id("python", "method", "dice.core.Solver.solve")]
+    solve = graph.entities[cpdocs.model.stable_entity_id("python", "method", "dice.core.Solver.solve")]
     # The implicit ``self`` is not part of the documented signature.
     assert {signature.compact for signature in solve.signatures} == {"(int)", "(float)"}
 
 
-def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: Path) -> None:
+def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "dice"
     (package / "_impl").mkdir(parents=True)
     (package / "__init__.py").write_text('"""Dice package."""\nfrom ._rng import roll\n', encoding="utf-8")
@@ -95,20 +99,22 @@ def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: Path) -> Non
     (package / "__pycache__").mkdir()
     (package / "__pycache__" / "cached.py").write_text("", encoding="utf-8")
 
-    graph = build_python_graph(project_root=tmp_path, package_root=package, package="dice", version="main")
+    graph = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="dice", version="main"
+    )
     assert sorted(graph.sources) == ["src/dice/__init__.py", "src/dice/_impl/tables.py", "src/dice/_rng.py"]
     # The modules themselves stay out of the API.
     assert {entity.qualified_name for entity in graph.entities.values()} == {"dice"}
 
     site = tmp_path / "site"
-    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    cpdocs.rendering.html.render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
     home = (site / "index.html").read_text(encoding="utf-8")
     hierarchy = home[home.index('id="file-hierarchy"') :]
     for name in ("__init__.py", "_rng.py", "tables.py"):
         assert f">{name}</a>" in hierarchy
 
 
-def test_rustdoc_backend_normalizes_function_signature(tmp_path: Path) -> None:
+def test_rustdoc_backend_normalizes_function_signature(tmp_path: pathlib.Path) -> None:
     rustdoc = tmp_path / "rustdoc.json"
     rustdoc.write_text(
         json.dumps(
@@ -150,36 +156,36 @@ def test_rustdoc_backend_normalizes_function_signature(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    graph = build_rust_graph(rustdoc_json=rustdoc, project="dice", project_root=tmp_path)
-    entity = graph.entities[stable_entity_id("rust", "function", "dice::parse")]
+    graph = cpdocs.languages.rust.extract.build_rust_graph(rustdoc_json=rustdoc, project="dice", project_root=tmp_path)
+    entity = graph.entities[cpdocs.model.stable_entity_id("rust", "function", "dice::parse")]
     assert entity.signatures[0].compact == "(&str)"
     assert entity.signatures[0].returns == "Result<u64>"
 
 
-def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -> None:
-    graph = ApiGraph(project="dice", version="main", language="cpp")
-    namespace = ApiEntity(
-        id=stable_entity_id("cpp", "namespace", "dice"),
+def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: pathlib.Path) -> None:
+    graph = cpdocs.model.ApiGraph(project="dice", version="main", language="cpp")
+    namespace = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "namespace", "dice"),
         language="cpp",
         kind="namespace",
         name="dice",
         qualified_name="dice",
         documentation="Dice public API.",
     )
-    function = ApiEntity(
-        id=stable_entity_id("cpp", "function", "dice::foo"),
+    function = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "function", "dice::foo"),
         language="cpp",
         kind="function",
         name="foo",
         qualified_name="dice::foo",
         parent=namespace.id,
         signatures=[
-            ApiSignature(
-                parameters=(ApiParameter("value", "int"),),
+            cpdocs.model.ApiSignature(
+                parameters=(cpdocs.model.ApiParameter("value", "int"),),
                 returns="void",
-                attributes=(ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),),
+                attributes=(cpdocs.model.ApiAttribute(name="nodiscard", spelling="[[nodiscard]]"),),
             ),
-            ApiSignature(parameters=(ApiParameter("value", "float"),), returns="void"),
+            cpdocs.model.ApiSignature(parameters=(cpdocs.model.ApiParameter("value", "float"),), returns="void"),
         ],
         documentation=(
             "Do work. See [testing guide](projectdocs:reference/testing/#fixtures) and "
@@ -187,59 +193,59 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
         ),
         feature_sets=["feature-set-001"],
     )
-    nested_namespace = ApiEntity(
-        id=stable_entity_id("cpp", "namespace", "dice::meta"),
+    nested_namespace = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "namespace", "dice::meta"),
         language="cpp",
         kind="namespace",
         name="meta",
         qualified_name="dice::meta",
         parent=namespace.id,
     )
-    nested_function = ApiEntity(
-        id=stable_entity_id("cpp", "function", "dice::meta::nested"),
+    nested_function = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "function", "dice::meta::nested"),
         language="cpp",
         kind="function",
         name="nested",
         qualified_name="dice::meta::nested",
         parent=nested_namespace.id,
-        signatures=[ApiSignature(returns="void")],
+        signatures=[cpdocs.model.ApiSignature(returns="void")],
     )
-    related = ApiEntity(
-        id=stable_entity_id("cpp", "class", "dice::bar"),
+    related = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "class", "dice::bar"),
         language="cpp",
         kind="class",
         name="bar",
         qualified_name="dice::bar",
         parent=namespace.id,
     )
-    method = ApiEntity(
-        id=stable_entity_id("cpp", "method", "dice::bar::run"),
+    method = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "method", "dice::bar::run"),
         language="cpp",
         kind="method",
         name="run",
         qualified_name="dice::bar::run",
         parent=related.id,
-        signatures=[ApiSignature(parameters=(ApiParameter("value", "int"),), returns="void")],
+        signatures=[cpdocs.model.ApiSignature(parameters=(cpdocs.model.ApiParameter("value", "int"),), returns="void")],
     )
-    package_info = ApiEntity(
-        id=stable_entity_id("cpp", "struct", "dice::package_info"),
+    package_info = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "struct", "dice::package_info"),
         language="cpp",
         kind="struct",
         name="package_info",
         qualified_name="dice::package_info",
         parent=namespace.id,
     )
-    package = ApiEntity(
-        id=stable_entity_id("cpp", "function", "dice::package"),
+    package = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "function", "dice::package"),
         language="cpp",
         kind="function",
         name="package",
         qualified_name="dice::package",
         parent=namespace.id,
-        signatures=[ApiSignature(returns="package_info")],
+        signatures=[cpdocs.model.ApiSignature(returns="package_info")],
     )
-    macro = ApiEntity(
-        id=stable_entity_id("cpp", "macro", "DICE_TEST"),
+    macro = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("cpp", "macro", "DICE_TEST"),
         language="cpp",
         kind="macro",
         name="DICE_TEST",
@@ -268,7 +274,7 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
         "[project blog](projectdocs:blog/).\n",
         encoding="utf-8",
     )
-    render_html_site(
+    cpdocs.rendering.html.render_html_site(
         graph,
         output_directory=site,
         project_docs_url="../../../../../",
@@ -276,12 +282,12 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
         introduction_file=template / "index.md",
     )
 
-    def html_page(document: Path) -> Path:
+    def html_page(document: pathlib.Path) -> pathlib.Path:
         if document.name == "index.md":
             return site / document.parent / "index.html"
         return site / document.with_suffix("") / "index.html"
 
-    page = html_page(entity_document(function)).read_text(encoding="utf-8")
+    page = html_page(cpdocs.rendering.common.entity_document(function)).read_text(encoding="utf-8")
     assert '<article class="api-signature-card"' in page
     assert "foo(int)" in page
     assert page.count("nodiscard") >= 2
@@ -294,17 +300,17 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert ">blog</a>" in page
     assert 'class="language-cpp"' in page
     assert (site / "_symbols" / "dice" / "foo" / "index.html").is_file()
-    class_page = html_page(entity_document(related)).read_text(encoding="utf-8")
+    class_page = html_page(cpdocs.rendering.common.entity_document(related)).read_text(encoding="utf-8")
     assert '<code class="language-cpp">' in class_page
     assert "Public Functions" in class_page
     assert 'id="member-method-run"' in class_page
-    assert not html_page(entity_document(method)).is_file()
+    assert not html_page(cpdocs.rendering.common.entity_document(method)).is_file()
     method_alias = (site / "_symbols" / "dice" / "bar" / "run" / "index.html").read_text(encoding="utf-8")
     assert "#member-method-run" in method_alias
-    package_page = html_page(entity_document(package)).read_text(encoding="utf-8")
+    package_page = html_page(cpdocs.rendering.common.entity_document(package)).read_text(encoding="utf-8")
     assert 'class="cpdocs-api-signature-type"' in package_page
     assert "struct-package_info/" in package_page
-    namespace_page = html_page(entity_document(namespace)).read_text(encoding="utf-8")
+    namespace_page = html_page(cpdocs.rendering.common.entity_document(namespace)).read_text(encoding="utf-8")
     assert "Namespace dice" in namespace_page
     assert '<section id="members"' in namespace_page
     assert "Public Functions" not in namespace_page
@@ -312,7 +318,9 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert ">foo()</a>" in namespace_page
     assert ">nested()</a>" in namespace_page
     assert ">run</a>" not in namespace_page
-    nested_namespace_page = html_page(entity_document(nested_namespace)).read_text(encoding="utf-8")
+    nested_namespace_page = html_page(cpdocs.rendering.common.entity_document(nested_namespace)).read_text(
+        encoding="utf-8"
+    )
     assert "groups the public API declared in this scope" in nested_namespace_page
     source_page = (site / "_sources" / "dice" / "version.hpp" / "index.html").read_text(encoding="utf-8")
     assert 'class="language-cpp"' in source_page
@@ -355,11 +363,11 @@ def test_renderer_generates_standalone_code_oriented_html_site(tmp_path: Path) -
     assert '"dice::foo"' in (site / "symbols.json").read_text(encoding="utf-8")
 
 
-def test_feature_set_page_shows_opaque_selection(tmp_path: Path) -> None:
-    graph = ApiGraph(project="demo", version="main", language="cpp")
+def test_feature_set_page_shows_opaque_selection(tmp_path: pathlib.Path) -> None:
+    graph = cpdocs.model.ApiGraph(project="demo", version="main", language="cpp")
     graph.add(
-        ApiEntity(
-            id=stable_entity_id("cpp", "namespace", "demo"),
+        cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "namespace", "demo"),
             language="cpp",
             kind="namespace",
             name="demo",
@@ -370,24 +378,26 @@ def test_feature_set_page_shows_opaque_selection(tmp_path: Path) -> None:
     graph.feature_sets["feature-set-001"] = {"features": ["base"], "selection": {"features": ["base"]}}
     graph.feature_sets["feature-set-002"] = {"features": ["base", "gpu"], "selection": {"features": ["base", "gpu"]}}
     graph.rebuild_children()
-    render_html_site(graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c")
+    cpdocs.rendering.html.render_html_site(
+        graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c"
+    )
     page = (tmp_path / "site" / "feature-sets" / "index.html").read_text(encoding="utf-8")
     assert "Feature Sets" in page
     assert "Feature sets have no names" in page
     assert "<code>base</code> <code>gpu</code>" in page
 
 
-def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
-    graph = ApiGraph(project="demo", version="main", language="cpp")
+def test_api_html_uses_packaged_template_and_assets(tmp_path: pathlib.Path) -> None:
+    graph = cpdocs.model.ApiGraph(project="demo", version="main", language="cpp")
     site = tmp_path / "site"
-    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    cpdocs.rendering.html.render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
     page = (site / "index.html").read_text(encoding="utf-8")
     assert page.startswith("<!doctype html>")
     assert "demo API documentation" in page
     assert '<main class="api-main">' in page
     assert "<script>document.documentElement" not in page
 
-    resource_root = resource("api")
+    resource_root = cpdocs.resources.resource("api")
     init = page.index('src="assets/cpdocs-api-init.js?v=')
     stylesheet = page.index('href="assets/cpdocs-api.css?v=')
     assert init < stylesheet  # Apply saved theme/width before the stylesheet is painted.
@@ -402,20 +412,22 @@ def test_api_html_uses_packaged_template_and_assets(tmp_path: Path) -> None:
     assert (site / "assets" / "cpdocs-api-init.js").is_file()
 
 
-def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: Path) -> None:
+def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: pathlib.Path) -> None:
     logo = tmp_path / "icon.svg"
     logo.write_text("<svg/>", encoding="utf-8")
     extra = tmp_path / "api.css"
     extra.write_text(".api-brand { font-weight: 700; }\n", encoding="utf-8")
-    theme = SiteTheme(
+    theme = cpdocs.config.SiteTheme(
         logo=logo,
         favicon=logo,
         stylesheet=extra,
         colors={"light": {"accent": "#266c7c"}, "dark": {"on-accent": "#0d1f24"}},
     )
-    graph = ApiGraph(project="demo", version="main", language="cpp")
+    graph = cpdocs.model.ApiGraph(project="demo", version="main", language="cpp")
     site = tmp_path / "site"
-    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c", theme=theme)
+    cpdocs.rendering.html.render_html_site(
+        graph, output_directory=site, project_docs_url="../", copyright_text="c", theme=theme
+    )
 
     stylesheet = (site / "assets" / "cpdocs-theme.css").read_text(encoding="utf-8")
     assert 'html[data-theme="light"] {\n  --api-accent: #266c7c;\n}' in stylesheet
@@ -436,19 +448,19 @@ def test_theme_is_written_into_assets_and_linked_after_the_stylesheet(tmp_path: 
 
 
 def test_theme_links_are_relative_to_nested_pages() -> None:
-    theme = _ThemeAssets(
-        stylesheet=_ThemeAsset(name="cpdocs-theme.css", version="0123456789"),
-        favicon=_ThemeAsset(name="favicon.png", version="abcdefabcd"),
+    theme = cpdocs.rendering.html._ThemeAssets(
+        stylesheet=cpdocs.rendering.html._ThemeAsset(name="cpdocs-theme.css", version="0123456789"),
+        favicon=cpdocs.rendering.html._ThemeAsset(name="favicon.png", version="abcdefabcd"),
     )
-    head = _theme_head(Path("api/demo/class-widget.md"), theme)
+    head = cpdocs.rendering.html._theme_head(pathlib.Path("api/demo/class-widget.md"), theme)
     assert 'href="../../../assets/cpdocs-theme.css?v=0123456789"' in head
     assert 'href="../../../assets/favicon.png?v=abcdefabcd"' in head
 
 
-def test_site_without_theme_keeps_the_cpdocs_look(tmp_path: Path) -> None:
-    graph = ApiGraph(project="demo", version="main", language="cpp")
+def test_site_without_theme_keeps_the_cpdocs_look(tmp_path: pathlib.Path) -> None:
+    graph = cpdocs.model.ApiGraph(project="demo", version="main", language="cpp")
     site = tmp_path / "site"
-    render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    cpdocs.rendering.html.render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
     assert sorted(path.name for path in (site / "assets").iterdir()) == [
         "cpdocs-api-init.js",
         "cpdocs-api.css",
@@ -460,23 +472,29 @@ def test_site_without_theme_keeps_the_cpdocs_look(tmp_path: Path) -> None:
     assert "api-brand-logo" not in page
 
 
-def test_namespace_pages_list_their_members_on_this_page(tmp_path: Path) -> None:
-    graph = ApiGraph(project="demo", version="main", language="cpp")
-    graph.add(ApiEntity(id="cpp:namespace:demo", language="cpp", kind="namespace", name="demo", qualified_name="demo"))
+def test_namespace_pages_list_their_members_on_this_page(tmp_path: pathlib.Path) -> None:
+    graph = cpdocs.model.ApiGraph(project="demo", version="main", language="cpp")
+    graph.add(
+        cpdocs.model.ApiEntity(
+            id="cpp:namespace:demo", language="cpp", kind="namespace", name="demo", qualified_name="demo"
+        )
+    )
     for name in ("convert", "always"):
         graph.add(
-            ApiEntity(
+            cpdocs.model.ApiEntity(
                 id=f"cpp:function:demo::{name}",
                 language="cpp",
                 kind="function",
                 name=name,
                 qualified_name=f"demo::{name}",
                 parent="cpp:namespace:demo",
-                signatures=[ApiSignature(returns="int")],
+                signatures=[cpdocs.model.ApiSignature(returns="int")],
             )
         )
     graph.rebuild_children()
-    render_html_site(graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c")
+    cpdocs.rendering.html.render_html_site(
+        graph, output_directory=tmp_path / "site", project_docs_url="../", copyright_text="c"
+    )
     page = (tmp_path / "site" / "api" / "demo" / "index.html").read_text(encoding="utf-8")
     toc = page[page.index('<aside class="api-toc">') :]
     toc = toc[: toc.index("</aside>")]

@@ -12,30 +12,21 @@ versioning, or availability handling.
 
 from __future__ import annotations
 
+import collections.abc
+import dataclasses
+import functools
 import json
 import os
+import pathlib
 import re
 import shlex
 import shutil
 import subprocess
-from collections.abc import Iterable
-from dataclasses import replace
-from functools import lru_cache
-from pathlib import Path
 
-from ...contract import ParseOptions, UnitManifest
-from ...filesystem import readable_file
-from ...model import (
-    ApiAttribute,
-    ApiEntity,
-    ApiGraph,
-    ApiParameter,
-    ApiSignature,
-    SourceLocation,
-    relative_source_path,
-    stable_entity_id,
-)
-from ..unit import UnitContext
+import cpdocs.contract
+import cpdocs.filesystem
+import cpdocs.languages.unit
+import cpdocs.model
 
 _RECORD_KINDS = {
     "CXXRecordDecl": "class",
@@ -56,14 +47,16 @@ _VARIABLE_KINDS = {"VarDecl": "variable", "FieldDecl": "attribute"}
 _SKIP_NAMES = {"__va_list_tag", "__NSConstantString_tag"}
 
 
-def _node_file(node: dict[str, object], inherited: Path | None, file_state: list[Path | None]) -> Path | None:
+def _node_file(
+    node: dict[str, object], inherited: pathlib.Path | None, file_state: list[pathlib.Path | None]
+) -> pathlib.Path | None:
     """Resolve Clang's state-compressed JSON source location to an explicit file path."""
 
     loc = node.get("loc")
     if isinstance(loc, dict):
         file_value = loc.get("file")
         if isinstance(file_value, str) and file_value:
-            value = Path(file_value)
+            value = pathlib.Path(file_value)
             file_state[0] = value
             return value
     if inherited is not None:
@@ -71,15 +64,15 @@ def _node_file(node: dict[str, object], inherited: Path | None, file_state: list
     return file_state[0]
 
 
-@lru_cache(maxsize=256)
-def _source_bytes(path: Path) -> bytes:
+@functools.lru_cache(maxsize=256)
+def _source_bytes(path: pathlib.Path) -> bytes:
     try:
         return path.read_bytes()
     except OSError:
         return b""
 
 
-def _line_column_from_offset(path: Path, offset: int) -> tuple[int | None, int | None]:
+def _line_column_from_offset(path: pathlib.Path, offset: int) -> tuple[int | None, int | None]:
     content = _source_bytes(path)
     if not content or offset < 0 or offset > len(content):
         return None, None
@@ -90,7 +83,7 @@ def _line_column_from_offset(path: Path, offset: int) -> tuple[int | None, int |
     return line, column
 
 
-def _inside(path: Path | None, roots: Iterable[Path]) -> bool:
+def _inside(path: pathlib.Path | None, roots: collections.abc.Iterable[pathlib.Path]) -> bool:
     if path is None:
         return False
     try:
@@ -106,13 +99,13 @@ def _inside(path: Path | None, roots: Iterable[Path]) -> bool:
     return False
 
 
-def _logical_public_path(path: Path, public_roots: tuple[Path, ...], project_root: Path) -> str:
+def _logical_public_path(path: pathlib.Path, public_roots: tuple[pathlib.Path, ...], project_root: pathlib.Path) -> str:
     for root in public_roots:
         try:
             return path.resolve().relative_to(root.resolve()).as_posix()
         except (OSError, ValueError):
             continue
-    return relative_source_path(path, project_root)
+    return cpdocs.model.relative_source_path(path, project_root)
 
 
 def _comment_line(node: dict[str, object]) -> int | None:
@@ -210,8 +203,11 @@ def _attached_comment(node: dict[str, object]) -> str:
 
 
 def _location(
-    node: dict[str, object], path: Path | None, project_root: Path, public_roots: tuple[Path, ...]
-) -> SourceLocation | None:
+    node: dict[str, object],
+    path: pathlib.Path | None,
+    project_root: pathlib.Path,
+    public_roots: tuple[pathlib.Path, ...],
+) -> cpdocs.model.SourceLocation | None:
     if path is None:
         return None
     loc = node.get("loc")
@@ -228,10 +224,10 @@ def _location(
             column = column or inferred_column
     # Public API locations use the installed/header namespace where possible. Generated headers
     # therefore do not leak profile-specific build-directory paths into the published reference.
-    return SourceLocation(_logical_public_path(path, public_roots, project_root), line, column)
+    return cpdocs.model.SourceLocation(_logical_public_path(path, public_roots, project_root), line, column)
 
 
-def _related_markers(node: dict[str, object], path: Path | None) -> list[str]:
+def _related_markers(node: dict[str, object], path: pathlib.Path | None) -> list[str]:
     """Read CPDOCS-API-RELATES-TO markers immediately preceding a declaration.
 
     These markers are intentionally ordinary source comments rather than part of the Doxygen-style
@@ -286,15 +282,15 @@ def _qual_type(node: dict[str, object]) -> str:
     return ""
 
 
-def _parameters(node: dict[str, object]) -> tuple[ApiParameter, ...]:
-    parameters: list[ApiParameter] = []
+def _parameters(node: dict[str, object]) -> tuple[cpdocs.model.ApiParameter, ...]:
+    parameters: list[cpdocs.model.ApiParameter] = []
     children = node.get("inner")
     if not isinstance(children, list):
         return ()
     for child in children:
         if not isinstance(child, dict) or child.get("kind") != "ParmVarDecl":
             continue
-        parameters.append(ApiParameter(name=str(child.get("name", "")), type=_qual_type(child)))
+        parameters.append(cpdocs.model.ApiParameter(name=str(child.get("name", "")), type=_qual_type(child)))
     return tuple(parameters)
 
 
@@ -368,7 +364,7 @@ def _attribute_name(node: dict[str, object]) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", stem).lower()
 
 
-def _attribute_spelling(node: dict[str, object], path: Path | None) -> str:
+def _attribute_spelling(node: dict[str, object], path: pathlib.Path | None) -> str:
     """Recover the complete ``[[...]]`` specifier containing one Clang Attr node."""
 
     if path is None:
@@ -393,27 +389,27 @@ def _attribute_spelling(node: dict[str, object], path: Path | None) -> str:
     return re.sub(r"\s+", " ", data[left : right + 2].decode("utf-8", errors="replace")).strip()
 
 
-def _attributes(node: dict[str, object], path: Path | None) -> tuple[ApiAttribute, ...]:
+def _attributes(node: dict[str, object], path: pathlib.Path | None) -> tuple[cpdocs.model.ApiAttribute, ...]:
     children = node.get("inner")
     if not isinstance(children, list):
         return ()
-    values: list[ApiAttribute] = []
+    values: list[cpdocs.model.ApiAttribute] = []
     for child in children:
         if not isinstance(child, dict) or not str(child.get("kind", "")).endswith("Attr"):
             continue
         name = _attribute_name(child)
         if not name:
             continue
-        attribute = ApiAttribute(name=name, spelling=_attribute_spelling(child, path))
+        attribute = cpdocs.model.ApiAttribute(name=name, spelling=_attribute_spelling(child, path))
         if attribute not in values:
             values.append(attribute)
     return tuple(values)
 
 
-def _signature(node: dict[str, object], path: Path | None) -> ApiSignature:
+def _signature(node: dict[str, object], path: pathlib.Path | None) -> cpdocs.model.ApiSignature:
     parameters = _parameters(node)
     qualifiers = _qualifiers(node)
-    return ApiSignature(
+    return cpdocs.model.ApiSignature(
         parameters=parameters, returns=_return_type(node), qualifiers=qualifiers, attributes=_attributes(node, path)
     )
 
@@ -426,7 +422,7 @@ def _signature(node: dict[str, object], path: Path | None) -> ApiSignature:
 # of the header using the byte offsets of the AST node ranges.
 # --------------------------------------------------------------------------------------------------
 
-_SOURCE_BYTES: dict[Path, bytes] = {}
+_SOURCE_BYTES: dict[pathlib.Path, bytes] = {}
 _TEMPLATE_KINDS = {"ClassTemplateDecl", "FunctionTemplateDecl", "VarTemplateDecl", "TypeAliasTemplateDecl"}
 _TEMPLATE_PARAMETER_KINDS = {"TemplateTypeParmDecl", "NonTypeTemplateParmDecl", "TemplateTemplateParmDecl"}
 _SPECIALIZATION_KINDS = {"ClassTemplateSpecializationDecl", "ClassTemplatePartialSpecializationDecl"}
@@ -455,7 +451,7 @@ def _range_offsets(node: dict[str, object]) -> tuple[int, int] | None:
     return start, stop + (token if isinstance(token, int) else 0)
 
 
-def _source_slice(path: Path | None, start: int, stop: int) -> str:
+def _source_slice(path: pathlib.Path | None, start: int, stop: int) -> str:
     if path is None:
         return ""
     data = _SOURCE_BYTES.get(path)
@@ -500,7 +496,7 @@ def _templated_child(node: dict[str, object]) -> dict[str, object] | None:
     return None
 
 
-def _template_header(node: dict[str, object], child: dict[str, object], path: Path | None) -> str:
+def _template_header(node: dict[str, object], child: dict[str, object], path: pathlib.Path | None) -> str:
     """``template <...>`` and any leading requires-clause, as written before ``child``."""
 
     outer = _range_offsets(node)
@@ -510,7 +506,7 @@ def _template_header(node: dict[str, object], child: dict[str, object], path: Pa
     return _normalize_declaration(_source_slice(path, outer[0], inner[0]))
 
 
-def _specialization(node: dict[str, object], path: Path | None) -> tuple[str, str] | None:
+def _specialization(node: dict[str, object], path: pathlib.Path | None) -> tuple[str, str] | None:
     """Template header and argument list of an explicit or partial specialization."""
 
     whole = _range_offsets(node)
@@ -533,7 +529,7 @@ def _specialization(node: dict[str, object], path: Path | None) -> tuple[str, st
     return None
 
 
-def _initializer(node: dict[str, object], path: Path | None) -> str:
+def _initializer(node: dict[str, object], path: pathlib.Path | None) -> str:
     """The written initializer of a variable declaration, if it has one."""
 
     if node.get("init") is None:
@@ -550,7 +546,7 @@ def _initializer(node: dict[str, object], path: Path | None) -> str:
     return re.sub(r"\s+", " ", value).strip().rstrip(";").strip()
 
 
-def _is_tag_typedef(node: dict[str, object], name: str, scopes: tuple[str, ...], graph: ApiGraph) -> bool:
+def _is_tag_typedef(node: dict[str, object], name: str, scopes: tuple[str, ...], graph: cpdocs.model.ApiGraph) -> bool:
     """Whether a typedef merely re-exports the record or enum tag of the same name.
 
     The typedef's documentation is moved onto the tag when the tag has none.
@@ -561,7 +557,7 @@ def _is_tag_typedef(node: dict[str, object], name: str, scopes: tuple[str, ...],
         return False
     qualified = "::".join((*scopes, name))
     for tag_kind in ("struct", "union", "enum", "class"):
-        tag = graph.entities.get(stable_entity_id("cpp", tag_kind, qualified))
+        tag = graph.entities.get(cpdocs.model.stable_entity_id("cpp", tag_kind, qualified))
         if tag is not None:
             if not tag.documentation:
                 tag.documentation = _attached_comment(node)
@@ -602,15 +598,15 @@ def _base_names(node: dict[str, object]) -> list[str]:
 def _walk_ast(
     node: dict[str, object],
     *,
-    graph: ApiGraph,
-    project_root: Path,
-    public_roots: tuple[Path, ...],
-    inherited_file: Path | None = None,
-    parent_entity: ApiEntity | None = None,
+    graph: cpdocs.model.ApiGraph,
+    project_root: pathlib.Path,
+    public_roots: tuple[pathlib.Path, ...],
+    inherited_file: pathlib.Path | None = None,
+    parent_entity: cpdocs.model.ApiEntity | None = None,
     scopes: tuple[str, ...] = (),
     template_context: bool = False,
     access: str = "public",
-    file_state: list[Path | None] | None = None,
+    file_state: list[pathlib.Path | None] | None = None,
 ) -> None:
     if file_state is None:
         file_state = [inherited_file]
@@ -650,15 +646,15 @@ def _walk_ast(
                 )
     template_header = str(node.get("__cpdocs_template", ""))
 
-    entity: ApiEntity | None = None
+    entity: cpdocs.model.ApiEntity | None = None
     next_scopes = scopes
     next_parent = parent_entity
     next_template = template_context or kind in {"FunctionTemplateDecl", "ClassTemplateDecl"}
 
     if kind == "NamespaceDecl" and name and in_public_file:
         qualified = "::".join((*scopes, name))
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", "namespace", qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "namespace", qualified),
             language="cpp",
             kind="namespace",
             name=name,
@@ -687,8 +683,8 @@ def _walk_ast(
                     display_name = name + arguments
             qualified = "::".join((*scopes, display_name))
             record_kind = _record_kind(node)
-            entity = ApiEntity(
-                id=stable_entity_id("cpp", record_kind, qualified),
+            entity = cpdocs.model.ApiEntity(
+                id=cpdocs.model.stable_entity_id("cpp", record_kind, qualified),
                 language="cpp",
                 kind=record_kind,
                 name=display_name,
@@ -712,9 +708,9 @@ def _walk_ast(
         record_name = "::".join((*scopes, guided))
         owner = next(
             (
-                graph.entities[stable_entity_id("cpp", record_kind, record_name)]
+                graph.entities[cpdocs.model.stable_entity_id("cpp", record_kind, record_name)]
                 for record_kind in ("struct", "class", "union")
-                if stable_entity_id("cpp", record_kind, record_name) in graph.entities
+                if cpdocs.model.stable_entity_id("cpp", record_kind, record_name) in graph.entities
             ),
             None,
         )
@@ -723,14 +719,14 @@ def _walk_ast(
         )
         if owner is not None and spelling:
             qualified = f"{record_name}::{guided}"
-            guide = ApiEntity(
-                id=stable_entity_id("cpp", "deduction_guide", qualified),
+            guide = cpdocs.model.ApiEntity(
+                id=cpdocs.model.stable_entity_id("cpp", "deduction_guide", qualified),
                 language="cpp",
                 kind="deduction_guide",
                 name=guided,
                 qualified_name=qualified,
                 parent=owner.id,
-                signatures=[ApiSignature(spelling=spelling)],
+                signatures=[cpdocs.model.ApiSignature(spelling=spelling)],
                 documentation=_attached_comment(node),
                 source=_location(node, path, project_root, public_roots),
             )
@@ -740,8 +736,8 @@ def _walk_ast(
     elif kind in _CALLABLE_KINDS and name and in_public_file:
         qualified = "::".join((*scopes, name))
         callable_kind = _CALLABLE_KINDS[kind]
-        entity_id = stable_entity_id("cpp", callable_kind, qualified)
-        entity = ApiEntity(
+        entity_id = cpdocs.model.stable_entity_id("cpp", callable_kind, qualified)
+        entity = cpdocs.model.ApiEntity(
             id=entity_id,
             language="cpp",
             kind=callable_kind,
@@ -749,7 +745,7 @@ def _walk_ast(
             qualified_name=qualified,
             parent=parent_entity.id if parent_entity else None,
             signatures=[
-                replace(
+                dataclasses.replace(
                     _signature(node, path),
                     template=template_header,
                     documentation=_attached_comment(node),
@@ -766,8 +762,8 @@ def _walk_ast(
 
     elif kind == "EnumDecl" and name and in_public_file:
         qualified = "::".join((*scopes, name))
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", "enum", qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "enum", qualified),
             language="cpp",
             kind="enum",
             name=name,
@@ -785,8 +781,8 @@ def _walk_ast(
 
     elif kind == "EnumConstantDecl" and name and in_public_file:
         qualified = "::".join((*scopes, name))
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", "constant", qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "constant", qualified),
             language="cpp",
             kind="constant",
             name=name,
@@ -805,8 +801,8 @@ def _walk_ast(
     elif kind in _ALIAS_KINDS and name and in_public_file:
         qualified = "::".join((*scopes, name))
         target = _qual_type(node)
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", "type_alias", qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "type_alias", qualified),
             language="cpp",
             kind="type_alias",
             name=name,
@@ -823,8 +819,8 @@ def _walk_ast(
     elif kind in _VARIABLE_KINDS and name and in_public_file:
         qualified = "::".join((*scopes, name))
         variable_kind = _VARIABLE_KINDS[kind]
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", variable_kind, qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", variable_kind, qualified),
             language="cpp",
             kind=variable_kind,
             name=name,
@@ -841,8 +837,8 @@ def _walk_ast(
 
     elif kind == "ConceptDecl" and name and in_public_file:
         qualified = "::".join((*scopes, name))
-        entity = ApiEntity(
-            id=stable_entity_id("cpp", "concept", qualified),
+        entity = cpdocs.model.ApiEntity(
+            id=cpdocs.model.stable_entity_id("cpp", "concept", qualified),
             language="cpp",
             kind="concept",
             name=name,
@@ -909,21 +905,24 @@ def _choose_compile_entry(entries: list[dict[str, object]], *, language: str) ->
     preferred = {".c"} if language == "c" else {".cc", ".cpp", ".cxx", ".c++", ".C"}
     for entry in entries:
         source = entry.get("file")
-        if isinstance(source, str) and Path(source).suffix in preferred:
+        if isinstance(source, str) and pathlib.Path(source).suffix in preferred:
             return entry
     return entries[0] if entries else None
 
 
 def _frontend_arguments(
-    entry: dict[str, object] | None, *, public_roots: tuple[Path, ...], predefines: Iterable[str]
-) -> tuple[Path | None, list[str]]:
+    entry: dict[str, object] | None,
+    *,
+    public_roots: tuple[pathlib.Path, ...],
+    predefines: collections.abc.Iterable[str],
+) -> tuple[pathlib.Path | None, list[str]]:
     if entry is None:
         args = ["-std=c++20"]
         directory = None
     else:
         raw = _compile_entry_arguments(entry)
         directory_value = entry.get("directory")
-        directory = Path(directory_value) if isinstance(directory_value, str) else None
+        directory = pathlib.Path(directory_value) if isinstance(directory_value, str) else None
         args = raw[1:] if raw else []
 
         source = entry.get("file")
@@ -946,7 +945,7 @@ def _frontend_arguments(
             if argument in source_values:
                 continue
             try:
-                if source_values and str(Path(argument).resolve()) in source_values:
+                if source_values and str(pathlib.Path(argument).resolve()) in source_values:
                     continue
             except OSError:
                 pass
@@ -968,21 +967,23 @@ def _frontend_arguments(
     return directory, args
 
 
-def _public_headers(public_roots: Iterable[Path], project_root: Path) -> list[Path]:
+def _public_headers(
+    public_roots: collections.abc.Iterable[pathlib.Path], project_root: pathlib.Path
+) -> list[pathlib.Path]:
     suffixes = {".h", ".hh", ".hpp", ".hxx", ".cuh"}
-    values: set[Path] = set()
+    values: set[pathlib.Path] = set()
     for root in public_roots:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
             # A link out of the API root and the project is not followed: its target would be
             # parsed as API and published as source.
-            if path.suffix.lower() in suffixes and readable_file(path, (root, project_root)):
+            if path.suffix.lower() in suffixes and cpdocs.filesystem.readable_file(path, (root, project_root)):
                 values.add(path.resolve())
     return sorted(values)
 
 
-def _write_umbrella(path: Path, headers: Iterable[Path]) -> None:
+def _write_umbrella(path: pathlib.Path, headers: collections.abc.Iterable[pathlib.Path]) -> None:
     lines = ["// Generated by cpdocs for semantic API extraction."]
     for header in headers:
         name = header.as_posix()
@@ -1021,9 +1022,12 @@ def _include_guard_name(lines: list[str]) -> str | None:
 
 
 def _macro_candidates(
-    headers: Iterable[Path], project_root: Path, public_roots: tuple[Path, ...], active_definitions: dict[str, str]
-) -> list[ApiEntity]:
-    entities: list[ApiEntity] = []
+    headers: collections.abc.Iterable[pathlib.Path],
+    project_root: pathlib.Path,
+    public_roots: tuple[pathlib.Path, ...],
+    active_definitions: dict[str, str],
+) -> list[cpdocs.model.ApiEntity]:
+    entities: list[cpdocs.model.ApiEntity] = []
     define = re.compile(r"^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)(\([^\n]*?\))?(?:\s+(.*))?$")
     comment_lines: list[str] = []
     for header in headers:
@@ -1050,19 +1054,21 @@ def _macro_candidates(
                 if active_tail is None or candidate_tail != active_tail:
                     comment_lines.clear()
                     continue
-                parameters: tuple[ApiParameter, ...] = ()
+                parameters: tuple[cpdocs.model.ApiParameter, ...] = ()
                 if args:
                     names = [item.strip() for item in args[1:-1].split(",") if item.strip()]
-                    parameters = tuple(ApiParameter(item) for item in names)
-                entity = ApiEntity(
-                    id=stable_entity_id("cpp", "macro", name),
+                    parameters = tuple(cpdocs.model.ApiParameter(item) for item in names)
+                entity = cpdocs.model.ApiEntity(
+                    id=cpdocs.model.stable_entity_id("cpp", "macro", name),
                     language="cpp",
                     kind="macro",
                     name=name,
                     qualified_name=name,
-                    signatures=[ApiSignature(parameters=parameters, spelling=line.strip())],
+                    signatures=[cpdocs.model.ApiSignature(parameters=parameters, spelling=line.strip())],
                     documentation=" ".join(comment_lines).strip(),
-                    source=SourceLocation(_logical_public_path(header, public_roots, project_root), number, 1),
+                    source=cpdocs.model.SourceLocation(
+                        _logical_public_path(header, public_roots, project_root), number, 1
+                    ),
                     properties=[value] if value else [],
                 )
                 entities.append(entity)
@@ -1074,7 +1080,7 @@ def _macro_candidates(
 
 
 def _active_macro_definitions(
-    *, clang_executable: str, frontend_args: list[str], umbrella: Path, cwd: Path
+    *, clang_executable: str, frontend_args: list[str], umbrella: pathlib.Path, cwd: pathlib.Path
 ) -> dict[str, str]:
     """Return macro definitions active under the exact semantic extraction configuration."""
 
@@ -1098,8 +1104,8 @@ def _active_macro_definitions(
 
 
 def _parse_arguments(
-    parse: ParseOptions, *, language: str, api_roots: tuple[Path, ...]
-) -> tuple[Path | None, list[str]]:
+    parse: cpdocs.contract.ParseOptions, *, language: str, api_roots: tuple[pathlib.Path, ...]
+) -> tuple[pathlib.Path | None, list[str]]:
     """Assemble the Clang frontend arguments described by one feature-set manifest.
 
     A compilation database, when the build system provides one, contributes the options of one
@@ -1107,7 +1113,7 @@ def _parse_arguments(
     they take precedence.
     """
 
-    directory: Path | None = None
+    directory: pathlib.Path | None = None
     args: list[str] = []
     if parse.compile_database is not None:
         try:
@@ -1139,7 +1145,7 @@ def _parse_arguments(
     return directory, args
 
 
-def _relabel(graph: ApiGraph, language: str) -> None:
+def _relabel(graph: cpdocs.model.ApiGraph, language: str) -> None:
     """Apply the semantic API language after extraction through the shared C/C++ walker.
 
     Namespace nodes are language-neutral containers in the rendered hierarchy.  Keeping their C++
@@ -1173,14 +1179,14 @@ def extract_clang_graph(
     *,
     project: str,
     version: str,
-    project_root: Path,
+    project_root: pathlib.Path,
     language: str,
-    api_roots: Iterable[Path],
-    parse: ParseOptions,
+    api_roots: collections.abc.Iterable[pathlib.Path],
+    parse: cpdocs.contract.ParseOptions,
     feature_set: str,
     clang_executable: str,
-    work_directory: Path,
-) -> ApiGraph:
+    work_directory: pathlib.Path,
+) -> cpdocs.model.ApiGraph:
     """Extract one feature set of a C or C++ unit with Clang's semantic frontend."""
 
     roots = tuple(path.resolve() for path in api_roots)
@@ -1190,7 +1196,7 @@ def extract_clang_graph(
             "API roots named in the feature-set manifest do not exist:\n" + "\n".join(f"  - {root}" for root in missing)
         )
     headers = _public_headers(roots, project_root)
-    graph = ApiGraph(project=project, version=version, language="cpp")
+    graph = cpdocs.model.ApiGraph(project=project, version=version, language="cpp")
     for header in headers:
         try:
             graph.sources[_logical_public_path(header, roots, project_root)] = header.read_text(encoding="utf-8")
@@ -1266,7 +1272,7 @@ def find_clang_executable() -> str:
     )
 
 
-def _generated_api_sources(unit: UnitManifest, graph: ApiGraph) -> list[str]:
+def _generated_api_sources(unit: cpdocs.contract.UnitManifest, graph: cpdocs.model.ApiGraph) -> list[str]:
     """Logical paths of the extracted headers that lie in API roots the build system generated."""
 
     values: list[str] = []
@@ -1281,7 +1287,9 @@ def _generated_api_sources(unit: UnitManifest, graph: ApiGraph) -> list[str]:
     return values
 
 
-def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+def extract_unit(
+    unit: cpdocs.contract.UnitManifest, context: cpdocs.languages.unit.UnitContext
+) -> cpdocs.model.ApiGraph:
     """Extract a C, C++, CUDA or HIP unit: parse its public headers with Clang."""
 
     assert unit.parse is not None and unit.language is not None

@@ -6,20 +6,20 @@
 
 from __future__ import annotations
 
+import collections.abc
+import dataclasses
 import hashlib
-from collections.abc import Iterable
-from dataclasses import dataclass, field
-from pathlib import Path
+import pathlib
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SourceLocation:
     path: str
     line: int | None = None
     column: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ApiParameter:
     name: str
     type: str = ""
@@ -27,7 +27,7 @@ class ApiParameter:
     kind: str = ""
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ApiAttribute:
     """One source-level attribute attached to an API declaration."""
 
@@ -35,7 +35,7 @@ class ApiAttribute:
     spelling: str = ""
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ApiSignature:
     parameters: tuple[ApiParameter, ...] = ()
     returns: str = ""
@@ -44,8 +44,8 @@ class ApiSignature:
     spelling: str = ""
     template: str = ""
     # Documentation and location of this overload; not part of its identity.
-    documentation: str = field(default="", compare=False)
-    source: SourceLocation | None = field(default=None, compare=False)
+    documentation: str = dataclasses.field(default="", compare=False)
+    source: SourceLocation | None = dataclasses.field(default=None, compare=False)
 
     @property
     def compact(self) -> str:
@@ -53,7 +53,7 @@ class ApiSignature:
         return f"({', '.join(values)})"
 
 
-@dataclass
+@dataclasses.dataclass
 class ApiEntity:
     id: str
     language: str
@@ -61,27 +61,27 @@ class ApiEntity:
     name: str
     qualified_name: str
     parent: str | None = None
-    signatures: list[ApiSignature] = field(default_factory=list)
+    signatures: list[ApiSignature] = dataclasses.field(default_factory=list)
     documentation: str = ""
     source: SourceLocation | None = None
-    properties: list[str] = field(default_factory=list)
-    feature_sets: list[str] = field(default_factory=list)
-    children: list[str] = field(default_factory=list)
-    bases: list[str] = field(default_factory=list)
-    aliases: list[str] = field(default_factory=list)
-    related: list[str] = field(default_factory=list)
+    properties: list[str] = dataclasses.field(default_factory=list)
+    feature_sets: list[str] = dataclasses.field(default_factory=list)
+    children: list[str] = dataclasses.field(default_factory=list)
+    bases: list[str] = dataclasses.field(default_factory=list)
+    aliases: list[str] = dataclasses.field(default_factory=list)
+    related: list[str] = dataclasses.field(default_factory=list)
     template: str = ""
     declaration: str = ""
     # Feature sets of each signature, parallel to ``signatures``; empty when unknown.
-    signature_feature_sets: list[list[str]] = field(default_factory=list)
+    signature_feature_sets: list[list[str]] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
         # Each language declares its kinds in cpdocs.languages.<language>.entities; an entity of a
         # kind its language does not declare could not be presented, so it is rejected here.
-        from .languages import entity_kind
+        import cpdocs.languages
 
         try:
-            entity_kind(self.language, self.kind)
+            cpdocs.languages.entity_kind(self.language, self.kind)
         except (KeyError, ValueError) as error:
             raise ValueError(f"API entity {self.qualified_name!r}: {error.args[0]}") from None
 
@@ -98,18 +98,18 @@ class ApiEntity:
         return self.name
 
 
-@dataclass
+@dataclasses.dataclass
 class ApiGraph:
     project: str
     version: str
     language: str
-    entities: dict[str, ApiEntity] = field(default_factory=dict)
-    feature_sets: dict[str, dict[str, object]] = field(default_factory=dict)
+    entities: dict[str, ApiEntity] = dataclasses.field(default_factory=dict)
+    feature_sets: dict[str, dict[str, object]] = dataclasses.field(default_factory=dict)
     # ``sources`` are API declaration sources used by "defined in" links. ``files`` is the broader
     # browseable project/source hierarchy and may additionally contain implementation-only files.
-    sources: dict[str, str] = field(default_factory=dict)
-    files: dict[str, str] = field(default_factory=dict)
-    metadata: dict[str, object] = field(default_factory=dict)
+    sources: dict[str, str] = dataclasses.field(default_factory=dict)
+    files: dict[str, str] = dataclasses.field(default_factory=dict)
+    metadata: dict[str, object] = dataclasses.field(default_factory=dict)
 
     def add(self, entity: ApiEntity) -> None:
         existing = self.entities.get(entity.id)
@@ -175,9 +175,13 @@ class ApiGraph:
 def entity_sort_key(entity: ApiEntity) -> tuple[int, str, str]:
     """Sort entities in member lists: by the order their language gives their kind, then by name."""
 
-    from .languages import entity_kind
+    import cpdocs.languages
 
-    return (entity_kind(entity.language, entity.kind).order, entity.name.casefold(), entity.qualified_name)
+    return (
+        cpdocs.languages.entity_kind(entity.language, entity.kind).order,
+        entity.name.casefold(),
+        entity.qualified_name,
+    )
 
 
 def stable_entity_id(language: str, kind: str, qualified_name: str, signature_key: str = "") -> str:
@@ -185,7 +189,7 @@ def stable_entity_id(language: str, kind: str, qualified_name: str, signature_ke
     return f"{language}:{kind}:{qualified_name}{suffix}"
 
 
-def relative_source_path(path: str | Path, project_root: Path) -> str:
+def relative_source_path(path: str | pathlib.Path, project_root: pathlib.Path) -> str:
     """The logical path of a source file: relative to the project, or below ``_external``.
 
     A logical path names the page of the file in the published site, so it must stay relative. A
@@ -195,7 +199,7 @@ def relative_source_path(path: str | Path, project_root: Path) -> str:
     of the machine that built the documentation.
     """
 
-    source = Path(path)
+    source = pathlib.Path(path)
     try:
         return source.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
@@ -208,7 +212,9 @@ def relative_source_path(path: str | Path, project_root: Path) -> str:
     return f"_external/{digest}/{absolute.name}"
 
 
-def merge_graphs(graphs: Iterable[tuple[str, ApiGraph]], *, project: str, version: str, language: str) -> ApiGraph:
+def merge_graphs(
+    graphs: collections.abc.Iterable[tuple[str, ApiGraph]], *, project: str, version: str, language: str
+) -> ApiGraph:
     merged = ApiGraph(project=project, version=version, language=language)
     for feature_set_name, graph in graphs:
         for key, value in graph.metadata.items():

@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 
-from ...model import ApiEntity, ApiSignature
-from ..base import LanguageRendering, assigned_property, parameter_spelling, typed_property
-from .entities import ENTITY_KINDS
+import cpdocs.languages.base
+import cpdocs.languages.cpp.entities
+import cpdocs.model
 
 
-def entity_declaration(entity: ApiEntity) -> str:
+def entity_declaration(entity: cpdocs.model.ApiEntity) -> str:
     if entity.declaration:
         return entity.declaration
     if entity.kind == "namespace":
@@ -23,10 +23,10 @@ def entity_declaration(entity: ApiEntity) -> str:
         scoped = " class" if "scoped" in entity.properties else ""
         value = f"enum{scoped} {entity.qualified_name}"
     elif entity.kind == "type_alias":
-        value = f"using {entity.qualified_name} = {assigned_property(entity)}".rstrip()
+        value = f"using {entity.qualified_name} = {cpdocs.languages.base.assigned_property(entity)}".rstrip()
     elif entity.kind in {"attribute", "variable", "constant"}:
-        type_name = typed_property(entity)
-        assigned = assigned_property(entity)
+        type_name = cpdocs.languages.base.typed_property(entity)
+        assigned = cpdocs.languages.base.assigned_property(entity)
         value = f"{type_name} {entity.qualified_name}".strip()
         if assigned:
             value += f" = {assigned}"
@@ -39,7 +39,7 @@ def entity_declaration(entity: ApiEntity) -> str:
     return f"{entity.template}\n{value}" if entity.template else value
 
 
-def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
+def signature_spelling(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> str:
     attribute_spellings = list(
         dict.fromkeys(attribute.spelling for attribute in signature.attributes if attribute.spelling)
     )
@@ -47,7 +47,7 @@ def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
     if signature.spelling:
         return f"{attribute_prefix} {signature.spelling}".strip()
 
-    parameters = parameter_spelling(signature)
+    parameters = cpdocs.languages.base.parameter_spelling(signature)
     prefix_values = [
         value for value in entity.properties if value in {"inline", "constexpr", "consteval", "static", "virtual"}
     ]
@@ -59,23 +59,23 @@ def signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
     return f"{attribute_prefix} {declaration}".strip()
 
 
-def member_summary(entity: ApiEntity) -> str:
+def member_summary(entity: cpdocs.model.ApiEntity) -> str:
     if entity.kind in {"attribute", "variable", "constant"}:
-        type_name = typed_property(entity)
-        assigned = assigned_property(entity)
+        type_name = cpdocs.languages.base.typed_property(entity)
+        assigned = cpdocs.languages.base.assigned_property(entity)
         value = f"{type_name} {entity.name}".strip()
         return value + (f" = {assigned}" if assigned else "")
     if entity.kind == "type_alias":
-        value = f"using {entity.name} = {assigned_property(entity)}".rstrip()
+        value = f"using {entity.name} = {cpdocs.languages.base.assigned_property(entity)}".rstrip()
         return f"{entity.template}\n{value}" if entity.template else value
     if entity.kind in {"class", "struct", "union", "enum"}:
         return f"{entity.kind} {entity.name}"
     return entity.name
 
 
-RENDERING = LanguageRendering(
+RENDERING = cpdocs.languages.base.LanguageRendering(
     separator="::",
-    kinds=ENTITY_KINDS,
+    kinds=cpdocs.languages.cpp.entities.ENTITY_KINDS,
     source_suffixes=frozenset({".h", ".hh", ".hpp", ".hxx", ".c", ".cc", ".cpp", ".cxx", ".cu", ".cuh", ".hip"}),
     signature_spelling=signature_spelling,
     entity_declaration=entity_declaration,

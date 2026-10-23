@@ -8,25 +8,25 @@ from __future__ import annotations
 
 import ast
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
 import tomllib
-from pathlib import Path
 
-from cpdocs.build import _redirect_page
-from cpdocs.resources import resource, shared_template, shared_text
+import cpdocs.build
+import cpdocs.resources
 
 
-def test_resources_resolve_from_cpdocs_share_not_other_namespaces(tmp_path: Path, monkeypatch) -> None:
+def test_resources_resolve_from_cpdocs_share_not_other_namespaces(tmp_path: pathlib.Path, monkeypatch) -> None:
     """A second ``share`` directory must not shadow cpdocs' resources."""
     foreign_share = tmp_path / "share" / "cpdocs" / "api"
     foreign_share.mkdir(parents=True)
     (foreign_share / "layout.html").write_text("wrong package", encoding="utf-8")
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    repository = Path(__file__).resolve().parents[1]
-    path = resource("api", "layout.html")
+    repository = pathlib.Path(__file__).resolve().parents[1]
+    path = cpdocs.resources.resource("api", "layout.html")
     assert path == repository / "share" / "cpdocs" / "api" / "layout.html"
     assert "${project}" in path.read_text(encoding="utf-8")
 
@@ -45,19 +45,19 @@ def test_packaged_templates_and_assets_are_files() -> None:
         "cpdocs-api-init.js",
     )
     for name in expected:
-        assert resource("api", name).is_file(), name
-        assert resource("api", name).read_bytes(), name
-    assert "API Documentation Home" in shared_text("api/index.md")
-    assert "${project}" in shared_text("api/layout.html")
-    assert "${qualified_name}" in shared_text("api/namespace-description.html")
-    assert "<code>demo</code>" in shared_template("api/namespace-description.html").substitute(
+        assert cpdocs.resources.resource("api", name).is_file(), name
+        assert cpdocs.resources.resource("api", name).read_bytes(), name
+    assert "API Documentation Home" in cpdocs.resources.shared_text("api/index.md")
+    assert "${project}" in cpdocs.resources.shared_text("api/layout.html")
+    assert "${qualified_name}" in cpdocs.resources.shared_text("api/namespace-description.html")
+    assert "<code>demo</code>" in cpdocs.resources.shared_template("api/namespace-description.html").substitute(
         qualified_name="demo", kind="namespace"
     )
 
 
-def test_wheel_resource_mapping_and_isolated_loading(tmp_path: Path) -> None:
+def test_wheel_resource_mapping_and_isolated_loading(tmp_path: pathlib.Path) -> None:
     """A wheel's shared directory remains readable outside the project tree."""
-    repository = Path(__file__).resolve().parents[1]
+    repository = pathlib.Path(__file__).resolve().parents[1]
     config = tomllib.loads((repository / "pyproject.toml").read_text(encoding="utf-8"))
     mapping = config["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]
     assert mapping == {"share": "share"}
@@ -88,9 +88,9 @@ def test_wheel_resource_mapping_and_isolated_loading(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_source_only_resource_lookup_from_elsewhere(tmp_path: Path) -> None:
+def test_source_only_resource_lookup_from_elsewhere(tmp_path: pathlib.Path) -> None:
     """A dev program using only PYTHONPATH=src can still find root-level share."""
-    repository = Path(__file__).resolve().parents[1]
+    repository = pathlib.Path(__file__).resolve().parents[1]
     result = subprocess.run(
         [
             sys.executable,
@@ -107,15 +107,15 @@ def test_source_only_resource_lookup_from_elsewhere(tmp_path: Path) -> None:
 
 
 def test_version_redirect_uses_a_shared_template_and_escapes_html() -> None:
-    text = _redirect_page("v1.2/")
+    text = cpdocs.build._redirect_page("v1.2/")
     assert 'href="v1.2/"' in text
     assert 'content="0; url=v1.2/"' in text
-    assert 'href="&quot;&gt;&lt;script&gt;"' in _redirect_page('"><script>')
+    assert 'href="&quot;&gt;&lt;script&gt;"' in cpdocs.build._redirect_page('"><script>')
 
 
 def test_runtime_code_does_not_embed_large_static_strings() -> None:
     """Keep substantial resources in share; Python docstrings remain part of the API."""
-    source_root = Path(__file__).resolve().parents[1] / "src" / "cpdocs"
+    source_root = pathlib.Path(__file__).resolve().parents[1] / "src" / "cpdocs"
     for filename in source_root.rglob("*.py"):
         tree = ast.parse(filename.read_text(encoding="utf-8"))
         docstrings = {

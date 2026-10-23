@@ -7,36 +7,40 @@
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import shlex
 import shutil
 import sys
-from pathlib import Path
 
 import pytest
 
-from conftest import fake_project, fixture_text
-from cpdocs.build import build_current
-from cpdocs.config import load_config
-from cpdocs.languages.python.extract import build_python_graph
-from cpdocs.model import stable_entity_id
-from cpdocs.rendering.common import _feature_set_anchor, entity_document
+import conftest
+import cpdocs.build
+import cpdocs.config
+import cpdocs.languages.python.extract
+import cpdocs.model
+import cpdocs.rendering.common
 
 
-def _page(site: Path, entity) -> str:
-    path = entity_document(entity)
+def _page(site: pathlib.Path, entity) -> str:
+    path = cpdocs.rendering.common.entity_document(entity)
     file = site / path.parent / "index.html" if path.name == "index.md" else site / path.with_suffix("") / "index.html"
     return file.read_text(encoding="utf-8")
 
 
-def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Path) -> None:
+def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "pkg"
     package.mkdir(parents=True)
-    (package / "__init__.py").write_text(fixture_text("python-version-guards.py"), encoding="utf-8")
-    older = build_python_graph(project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11))
-    newer = build_python_graph(project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 12))
+    (package / "__init__.py").write_text(conftest.fixture_text("python-version-guards.py"), encoding="utf-8")
+    older = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 11)
+    )
+    newer = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="pkg", python_version=(3, 12)
+    )
 
     def name(kind, value):
-        return stable_entity_id("python", kind, "pkg." + value)
+        return cpdocs.model.stable_entity_id("python", kind, "pkg." + value)
 
     assert name("function", "old_api") in older.entities
     assert name("function", "old_api") not in newer.entities
@@ -49,8 +53,8 @@ def test_python_version_guard_static_extraction_and_nested_classes(tmp_path: Pat
     assert newer.entities[name("method", "Service.run")].signatures[0].parameters[0].type == "str"
 
 
-def test_python_build_matrix_displays_availability_per_signature(tmp_path: Path) -> None:
-    project = fake_project(tmp_path / "project", feature_sets=[[], ["mpi"]])
+def test_python_build_matrix_displays_availability_per_signature(tmp_path: pathlib.Path) -> None:
+    project = conftest.fake_project(tmp_path / "project", feature_sets=[[], ["mpi"]])
     (project / "src/pkg/__init__.py").write_text(
         """import sys
 
@@ -63,11 +67,11 @@ else:
         encoding="utf-8",
     )
     config = dataclasses.replace(
-        load_config(project / "docs/cpdocs.yml"),
+        cpdocs.config.load_config(project / "docs/cpdocs.yml"),
         language_configurations=({"python": {"version": "3.11"}}, {"python": {"version": "3.12"}}),
     )
-    graph = build_current(config, output=project / "build")
-    shared = graph.entities[stable_entity_id("python", "function", "pkg.shared")]
+    graph = cpdocs.build.build_current(config, output=project / "build")
+    shared = graph.entities[cpdocs.model.stable_entity_id("python", "function", "pkg.shared")]
     signatures = {
         s.parameters[0].type: set(sets)
         for s, sets in zip(shared.signatures, shared.signature_feature_sets, strict=True)
@@ -82,15 +86,15 @@ else:
     assert "Available in feature sets" in page
     # No guessed open-ended version interval, and precise combination links are retained.
     assert "Python 3.12+" not in page
-    assert _feature_set_anchor("language-002--feature-set-002") in page
-    modern = graph.entities[stable_entity_id("python", "function", "pkg.modern")]
+    assert cpdocs.rendering.common._feature_set_anchor("language-002--feature-set-002") in page
+    modern = graph.entities[cpdocs.model.stable_entity_id("python", "function", "pkg.modern")]
     assert "Python 3.11" not in _page(site, modern)
 
 
-CPP_PROVIDER = fixture_text("cpp-version-provider.py")
+CPP_PROVIDER = conftest.fixture_text("cpp-version-provider.py")
 
 
-def test_cpp_standard_and_feature_intersection_for_overloads(tmp_path: Path) -> None:
+def test_cpp_standard_and_feature_intersection_for_overloads(tmp_path: pathlib.Path) -> None:
     if shutil.which("clang++") is None:
         pytest.skip("clang++ required")
     project = tmp_path / "project"
@@ -121,15 +125,15 @@ void mpi_only();
         encoding="utf-8",
     )
     config = dataclasses.replace(
-        load_config(project / "docs/cpdocs.yml"),
+        cpdocs.config.load_config(project / "docs/cpdocs.yml"),
         language_configurations=({"cxx": {"standard": 17}}, {"cxx": {"standard": 20}}),
     )
-    graph = build_current(config, output=project / "site")
-    stable = graph.entities[stable_entity_id("cpp", "function", "demo::stable")]
+    graph = cpdocs.build.build_current(config, output=project / "site")
+    stable = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::stable")]
     signatures = {s.compact: set(ids) for s, ids in zip(stable.signatures, stable.signature_feature_sets, strict=True)}
     assert len(signatures["(int)"]) == 4
     assert signatures["(double)"] == {"language-002--feature-set-001", "language-002--feature-set-002"}
-    mpi = graph.entities[stable_entity_id("cpp", "function", "demo::mpi_only")]
+    mpi = graph.entities[cpdocs.model.stable_entity_id("cpp", "function", "demo::mpi_only")]
     assert mpi.feature_sets == ["language-002--feature-set-002"]
     page = _page(project / "site/cpdocs/current", mpi)
     assert "C++20" in page and "C++17" not in page

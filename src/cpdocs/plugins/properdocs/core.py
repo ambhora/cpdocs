@@ -6,14 +6,14 @@
 
 from __future__ import annotations
 
+import collections.abc
+import pathlib
 import posixpath
 import re
 import shutil
-from collections.abc import Callable
-from pathlib import Path, PurePosixPath
-from urllib.parse import quote
+import urllib.parse
 
-from ...filesystem import remove_tree
+import cpdocs.filesystem
 
 _APIDOCS_REFERENCE = re.compile(
     r"@apidocs(?:\[(?P<version>[^\]]+)\])?::"
@@ -40,8 +40,8 @@ def _repository_base(repo_url: str) -> str:
 
 def source_url(repo_url: str, provider: str, ref: str, source_path: str) -> str:
     base = _repository_base(repo_url)
-    ref_part = quote(ref, safe="/")
-    path_part = quote(source_path, safe="/")
+    ref_part = urllib.parse.quote(ref, safe="/")
+    path_part = urllib.parse.quote(source_path, safe="/")
     if provider == "github":
         return f"{base}/blob/{ref_part}/{path_part}"
     if provider == "bitbucket":
@@ -51,8 +51,8 @@ def source_url(repo_url: str, provider: str, ref: str, source_path: str) -> str:
 
 def edit_url(repo_url: str, provider: str, ref: str, source_path: str) -> str:
     base = _repository_base(repo_url)
-    ref_part = quote(ref, safe="/")
-    path_part = quote(source_path, safe="/")
+    ref_part = urllib.parse.quote(ref, safe="/")
+    path_part = urllib.parse.quote(source_path, safe="/")
     if provider == "github":
         return f"{base}/edit/{ref_part}/{path_part}"
     if provider == "bitbucket":
@@ -69,8 +69,8 @@ def default_issue_url(repo_url: str, provider: str) -> str:
 _CODE = re.compile(r"^(?P<fence>`{3,}|~{3,}).*?^(?P=fence)[ \t]*$|`[^`\n]+`", re.MULTILINE | re.DOTALL)
 
 
-def api_symbol_public_path(symbol: str, version: str, mount: str) -> PurePosixPath:
-    return PurePosixPath(mount) / version / "_symbols" / PurePosixPath(*re.split(r"::|\.", symbol))
+def api_symbol_public_path(symbol: str, version: str, mount: str) -> pathlib.PurePosixPath:
+    return pathlib.PurePosixPath(mount) / version / "_symbols" / pathlib.PurePosixPath(*re.split(r"::|\.", symbol))
 
 
 def resolve_api_references(
@@ -79,7 +79,7 @@ def resolve_api_references(
     page_dest_uri: str,
     mount: str,
     default_version: str,
-    locate: Callable[[str, str], str | None] | None = None,
+    locate: collections.abc.Callable[[str, str], str | None] | None = None,
     missing: list[tuple[str, str]] | None = None,
 ) -> str:
     """Resolve ``@apidocs`` names to links into the versioned API.
@@ -90,9 +90,9 @@ def resolve_api_references(
     are appended to ``missing`` as ``(version, symbol)``.
     """
 
-    page_directory = PurePosixPath(page_dest_uri).parent
+    page_directory = pathlib.PurePosixPath(page_dest_uri).parent
 
-    def href_to(target: PurePosixPath, anchor: str = "") -> str:
+    def href_to(target: pathlib.PurePosixPath, anchor: str = "") -> str:
         relative = posixpath.relpath(target.as_posix(), page_directory.as_posix())
         return relative + "/" + (f"#{anchor}" if anchor else "")
 
@@ -102,7 +102,7 @@ def resolve_api_references(
         found = locate(version, symbol) if locate is not None else None
         if found:
             path, _, anchor = found.partition("#")
-            return f"[`{symbol}`]({href_to(PurePosixPath(mount) / version / path, anchor)})"
+            return f"[`{symbol}`]({href_to(pathlib.PurePosixPath(mount) / version / path, anchor)})"
         if locate is not None and missing is not None:
             missing.append((version, symbol))
         return f"[`{symbol}`]({href_to(api_symbol_public_path(symbol, version, mount))})"
@@ -125,7 +125,7 @@ def expand_versions_directive(markdown: str, *, page_dest_uri: str, mount: str, 
 
     if not _VERSIONS_DIRECTIVE.search(markdown):
         return markdown
-    page_directory = PurePosixPath(page_dest_uri).parent
+    page_directory = pathlib.PurePosixPath(page_dest_uri).parent
     default = metadata.get("default")
     aliases = metadata.get("aliases", {})
     aliases = aliases if isinstance(aliases, dict) else {}
@@ -135,7 +135,7 @@ def expand_versions_directive(markdown: str, *, page_dest_uri: str, mount: str, 
         if not isinstance(entry, dict):
             continue
         name = str(entry.get("name"))
-        target = PurePosixPath(mount) / name
+        target = pathlib.PurePosixPath(mount) / name
         href = posixpath.relpath(target.as_posix(), page_directory.as_posix()) + "/"
         notes = [str(entry.get("kind", ""))]
         if name == default:
@@ -146,7 +146,7 @@ def expand_versions_directive(markdown: str, *, page_dest_uri: str, mount: str, 
     return _VERSIONS_DIRECTIVE.sub(lambda _match: listing, markdown)
 
 
-def mount_path(mount: str) -> PurePosixPath:
+def mount_path(mount: str) -> pathlib.PurePosixPath:
     """Validate the site-relative directory the API is published at.
 
     The directory is deleted and replaced on every build, so it must be a proper subdirectory of
@@ -157,20 +157,20 @@ def mount_path(mount: str) -> PurePosixPath:
     parts = value.split("/")
     if not value or any(part in {"", ".", ".."} for part in parts):
         raise ValueError(f"mount must be a subdirectory of the site such as reference/api, found {mount!r}")
-    return PurePosixPath(*parts)
+    return pathlib.PurePosixPath(*parts)
 
 
-def publish_api(source: Path, site_directory: Path, mount: str) -> Path:
+def publish_api(source: pathlib.Path, site_directory: pathlib.Path, mount: str) -> pathlib.Path:
     """Replace the mounted API subtree with cpdocs's complete versioned output."""
 
-    destination = site_directory / Path(*mount_path(mount).parts)
+    destination = site_directory / pathlib.Path(*mount_path(mount).parts)
     # A link inside the site could still lead the mount elsewhere; remove_tree refuses links on
     # the way down and this check catches a mount that resolves outside the site.
     site = site_directory.resolve()
     resolved = destination.resolve()
     if resolved == site or not resolved.is_relative_to(site):
         raise ValueError(f"mount {mount!r} leads outside the site directory {site_directory}")
-    remove_tree(destination, owner=site_directory)
+    cpdocs.filesystem.remove_tree(destination, owner=site_directory)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
     (site_directory / ".nojekyll").touch()

@@ -23,28 +23,57 @@
 
 from __future__ import annotations
 
-from ..kinds import FUNCTIONS, MEMBERS, TYPES, EntityKind, EntityKinds, Role
+import cpdocs.languages.kinds
 
-_RECORD = Role.TYPE_PAGE | Role.CLASS_LIKE | Role.TYPE
+_RECORD = (
+    cpdocs.languages.kinds.Role.TYPE_PAGE | cpdocs.languages.kinds.Role.CLASS_LIKE | cpdocs.languages.kinds.Role.TYPE
+)
 
-ENTITY_KINDS = EntityKinds(
+ENTITY_KINDS = cpdocs.languages.kinds.EntityKinds(
     "cpp",
     (
-        EntityKind("namespace", "namespace", "N", 1, roles=Role.CONTAINER),
-        EntityKind("class", "class", "C", 2, TYPES, _RECORD),
-        EntityKind("struct", "struct", "S", 2, TYPES, _RECORD),
-        EntityKind("union", "union", "U", 2, TYPES, _RECORD),
-        EntityKind("enum", "enum", "E", 3, TYPES, Role.TYPE_PAGE | Role.TYPE),
-        EntityKind("type_alias", "type alias", "T", 4, TYPES, Role.TYPE),
-        EntityKind("concept", "concept", "K", 4, TYPES, Role.TYPE),
-        EntityKind("constructor", "constructor", "F", 5, FUNCTIONS, Role.CALLABLE),
-        EntityKind("deduction_guide", "deduction guide", "G", 5, "Deduction Guides", Role.CALLABLE),
-        EntityKind("function", "function", "F", 6, FUNCTIONS, Role.CALLABLE),
-        EntityKind("method", "method", "F", 6, FUNCTIONS, Role.CALLABLE),
-        EntityKind("attribute", "attribute", "A", 8, MEMBERS, Role.VALUE),
-        EntityKind("variable", "variable", "V", 8, MEMBERS, Role.VALUE),
-        EntityKind("constant", "constant", "C", 8, MEMBERS, Role.VALUE),
-        EntityKind("macro", "macro", "D", 9),
+        cpdocs.languages.kinds.EntityKind(
+            "namespace", "namespace", "N", 1, roles=cpdocs.languages.kinds.Role.CONTAINER
+        ),
+        cpdocs.languages.kinds.EntityKind("class", "class", "C", 2, cpdocs.languages.kinds.TYPES, _RECORD),
+        cpdocs.languages.kinds.EntityKind("struct", "struct", "S", 2, cpdocs.languages.kinds.TYPES, _RECORD),
+        cpdocs.languages.kinds.EntityKind("union", "union", "U", 2, cpdocs.languages.kinds.TYPES, _RECORD),
+        cpdocs.languages.kinds.EntityKind(
+            "enum",
+            "enum",
+            "E",
+            3,
+            cpdocs.languages.kinds.TYPES,
+            cpdocs.languages.kinds.Role.TYPE_PAGE | cpdocs.languages.kinds.Role.TYPE,
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "type_alias", "type alias", "T", 4, cpdocs.languages.kinds.TYPES, cpdocs.languages.kinds.Role.TYPE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "concept", "concept", "K", 4, cpdocs.languages.kinds.TYPES, cpdocs.languages.kinds.Role.TYPE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "constructor", "constructor", "F", 5, cpdocs.languages.kinds.FUNCTIONS, cpdocs.languages.kinds.Role.CALLABLE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "deduction_guide", "deduction guide", "G", 5, "Deduction Guides", cpdocs.languages.kinds.Role.CALLABLE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "function", "function", "F", 6, cpdocs.languages.kinds.FUNCTIONS, cpdocs.languages.kinds.Role.CALLABLE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "method", "method", "F", 6, cpdocs.languages.kinds.FUNCTIONS, cpdocs.languages.kinds.Role.CALLABLE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "attribute", "attribute", "A", 8, cpdocs.languages.kinds.MEMBERS, cpdocs.languages.kinds.Role.VALUE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "variable", "variable", "V", 8, cpdocs.languages.kinds.MEMBERS, cpdocs.languages.kinds.Role.VALUE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "constant", "constant", "C", 8, cpdocs.languages.kinds.MEMBERS, cpdocs.languages.kinds.Role.VALUE
+        ),
+        cpdocs.languages.kinds.EntityKind("macro", "macro", "D", 9),
     ),
 )
 

@@ -43,3 +43,12 @@ default API introduction, page fragments, the stylesheet and the scripts. They a
 `importlib.resources`, and the wheel installs `share/` at its root, so they work without a source
 checkout. Browser assets are copied into each site's `assets/` directory under content-derived
 names, so browsers never keep a stale copy. Test-only sources live in `test/share/`.
+
+## Imports
+
+cpdocs code imports modules, never their members, and names a member where it is used:
+`import pathlib` and `pathlib.Path`, `import cpdocs.model` and `cpdocs.model.ApiGraph`. A reader
+sees where every name comes from, and no module depends on what another happens to re-export, so
+package `__init__` files are empty. `from __future__ import annotations` is the one exception. Ruff
+rejects relative imports (TID252), and `test/test_import_style.py` rejects every other `from`
+import.

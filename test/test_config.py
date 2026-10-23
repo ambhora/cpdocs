@@ -4,16 +4,16 @@
 # --------------------------------------------------------------------------------------------------
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
 import pytest
 
-from conftest import fixture_text
-from cpdocs.build import _config_for_checkout
-from cpdocs.config import SiteTheme, load_config
+import conftest
+import cpdocs.build
+import cpdocs.config
 
 
-def _write(path: Path, text: str) -> Path:
+def _write(path: pathlib.Path, text: str) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
@@ -26,8 +26,8 @@ build:
 """
 
 
-def test_minimal_config_has_documented_defaults(tmp_path: Path) -> None:
-    config = load_config(_write(tmp_path / "docs" / "cpdocs.yml", MINIMAL))
+def test_minimal_config_has_documented_defaults(tmp_path: pathlib.Path) -> None:
+    config = cpdocs.config.load_config(_write(tmp_path / "docs" / "cpdocs.yml", MINIMAL))
     assert config.project_root == tmp_path
     assert config.feature_sets == "make feature-sets OUTPUT={{output-file}}"
     assert config.build == "make build FEATURES={{feature-set}} OUTPUT={{output-file}}"
@@ -36,22 +36,24 @@ def test_minimal_config_has_documented_defaults(tmp_path: Path) -> None:
     assert config.hide_private_python is True
     assert config.check_undocumented == "ignore"
     assert config.check_broken_references == "warn"
-    assert config.theme == SiteTheme()
+    assert config.theme == cpdocs.config.SiteTheme()
 
 
-def test_index_defaults_to_docs_api(tmp_path: Path) -> None:
+def test_index_defaults_to_docs_api(tmp_path: pathlib.Path) -> None:
     _write(tmp_path / "docs" / "api" / "index.md", "# API\n")
-    config = load_config(_write(tmp_path / "docs" / "cpdocs.yml", MINIMAL))
+    config = cpdocs.config.load_config(_write(tmp_path / "docs" / "cpdocs.yml", MINIMAL))
     assert config.index == tmp_path / "docs" / "api" / "index.md"
 
 
-def test_config_outside_docs_belongs_to_its_directory(tmp_path: Path) -> None:
-    config = load_config(_write(tmp_path / "cpdocs.yml", MINIMAL))
+def test_config_outside_docs_belongs_to_its_directory(tmp_path: pathlib.Path) -> None:
+    config = cpdocs.config.load_config(_write(tmp_path / "cpdocs.yml", MINIMAL))
     assert config.project_root == tmp_path
 
 
-def test_full_config(tmp_path: Path) -> None:
-    config = load_config(_write(tmp_path / "docs" / "cpdocs.yml", fixture_text("complete-cpdocs.yml")))
+def test_full_config(tmp_path: pathlib.Path) -> None:
+    config = cpdocs.config.load_config(
+        _write(tmp_path / "docs" / "cpdocs.yml", conftest.fixture_text("complete-cpdocs.yml"))
+    )
     assert config.versions == ("main", "v2.0.0", "v1.0.0")
     assert config.hide_cpp_namespaces == ("*::detail",)
     assert config.hide_private_python is False
@@ -73,9 +75,9 @@ def test_full_config(tmp_path: Path) -> None:
         ("contract: 3\nbuild:\n  feature-sets: make\n  build: make\nversions: []\n", "at least one version"),
     ],
 )
-def test_invalid_configs_are_rejected(tmp_path: Path, text: str, message: str) -> None:
+def test_invalid_configs_are_rejected(tmp_path: pathlib.Path, text: str, message: str) -> None:
     with pytest.raises(RuntimeError, match=message):
-        load_config(_write(tmp_path / "docs" / "cpdocs.yml", text))
+        cpdocs.config.load_config(_write(tmp_path / "docs" / "cpdocs.yml", text))
 
 
 THEMED = (
@@ -95,16 +97,16 @@ THEMED = (
 )
 
 
-def _themed_project(root: Path, text: str = THEMED) -> Path:
+def _themed_project(root: pathlib.Path, text: str = THEMED) -> pathlib.Path:
     _write(root / "share" / "icon.svg", "<svg/>")
     _write(root / "share" / "favicon.png", "png")
     _write(root / "docs" / "api.css", ".api-brand { font-weight: 700; }\n")
     return _write(root / "docs" / "cpdocs.yml", text)
 
 
-def test_theme_resolves_files_and_normalizes_colors(tmp_path: Path) -> None:
-    config = load_config(_themed_project(tmp_path))
-    assert config.theme == SiteTheme(
+def test_theme_resolves_files_and_normalizes_colors(tmp_path: pathlib.Path) -> None:
+    config = cpdocs.config.load_config(_themed_project(tmp_path))
+    assert config.theme == cpdocs.config.SiteTheme(
         logo=tmp_path / "share" / "icon.svg",
         # Without its own favicon the site uses the logo.
         favicon=tmp_path / "share" / "icon.svg",
@@ -116,17 +118,17 @@ def test_theme_resolves_files_and_normalizes_colors(tmp_path: Path) -> None:
     )
 
 
-def test_theme_favicon_can_differ_from_logo(tmp_path: Path) -> None:
+def test_theme_favicon_can_differ_from_logo(tmp_path: pathlib.Path) -> None:
     text = THEMED.replace("    logo: share/icon.svg\n", "    logo: share/icon.svg\n    favicon: share/favicon.png\n")
-    config = load_config(_themed_project(tmp_path, text))
+    config = cpdocs.config.load_config(_themed_project(tmp_path, text))
     assert config.theme.favicon == tmp_path / "share" / "favicon.png"
 
 
-def test_theme_of_current_tree_applies_to_other_versions(tmp_path: Path) -> None:
-    config = load_config(_themed_project(tmp_path / "current"))
+def test_theme_of_current_tree_applies_to_other_versions(tmp_path: pathlib.Path) -> None:
+    config = cpdocs.config.load_config(_themed_project(tmp_path / "current"))
     checkout = tmp_path / "checkout"
     checkout.mkdir()
-    assert _config_for_checkout(config, checkout).theme == config.theme
+    assert cpdocs.build._config_for_checkout(config, checkout).theme == config.theme
 
 
 @pytest.mark.parametrize(
@@ -143,6 +145,6 @@ def test_theme_of_current_tree_applies_to_other_versions(tmp_path: Path) -> None
         ("    colors:\n      light:\n        accent: teal\n", "hexadecimal colour"),
     ],
 )
-def test_invalid_themes_are_rejected(tmp_path: Path, theme: str, message: str) -> None:
+def test_invalid_themes_are_rejected(tmp_path: pathlib.Path, theme: str, message: str) -> None:
     with pytest.raises(RuntimeError, match=message):
-        load_config(_themed_project(tmp_path, MINIMAL + "site:\n  theme:\n" + theme))
+        cpdocs.config.load_config(_themed_project(tmp_path, MINIMAL + "site:\n  theme:\n" + theme))

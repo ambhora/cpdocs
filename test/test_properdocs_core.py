@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-from pathlib import Path
+import pathlib
 
-from cpdocs.plugins.properdocs.core import publish_api, resolve_api_references
+import cpdocs.plugins.properdocs.core
 
 
 def test_semantic_api_links_resolve_against_mount() -> None:
-    rendered = resolve_api_references(
+    rendered = cpdocs.plugins.properdocs.core.resolve_api_references(
         "See @apidocs::dice::meta::build and @apidocs[v1.2]::dice.solve.",
         page_dest_uri="reference/index.html",
         mount="reference/api",
@@ -18,7 +18,7 @@ def test_semantic_api_links_resolve_against_mount() -> None:
     assert "(api/v1.2/_symbols/dice/solve/)" in rendered
 
 
-def test_publish_replaces_api_subtree(tmp_path: Path) -> None:
+def test_publish_replaces_api_subtree(tmp_path: pathlib.Path) -> None:
     source = tmp_path / "cpdocs"
     (source / "main").mkdir(parents=True)
     (source / "main" / "index.html").write_text("new", encoding="utf-8")
@@ -26,14 +26,14 @@ def test_publish_replaces_api_subtree(tmp_path: Path) -> None:
     stale = site / "reference" / "api" / "old"
     stale.mkdir(parents=True)
     (stale / "index.html").write_text("old", encoding="utf-8")
-    destination = publish_api(source, site, "reference/api")
+    destination = cpdocs.plugins.properdocs.core.publish_api(source, site, "reference/api")
     assert (destination / "main" / "index.html").read_text(encoding="utf-8") == "new"
     assert not (destination / "old").exists()
     assert (site / ".nojekyll").is_file()
 
 
 def test_sentence_final_period_is_not_part_of_the_symbol() -> None:
-    rendered = resolve_api_references(
+    rendered = cpdocs.plugins.properdocs.core.resolve_api_references(
         "Call @apidocs::dice::roll.", page_dest_uri="index.html", mount="reference/api", default_version="main"
     )
     assert rendered == "Call [`dice::roll`](reference/api/main/_symbols/dice/roll/)."
@@ -41,7 +41,7 @@ def test_sentence_final_period_is_not_part_of_the_symbol() -> None:
 
 def test_unknown_references_are_reported() -> None:
     missing: list[tuple[str, str]] = []
-    resolve_api_references(
+    cpdocs.plugins.properdocs.core.resolve_api_references(
         "@apidocs::a::b and @apidocs[v1]::c",
         page_dest_uri="index.html",
         mount="api",
@@ -53,7 +53,7 @@ def test_unknown_references_are_reported() -> None:
 
 
 def test_known_references_link_straight_to_the_page() -> None:
-    rendered = resolve_api_references(
+    rendered = cpdocs.plugins.properdocs.core.resolve_api_references(
         "See @apidocs::a::b and @apidocs::a::c.",
         page_dest_uri="guide/index.html",
         mount="reference/api",
@@ -65,9 +65,9 @@ def test_known_references_link_straight_to_the_page() -> None:
 
 
 def test_versions_directive_lists_every_version() -> None:
-    from cpdocs.plugins.properdocs.core import expand_versions_directive
+    import cpdocs.plugins.properdocs.core
 
-    rendered = expand_versions_directive(
+    rendered = cpdocs.plugins.properdocs.core.expand_versions_directive(
         "Versions:\n\n@apidocs-versions\n",
         page_dest_uri="reference/api.html",
         mount="reference/api",
@@ -83,24 +83,26 @@ def test_versions_directive_lists_every_version() -> None:
 
 def test_code_is_left_alone() -> None:
     markdown = "Use `@apidocs::a::b` like this:\n\n```text\n@apidocs::a::b\n```\n\nSee @apidocs::a::b.\n"
-    rendered = resolve_api_references(markdown, page_dest_uri="index.html", mount="api", default_version="main")
+    rendered = cpdocs.plugins.properdocs.core.resolve_api_references(
+        markdown, page_dest_uri="index.html", mount="api", default_version="main"
+    )
     assert rendered.count("@apidocs::a::b") == 2
     assert rendered.endswith("See [`a::b`](api/main/_symbols/a/b/).\n")
 
 
-def test_subsite_mounts_are_relative_to_project_root(tmp_path: Path) -> None:
-    from cpdocs.plugins.properdocs.plugin import CpdocsPlugin
+def test_subsite_mounts_are_relative_to_project_root(tmp_path: pathlib.Path) -> None:
+    import cpdocs.plugins.properdocs.plugin
 
     (tmp_path / "examples" / "demo").mkdir(parents=True)
     (tmp_path / "examples" / "demo" / "properdocs.yml").write_text("site_name: demo\n")
-    plugin = CpdocsPlugin()
+    plugin = cpdocs.plugins.properdocs.plugin.CpdocsPlugin()
     plugin._project_root = tmp_path
     plugin.config = {"subsites": ["examples/demo"]}
-    assert plugin._subsites() == [(tmp_path / "examples" / "demo", Path("examples/demo"))]
+    assert plugin._subsites() == [(tmp_path / "examples" / "demo", pathlib.Path("examples/demo"))]
 
 
-def test_serve_reuses_cached_subsites_until_their_inputs_change(tmp_path: Path, monkeypatch) -> None:
-    from cpdocs.plugins.properdocs.plugin import CpdocsPlugin
+def test_serve_reuses_cached_subsites_until_their_inputs_change(tmp_path: pathlib.Path, monkeypatch) -> None:
+    import cpdocs.plugins.properdocs.plugin
 
     project = tmp_path / "examples" / "demo"
     project.mkdir(parents=True)
@@ -110,12 +112,12 @@ def test_serve_reuses_cached_subsites_until_their_inputs_change(tmp_path: Path, 
     root_doc.parent.mkdir()
     root_doc.write_text("root\n", encoding="utf-8")
 
-    plugin = CpdocsPlugin()
+    plugin = cpdocs.plugins.properdocs.plugin.CpdocsPlugin()
     plugin._project_root = tmp_path
     plugin._serve_active = True
     plugin.config = {"subsites": ["examples/demo"], "output": "build"}
 
-    builds: list[Path] = []
+    builds: list[pathlib.Path] = []
 
     def fake_build(project_arg, mount, destination, *, strict):
         del project_arg, mount, strict

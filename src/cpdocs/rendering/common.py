@@ -6,24 +6,24 @@
 
 from __future__ import annotations
 
+import collections.abc
 import hashlib
 import html
+import pathlib
 import re
-from collections.abc import Iterable
-from pathlib import Path
 
 try:
-    from pygments import highlight, lex
-    from pygments.formatters import HtmlFormatter
-    from pygments.lexers import CppLexer, FortranLexer, PythonLexer, RustLexer, TextLexer
+    import pygments
+    import pygments.formatters
+    import pygments.lexers
 except ImportError:  # pragma: no cover - optional dependency in some bootstrap environments
     highlight = None
     lex = None
     HtmlFormatter = None
     CppLexer = FortranLexer = PythonLexer = RustLexer = TextLexer = None
 
-from ..languages import kind_marker, rendering_for, source_language
-from ..model import ApiEntity, ApiGraph, ApiSignature
+import cpdocs.languages
+import cpdocs.model
 
 
 def split_qualified(name: str, separator: str) -> list[str]:
@@ -49,8 +49,8 @@ def split_qualified(name: str, separator: str) -> list[str]:
     return [part for part in parts if part]
 
 
-def _segments(entity: ApiEntity) -> list[str]:
-    return split_qualified(entity.qualified_name, rendering_for(entity.language).separator)
+def _segments(entity: cpdocs.model.ApiEntity) -> list[str]:
+    return split_qualified(entity.qualified_name, cpdocs.languages.rendering_for(entity.language).separator)
 
 
 # Operator names as words, longest spelling first, so that ``operator<<`` is not read as ``<``.
@@ -125,10 +125,10 @@ def _slug(value: str) -> str:
 
 
 # Documents of entities whose readable path collides with another entity's, set per rendered site.
-_DOCUMENT_OVERRIDES: dict[str, Path] = {}
+_DOCUMENT_OVERRIDES: dict[str, pathlib.Path] = {}
 
 
-def assign_documents(entities: Iterable[ApiEntity]) -> None:
+def assign_documents(entities: collections.abc.Iterable[cpdocs.model.ApiEntity]) -> None:
     """Resolve path collisions between entities before a site is rendered.
 
     Entities whose readable document path is shared get a short digest of their qualified name
@@ -136,7 +136,7 @@ def assign_documents(entities: Iterable[ApiEntity]) -> None:
     """
 
     _DOCUMENT_OVERRIDES.clear()
-    by_path: dict[Path, list[ApiEntity]] = {}
+    by_path: dict[pathlib.Path, list[cpdocs.model.ApiEntity]] = {}
     for entity in entities:
         by_path.setdefault(entity_document(entity), []).append(entity)
     for path, values in by_path.items():
@@ -151,43 +151,43 @@ def assign_documents(entities: Iterable[ApiEntity]) -> None:
                 _DOCUMENT_OVERRIDES[entity.id] = path.with_name(f"{path.stem}-{digest}.md")
 
 
-def entity_document(entity: ApiEntity) -> Path:
+def entity_document(entity: cpdocs.model.ApiEntity) -> pathlib.Path:
     override = _DOCUMENT_OVERRIDES.get(entity.id)
     if override is not None:
         return override
-    rendering = rendering_for(entity.language)
+    rendering = cpdocs.languages.rendering_for(entity.language)
     parts = [_slug(part) for part in _segments(entity)]
     if entity.kind in rendering.container_kinds:
-        return Path("api", *parts, "index.md")
+        return pathlib.Path("api", *parts, "index.md")
     if entity.kind in rendering.type_page_kinds:
         if len(parts) > 1:
-            return Path("api", *parts[:-1], f"{entity.kind}-{parts[-1]}", "index.md")
-        return Path("api", f"{entity.kind}-{parts[0]}", "index.md")
+            return pathlib.Path("api", *parts[:-1], f"{entity.kind}-{parts[-1]}", "index.md")
+        return pathlib.Path("api", f"{entity.kind}-{parts[0]}", "index.md")
     if len(parts) > 1:
-        return Path("api", *parts[:-1], f"{entity.kind}-{parts[-1]}.md")
-    return Path("api", f"{entity.kind}-{parts[0]}.md")
+        return pathlib.Path("api", *parts[:-1], f"{entity.kind}-{parts[-1]}.md")
+    return pathlib.Path("api", f"{entity.kind}-{parts[0]}.md")
 
 
-def _source_document(source_path: str) -> Path:
-    logical = Path(source_path)
-    return Path("_sources", *logical.parent.parts, logical.name + ".md")
+def _source_document(source_path: str) -> pathlib.Path:
+    logical = pathlib.Path(source_path)
+    return pathlib.Path("_sources", *logical.parent.parts, logical.name + ".md")
 
 
 def _source_language(source_path: str) -> str:
-    return source_language(source_path)
+    return cpdocs.languages.source_language(source_path)
 
 
 def _pygments_lexer(language: str):
     lexer_map = {
-        "c": CppLexer,
-        "cpp": CppLexer,
-        "cuda": CppLexer,
-        "hip": CppLexer,
-        "fortran": FortranLexer,
-        "python": PythonLexer,
-        "rust": RustLexer,
+        "c": pygments.lexers.CppLexer,
+        "cpp": pygments.lexers.CppLexer,
+        "cuda": pygments.lexers.CppLexer,
+        "hip": pygments.lexers.CppLexer,
+        "fortran": pygments.lexers.FortranLexer,
+        "python": pygments.lexers.PythonLexer,
+        "rust": pygments.lexers.RustLexer,
     }
-    lexer_type = lexer_map.get(language, TextLexer)
+    lexer_type = lexer_map.get(language, pygments.lexers.TextLexer)
     return lexer_type() if lexer_type is not None else None
 
 
@@ -393,7 +393,7 @@ def _fallback_token_html(kind: str, value: str) -> str:
     return f'<span class="cpdocs-syntax-{kind}">{escaped}</span>'
 
 
-def _token_style(formatter: HtmlFormatter, token_type) -> str:
+def _token_style(formatter: pygments.formatters.HtmlFormatter, token_type) -> str:
     style = formatter.style.style_for_token(token_type)
     values: list[str] = []
     if style.get("color"):
@@ -410,7 +410,7 @@ def _token_style(formatter: HtmlFormatter, token_type) -> str:
 
 
 def _highlight_source_lines(content: str, language: str) -> list[str]:
-    if lex is None or HtmlFormatter is None:
+    if pygments.lex is None or pygments.formatters.HtmlFormatter is None:
         rendered: list[list[str]] = [[]]
         for kind, value in _fallback_lex(content, language):
             parts = value.split("\n")
@@ -427,9 +427,9 @@ def _highlight_source_lines(content: str, language: str) -> list[str]:
     if lexer is None:
         return [html.escape(value) or " " for value in content.splitlines()]
 
-    formatter = HtmlFormatter(noclasses=True, style="friendly")
+    formatter = pygments.formatters.HtmlFormatter(noclasses=True, style="friendly")
     rendered: list[list[str]] = [[]]
-    for token_type, value in lex(content, lexer):
+    for token_type, value in pygments.lex(content, lexer):
         style = _token_style(formatter, token_type)
         parts = value.split("\n")
         for index, part in enumerate(parts):
@@ -449,27 +449,30 @@ def _highlight_source_lines(content: str, language: str) -> list[str]:
     return ["".join(parts) or " " for parts in rendered]
 
 
-def _is_container(entity: ApiEntity) -> bool:
-    return entity.kind in rendering_for(entity.language).container_kinds
+def _is_container(entity: cpdocs.model.ApiEntity) -> bool:
+    return entity.kind in cpdocs.languages.rendering_for(entity.language).container_kinds
 
 
-def _is_class_like(entity: ApiEntity) -> bool:
-    return entity.kind in rendering_for(entity.language).class_like_kinds
+def _is_class_like(entity: cpdocs.model.ApiEntity) -> bool:
+    return entity.kind in cpdocs.languages.rendering_for(entity.language).class_like_kinds
 
 
-def _is_type_page(entity: ApiEntity) -> bool:
-    return entity.kind in rendering_for(entity.language).type_page_kinds
+def _is_type_page(entity: cpdocs.model.ApiEntity) -> bool:
+    return entity.kind in cpdocs.languages.rendering_for(entity.language).type_page_kinds
 
 
-def _is_function(entity: ApiEntity) -> bool:
-    return entity.kind in rendering_for(entity.language).function_kinds
+def _is_function(entity: cpdocs.model.ApiEntity) -> bool:
+    return entity.kind in cpdocs.languages.rendering_for(entity.language).function_kinds
 
 
-def _preferred_type_target(name: str, entity: ApiEntity, graph: ApiGraph) -> ApiEntity | None:
+def _preferred_type_target(
+    name: str, entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> cpdocs.model.ApiEntity | None:
     candidates = [
         candidate
         for candidate in graph.entities.values()
-        if candidate.kind in rendering_for(candidate.language).type_like_kinds and candidate.name == name
+        if candidate.kind in cpdocs.languages.rendering_for(candidate.language).type_like_kinds
+        and candidate.name == name
     ]
     if not candidates:
         return None
@@ -480,28 +483,37 @@ def _preferred_type_target(name: str, entity: ApiEntity, graph: ApiGraph) -> Api
     return candidates[0] if len(candidates) == 1 else None
 
 
-def _embedded_member_parent(entity: ApiEntity, graph: ApiGraph) -> ApiEntity | None:
+def _embedded_member_parent(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> cpdocs.model.ApiEntity | None:
     if not entity.parent or entity.parent not in graph.entities:
         return None
     parent = graph.entities[entity.parent]
     return parent if _is_class_like(parent) else None
 
 
-def _member_anchor(entity: ApiEntity) -> str:
+def _member_anchor(entity: cpdocs.model.ApiEntity) -> str:
     return f"member-{_slug(entity.kind)}-{_slug(entity.name)}"
 
 
-def _entity_href(document_path: Path, entity: ApiEntity, graph: ApiGraph) -> str:
+def _entity_href(document_path: pathlib.Path, entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph) -> str:
     parent = _embedded_member_parent(entity, graph)
     if parent is not None:
         return _relative_link(document_path, entity_document(parent)) + f"#{_member_anchor(entity)}"
     return _relative_link(document_path, entity_document(entity))
 
 
-def _highlight_declaration(code: str, language: str, *, entity: ApiEntity, graph: ApiGraph, document_path: Path) -> str:
+def _highlight_declaration(
+    code: str,
+    language: str,
+    *,
+    entity: cpdocs.model.ApiEntity,
+    graph: cpdocs.model.ApiGraph,
+    document_path: pathlib.Path,
+) -> str:
     """Highlight a declaration and add semantic links to known API types."""
 
-    if lex is None or HtmlFormatter is None:
+    if pygments.lex is None or pygments.formatters.HtmlFormatter is None:
         values: list[str] = []
         for kind, value in _fallback_lex(code, language):
             token_html = _fallback_token_html(kind, value)
@@ -522,9 +534,9 @@ def _highlight_declaration(code: str, language: str, *, entity: ApiEntity, graph
     if lexer is None:
         return html.escape(code)
 
-    formatter = HtmlFormatter(noclasses=True, style="friendly")
+    formatter = pygments.formatters.HtmlFormatter(noclasses=True, style="friendly")
     values: list[str] = []
-    tokens = list(lex(code, lexer))
+    tokens = list(pygments.lex(code, lexer))
     if tokens and tokens[-1][1] == "\n":
         tokens.pop()
     for token_type, value in tokens:
@@ -546,17 +558,17 @@ def _highlight_declaration(code: str, language: str, *, entity: ApiEntity, graph
     return "".join(values)
 
 
-def _signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
-    value = rendering_for(entity.language).signature_spelling(entity, signature)
+def _signature_spelling(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> str:
+    value = cpdocs.languages.rendering_for(entity.language).signature_spelling(entity, signature)
     return f"{signature.template}\n{value}" if signature.template else value
 
 
-def _plain_signature_spelling(entity: ApiEntity, signature: ApiSignature) -> str:
-    return rendering_for(entity.language).signature_spelling(entity, signature)
+def _plain_signature_spelling(entity: cpdocs.model.ApiEntity, signature: cpdocs.model.ApiSignature) -> str:
+    return cpdocs.languages.rendering_for(entity.language).signature_spelling(entity, signature)
 
 
-def _entity_declaration(entity: ApiEntity) -> str:
-    return rendering_for(entity.language).entity_declaration(entity)
+def _entity_declaration(entity: cpdocs.model.ApiEntity) -> str:
+    return cpdocs.languages.rendering_for(entity.language).entity_declaration(entity)
 
 
 def _paragraphs(text: str) -> str:
@@ -573,7 +585,9 @@ def _feature_set_anchor(name: str) -> str:
     return "feature-set-" + _slug(name)
 
 
-def _resolve_related_entity(reference: str, entity: ApiEntity, graph: ApiGraph) -> ApiEntity | None:
+def _resolve_related_entity(
+    reference: str, entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> cpdocs.model.ApiEntity | None:
     normalized = reference.strip()
     if not normalized:
         return None
@@ -594,7 +608,9 @@ def _resolve_related_entity(reference: str, entity: ApiEntity, graph: ApiGraph) 
     return matches[0] if len(matches) == 1 else None
 
 
-def _documentation_blocks(entity: ApiEntity, graph: ApiGraph) -> tuple[str, list[tuple[str, ApiEntity | None]]]:
+def _documentation_blocks(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph
+) -> tuple[str, list[tuple[str, cpdocs.model.ApiEntity | None]]]:
     related_names = list(entity.related)
     paragraphs: list[str] = []
     for block in re.split(r"\n\s*\n", entity.documentation.strip()):
@@ -619,14 +635,14 @@ def _feature_set_display_name(name: str) -> str:
     return name
 
 
-def _member_summary_spelling(entity: ApiEntity) -> str:
-    return rendering_for(entity.language).member_summary(entity)
+def _member_summary_spelling(entity: cpdocs.model.ApiEntity) -> str:
+    return cpdocs.languages.rendering_for(entity.language).member_summary(entity)
 
 
-def _relative_link(source: Path, target: Path) -> str:
+def _relative_link(source: pathlib.Path, target: pathlib.Path) -> str:
     import posixpath
 
-    def output_directory(document: Path) -> Path:
+    def output_directory(document: pathlib.Path) -> pathlib.Path:
         if document.name == "index.md":
             return document.parent
         return document.with_suffix("")
@@ -638,4 +654,4 @@ def _relative_link(source: Path, target: Path) -> str:
 
 
 def _kind_marker(kind: str, language: str) -> str:
-    return kind_marker(kind, language)
+    return cpdocs.languages.kind_marker(kind, language)

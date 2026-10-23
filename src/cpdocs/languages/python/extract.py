@@ -13,22 +13,14 @@ from __future__ import annotations
 
 import ast
 import inspect
+import pathlib
 import re
-from pathlib import Path
-from typing import Any
+import typing
 
-from ...contract import UnitManifest
-from ...filesystem import readable_file
-from ...model import (
-    ApiEntity,
-    ApiGraph,
-    ApiParameter,
-    ApiSignature,
-    SourceLocation,
-    relative_source_path,
-    stable_entity_id,
-)
-from ..unit import UnitContext
+import cpdocs.contract
+import cpdocs.filesystem
+import cpdocs.languages.unit
+import cpdocs.model
 
 
 def _version_imports(tree: ast.Module) -> tuple[set[str], set[str]]:
@@ -48,7 +40,7 @@ def _version_imports(tree: ast.Module) -> tuple[set[str], set[str]]:
     return sys_names, version_names
 
 
-def _guard_value(node: ast.expr, version: tuple[int, int], sys_names: set[str], version_names: set[str]) -> Any:
+def _guard_value(node: ast.expr, version: tuple[int, int], sys_names: set[str], version_names: set[str]) -> typing.Any:
     """Evaluate only literals and standard Python interpreter-version references."""
 
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, str, bool)):
@@ -180,17 +172,19 @@ def _default(node: ast.expr | None) -> str | None:
         return None
 
 
-def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: bool = False) -> ApiSignature:
+def _signature(
+    node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: bool = False
+) -> cpdocs.model.ApiSignature:
     args = node.args
     positional = [*args.posonlyargs, *args.args]
     if implicit_first and positional and positional[0].arg in {"self", "cls"}:
         positional = positional[1:]
     defaults = [None] * (len(positional) - len(args.defaults)) + list(args.defaults)
-    parameters: list[ApiParameter] = []
+    parameters: list[cpdocs.model.ApiParameter] = []
     posonly_count = len(args.posonlyargs)
     for index, (argument, default) in enumerate(zip(positional, defaults, strict=True)):
         parameters.append(
-            ApiParameter(
+            cpdocs.model.ApiParameter(
                 name=argument.arg,
                 type=_annotation(argument.annotation),
                 default=_default(default),
@@ -199,17 +193,19 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: 
         )
     if args.vararg is not None:
         parameters.append(
-            ApiParameter(name=args.vararg.arg, type=_annotation(args.vararg.annotation), kind="var-positional")
+            cpdocs.model.ApiParameter(
+                name=args.vararg.arg, type=_annotation(args.vararg.annotation), kind="var-positional"
+            )
         )
     for argument, default in zip(args.kwonlyargs, args.kw_defaults, strict=True):
         parameters.append(
-            ApiParameter(
+            cpdocs.model.ApiParameter(
                 name=argument.arg, type=_annotation(argument.annotation), default=_default(default), kind="keyword-only"
             )
         )
     if args.kwarg is not None:
         parameters.append(
-            ApiParameter(name=args.kwarg.arg, type=_annotation(args.kwarg.annotation), kind="var-keyword")
+            cpdocs.model.ApiParameter(name=args.kwarg.arg, type=_annotation(args.kwarg.annotation), kind="var-keyword")
         )
     qualifiers: list[str] = []
     if isinstance(node, ast.AsyncFunctionDef):
@@ -220,12 +216,12 @@ def _signature(node: ast.FunctionDef | ast.AsyncFunctionDef, *, implicit_first: 
             qualifiers.append(text)
         elif text.endswith(".overload") or text == "overload":
             qualifiers.append("overload")
-    return ApiSignature(
+    return cpdocs.model.ApiSignature(
         parameters=tuple(parameters), returns=_annotation(node.returns), qualifiers=tuple(dict.fromkeys(qualifiers))
     )
 
 
-def _module_info(root: Path, path: Path, package: str) -> tuple[str, str]:
+def _module_info(root: pathlib.Path, path: pathlib.Path, package: str) -> tuple[str, str]:
     """Return the public module/package name and normalized entity kind for one source file."""
 
     relative = path.relative_to(root)
@@ -279,10 +275,10 @@ def _attribute_docstring(body: list[ast.stmt], index: int) -> str:
 def _walk_body(
     body: list[ast.stmt],
     *,
-    graph: ApiGraph,
+    graph: cpdocs.model.ApiGraph,
     module: str,
     source_path: str,
-    parent: ApiEntity,
+    parent: cpdocs.model.ApiEntity,
     scopes: tuple[str, ...],
     explicit_public: set[str] | None = None,
     python_version: tuple[int, int] | None = None,
@@ -293,7 +289,7 @@ def _walk_body(
     version_names = version_names or set()
     body = _selected_body(body, python_version, sys_names, version_names)
     for index, node in enumerate(body):
-        entity: ApiEntity | None = None
+        entity: cpdocs.model.ApiEntity | None = None
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             in_class = parent.kind in {"class", "protocol", "enum"}
             if (
@@ -308,8 +304,8 @@ def _walk_body(
             properties = list(signature.qualifiers)
             if "property" in properties:
                 kind = "property"
-            entity = ApiEntity(
-                id=stable_entity_id("python", kind, qualified),
+            entity = cpdocs.model.ApiEntity(
+                id=cpdocs.model.stable_entity_id("python", kind, qualified),
                 language="python",
                 kind=kind,
                 name=node.name,
@@ -317,7 +313,7 @@ def _walk_body(
                 parent=parent.id,
                 signatures=[signature],
                 documentation=ast.get_docstring(node, clean=True) or "",
-                source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                 properties=properties,
             )
             graph.add(entity)
@@ -336,15 +332,15 @@ def _walk_body(
                 kind = "enum"
             else:
                 kind = "class"
-            entity = ApiEntity(
-                id=stable_entity_id("python", kind, qualified),
+            entity = cpdocs.model.ApiEntity(
+                id=cpdocs.model.stable_entity_id("python", kind, qualified),
                 language="python",
                 kind=kind,
                 name=node.name,
                 qualified_name=qualified,
                 parent=parent.id,
                 documentation=ast.get_docstring(node, clean=True) or "",
-                source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                 properties=properties,
                 bases=[base for base in bases if base],
             )
@@ -369,14 +365,14 @@ def _walk_body(
                 name = target.id
                 qualified = ".".join((*scopes, name))
                 graph.add(
-                    ApiEntity(
-                        id=stable_entity_id("python", "constant", qualified),
+                    cpdocs.model.ApiEntity(
+                        id=cpdocs.model.stable_entity_id("python", "constant", qualified),
                         language="python",
                         kind="constant",
                         name=name,
                         qualified_name=qualified,
                         parent=parent.id,
-                        source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                        source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                         documentation=_attribute_docstring(body, index),
                         properties=[_default(node.value) or ""],
                     )
@@ -392,14 +388,14 @@ def _walk_body(
                 qualified = ".".join((*scopes, name))
                 target = _annotation(getattr(node, "value", None))
                 graph.add(
-                    ApiEntity(
-                        id=stable_entity_id("python", "type_alias", qualified),
+                    cpdocs.model.ApiEntity(
+                        id=cpdocs.model.stable_entity_id("python", "type_alias", qualified),
                         language="python",
                         kind="type_alias",
                         name=name,
                         qualified_name=qualified,
                         parent=parent.id,
-                        source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                        source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                         documentation=_attribute_docstring(body, index),
                         properties=[f"= {target}"] if target else [],
                     )
@@ -420,14 +416,14 @@ def _walk_body(
                 qualified = ".".join((*scopes, name))
                 value = _default(node.value)
                 graph.add(
-                    ApiEntity(
-                        id=stable_entity_id("python", "constant", qualified),
+                    cpdocs.model.ApiEntity(
+                        id=cpdocs.model.stable_entity_id("python", "constant", qualified),
                         language="python",
                         kind="constant",
                         name=name,
                         qualified_name=qualified,
                         parent=parent.id,
-                        source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                        source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                         documentation=_attribute_docstring(body, index),
                         properties=[f"= {value}"] if value else [],
                     )
@@ -448,15 +444,15 @@ def _walk_body(
             value = _default(node.value)
             if value is not None:
                 properties.append(f"= {value}")
-            entity = ApiEntity(
-                id=stable_entity_id("python", kind, qualified),
+            entity = cpdocs.model.ApiEntity(
+                id=cpdocs.model.stable_entity_id("python", kind, qualified),
                 language="python",
                 kind=kind,
                 name=name,
                 qualified_name=qualified,
                 parent=parent.id,
                 documentation=_attribute_docstring(body, index),
-                source=SourceLocation(source_path, node.lineno, node.col_offset + 1),
+                source=cpdocs.model.SourceLocation(source_path, node.lineno, node.col_offset + 1),
                 properties=properties,
             )
             graph.add(entity)
@@ -464,18 +460,18 @@ def _walk_body(
 
 def build_python_graph(
     *,
-    project_root: Path,
-    package_root: Path,
+    project_root: pathlib.Path,
+    package_root: pathlib.Path,
     package: str,
     version: str = "main",
     include_private: bool = False,
     python_version: tuple[int, int] | None = None,
-) -> ApiGraph:
+) -> cpdocs.model.ApiGraph:
     """Build a static Python API graph without importing the documented package."""
 
     project_root = project_root.resolve()
     package_root = package_root.resolve()
-    graph = ApiGraph(project=package, version=version, language="python")
+    graph = cpdocs.model.ApiGraph(project=package, version=version, language="python")
     try:
         source_root = package_root.parent.resolve().relative_to(project_root.resolve()).as_posix()
     except (OSError, ValueError):
@@ -483,8 +479,8 @@ def build_python_graph(
     if source_root not in {"", "."}:
         graph.metadata["source_root"] = source_root
 
-    package_entity = ApiEntity(
-        id=stable_entity_id("python", "package", package),
+    package_entity = cpdocs.model.ApiEntity(
+        id=cpdocs.model.stable_entity_id("python", "package", package),
         language="python",
         kind="package",
         name=package.rsplit(".", 1)[-1],
@@ -492,14 +488,14 @@ def build_python_graph(
     )
     graph.add(package_entity)
 
-    def package_source(path: Path) -> bool:
+    def package_source(path: pathlib.Path) -> bool:
         parts = path.relative_to(package_root).parts
         if any(part.startswith(".") or part == "__pycache__" for part in parts):
             return False
         # A link out of the package and the project is not followed.
-        return readable_file(path, (package_root, project_root))
+        return cpdocs.filesystem.readable_file(path, (package_root, project_root))
 
-    def public_source(path: Path) -> bool:
+    def public_source(path: pathlib.Path) -> bool:
         if include_private:
             return True
         parts = path.relative_to(package_root).parts
@@ -509,7 +505,7 @@ def build_python_graph(
             not path.stem.startswith("_") and all(not part.startswith("_") for part in parts[:-1])
         )
 
-    def importable_source(path: Path) -> bool:
+    def importable_source(path: pathlib.Path) -> bool:
         # A file whose name is not an identifier cannot be imported, so it is not API. Its name
         # would otherwise become a module name shown to readers, as in ``<img ...>.py``.
         parts = path.relative_to(package_root).with_suffix("").parts
@@ -527,11 +523,13 @@ def build_python_graph(
         if public_source(path) and importable_source(path):
             continue
         try:
-            graph.sources.setdefault(relative_source_path(path, project_root), path.read_text(encoding="utf-8"))
+            graph.sources.setdefault(
+                cpdocs.model.relative_source_path(path, project_root), path.read_text(encoding="utf-8")
+            )
         except (OSError, UnicodeDecodeError):
             pass
 
-    parsed: list[tuple[Path, ast.Module, str, str, str]] = []
+    parsed: list[tuple[pathlib.Path, ast.Module, str, str, str]] = []
     # Create the module/package hierarchy first so children can always refer to a semantic parent.
     for path in sources:
         try:
@@ -539,7 +537,7 @@ def build_python_graph(
         except (OSError, UnicodeDecodeError, SyntaxError) as error:
             raise RuntimeError(f"Cannot parse Python API source {path}: {error}") from error
         qualified, kind = _module_info(package_root, path, package)
-        source_path = relative_source_path(path, project_root)
+        source_path = cpdocs.model.relative_source_path(path, project_root)
         parsed.append((path, tree, qualified, kind, source_path))
         try:
             graph.sources.setdefault(source_path, path.read_text(encoding="utf-8"))
@@ -551,21 +549,23 @@ def build_python_graph(
             if not root.documentation:
                 root.documentation = ast.get_docstring(tree, clean=True) or ""
             if root.source is None:
-                root.source = SourceLocation(source_path, 1, 1)
+                root.source = cpdocs.model.SourceLocation(source_path, 1, 1)
             continue
 
         parent_name = _parent_qualified_name(qualified) or package
-        parent_id = stable_entity_id(
+        parent_id = cpdocs.model.stable_entity_id(
             "python",
-            "package" if (package_root / Path(*parent_name.split(".")[1:]) / "__init__.py").is_file() else "module",
+            "package"
+            if (package_root / pathlib.Path(*parent_name.split(".")[1:]) / "__init__.py").is_file()
+            else "module",
             parent_name,
         )
         if parent_id not in graph.entities:
             # Namespace-package directories need no __init__.py. Represent the missing container as a
             # package so the API tree remains hierarchical without importing it.
-            parent_id = stable_entity_id("python", "package", parent_name)
+            parent_id = cpdocs.model.stable_entity_id("python", "package", parent_name)
             graph.add(
-                ApiEntity(
+                cpdocs.model.ApiEntity(
                     id=parent_id,
                     language="python",
                     kind="package",
@@ -574,9 +574,9 @@ def build_python_graph(
                     parent=package_entity.id if parent_name != package else None,
                 )
             )
-        entity_id = stable_entity_id("python", kind, qualified)
+        entity_id = cpdocs.model.stable_entity_id("python", kind, qualified)
         graph.add(
-            ApiEntity(
+            cpdocs.model.ApiEntity(
                 id=entity_id,
                 language="python",
                 kind=kind,
@@ -584,7 +584,7 @@ def build_python_graph(
                 qualified_name=qualified,
                 parent=parent_id,
                 documentation=ast.get_docstring(tree, clean=True) or "",
-                source=SourceLocation(source_path, 1, 1),
+                source=cpdocs.model.SourceLocation(source_path, 1, 1),
             )
         )
 
@@ -593,7 +593,7 @@ def build_python_graph(
         if qualified == package:
             parent = graph.entities[package_entity.id]
         else:
-            parent = graph.entities[stable_entity_id("python", kind, qualified)]
+            parent = graph.entities[cpdocs.model.stable_entity_id("python", kind, qualified)]
         _walk_body(
             tree.body,
             graph=graph,
@@ -628,7 +628,9 @@ def target_python_version(language_configuration: dict[str, object]) -> tuple[in
     return int(major), int(minor)
 
 
-def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+def extract_unit(
+    unit: cpdocs.contract.UnitManifest, context: cpdocs.languages.unit.UnitContext
+) -> cpdocs.model.ApiGraph:
     """Extract a Python unit: read its one package statically, without importing it."""
 
     assert unit.package is not None

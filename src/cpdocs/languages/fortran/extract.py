@@ -11,21 +11,13 @@ subroutines, their argument names/types, source locations, and nearby ``!>``/``!
 
 from __future__ import annotations
 
+import pathlib
 import re
-from pathlib import Path
 
-from ...contract import UnitManifest
-from ...filesystem import readable_file
-from ...model import (
-    ApiEntity,
-    ApiGraph,
-    ApiParameter,
-    ApiSignature,
-    SourceLocation,
-    relative_source_path,
-    stable_entity_id,
-)
-from ..unit import UnitContext
+import cpdocs.contract
+import cpdocs.filesystem
+import cpdocs.languages.unit
+import cpdocs.model
 
 _FORTRAN_SUFFIXES = {".f", ".for", ".ftn", ".f77", ".f90", ".f95", ".f03", ".f08", ".f18"}
 _MODULE = re.compile(r"^\s*module\s+(?!procedure\b)([a-z_]\w*)\b", re.IGNORECASE)
@@ -40,8 +32,8 @@ _DECL = re.compile(r"^\s*([^!]+?)\s*::\s*(.+)$")
 _DOC = re.compile(r"^\s*(?:!>|!!)[ ]?(.*)$")
 
 
-def _source_files(roots: list[Path], project_root: Path) -> list[Path]:
-    values: set[Path] = set()
+def _source_files(roots: list[pathlib.Path], project_root: pathlib.Path) -> list[pathlib.Path]:
+    values: set[pathlib.Path] = set()
     for root in roots:
         if root.is_file():
             if root.suffix.casefold() in _FORTRAN_SUFFIXES:
@@ -51,7 +43,9 @@ def _source_files(roots: list[Path], project_root: Path) -> list[Path]:
             continue
         for path in root.rglob("*"):
             # A link out of the declared root and the project is not followed.
-            if path.suffix.casefold() in _FORTRAN_SUFFIXES and readable_file(path, (root, project_root)):
+            if path.suffix.casefold() in _FORTRAN_SUFFIXES and cpdocs.filesystem.readable_file(
+                path, (root, project_root)
+            ):
                 values.add(path.resolve())
     return sorted(values)
 
@@ -133,17 +127,17 @@ def _public(
 
 
 def extract_fortran_graph(
-    *, project: str, version: str, project_root: Path, api_roots: list[Path], feature_set: str
-) -> ApiGraph:
+    *, project: str, version: str, project_root: pathlib.Path, api_roots: list[pathlib.Path], feature_set: str
+) -> cpdocs.model.ApiGraph:
     """Extract public module/type/routine declarations from Fortran source roots."""
 
-    graph = ApiGraph(project=project, version=version, language="fortran")
+    graph = cpdocs.model.ApiGraph(project=project, version=version, language="fortran")
     for path in _source_files(api_roots, project_root):
         try:
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        logical = relative_source_path(path, project_root)
+        logical = cpdocs.model.relative_source_path(path, project_root)
         graph.sources.setdefault(logical, content)
         lines = content.splitlines()
 
@@ -164,16 +158,16 @@ def extract_fortran_graph(
             module_match = _MODULE.match(code)
             if module_match:
                 module_name = module_match.group(1)
-                module_id = stable_entity_id("fortran", "module", module_name)
+                module_id = cpdocs.model.stable_entity_id("fortran", "module", module_name)
                 graph.add(
-                    ApiEntity(
+                    cpdocs.model.ApiEntity(
                         id=module_id,
                         language="fortran",
                         kind="module",
                         name=module_name,
                         qualified_name=module_name,
                         documentation=_documentation(lines, index),
-                        source=SourceLocation(logical, index + 1, 1),
+                        source=cpdocs.model.SourceLocation(logical, index + 1, 1),
                         feature_sets=[feature_set],
                     )
                 )
@@ -214,8 +208,8 @@ def extract_fortran_graph(
                 ):
                     qualified = f"{module_name}::{name}"
                     graph.add(
-                        ApiEntity(
-                            id=stable_entity_id("fortran", "derived_type", qualified),
+                        cpdocs.model.ApiEntity(
+                            id=cpdocs.model.stable_entity_id("fortran", "derived_type", qualified),
                             language="fortran",
                             kind="derived_type",
                             name=name,
@@ -223,7 +217,7 @@ def extract_fortran_graph(
                             parent=module_id,
                             declaration=code,
                             documentation=_documentation(lines, index),
-                            source=SourceLocation(logical, index + 1, 1),
+                            source=cpdocs.model.SourceLocation(logical, index + 1, 1),
                             feature_sets=[feature_set],
                         )
                     )
@@ -238,21 +232,22 @@ def extract_fortran_graph(
                     arguments = [value.strip() for value in arguments_text.split(",") if value.strip()]
                     types = _argument_types(lines, index + 1, end, arguments)
                     parameters = tuple(
-                        ApiParameter(name=value, type=types.get(value.casefold(), "")) for value in arguments
+                        cpdocs.model.ApiParameter(name=value, type=types.get(value.casefold(), ""))
+                        for value in arguments
                     )
                     kind = "function" if kind_text.casefold() == "function" else "subroutine"
                     returns = _declaration_type(prefix) if kind_text.casefold() == "function" else ""
                     qualified = f"{module_name}::{name}"
-                    signature = ApiSignature(
+                    signature = cpdocs.model.ApiSignature(
                         parameters=parameters,
                         returns=returns,
                         spelling=code,
                         documentation=_documentation(lines, index),
-                        source=SourceLocation(logical, index + 1, 1),
+                        source=cpdocs.model.SourceLocation(logical, index + 1, 1),
                     )
                     graph.add(
-                        ApiEntity(
-                            id=stable_entity_id("fortran", kind, qualified),
+                        cpdocs.model.ApiEntity(
+                            id=cpdocs.model.stable_entity_id("fortran", kind, qualified),
                             language="fortran",
                             kind=kind,
                             name=name,
@@ -273,7 +268,9 @@ def extract_fortran_graph(
     return graph
 
 
-def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+def extract_unit(
+    unit: cpdocs.contract.UnitManifest, context: cpdocs.languages.unit.UnitContext
+) -> cpdocs.model.ApiGraph:
     """Extract a Fortran unit: read the public modules below its API roots and module roots."""
 
     roots = [root.path for root in unit.api]

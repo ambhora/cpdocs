@@ -14,15 +14,28 @@
 
 from __future__ import annotations
 
-from ..kinds import FUNCTIONS, TYPES, EntityKind, EntityKinds, Role
+import cpdocs.languages.kinds
 
-ENTITY_KINDS = EntityKinds(
+ENTITY_KINDS = cpdocs.languages.kinds.EntityKinds(
     "fortran",
     (
-        EntityKind("module", "module", "M", 1, roles=Role.CONTAINER),
-        EntityKind("derived_type", "derived type", "T", 2, TYPES, Role.TYPE_PAGE | Role.CLASS_LIKE | Role.TYPE),
-        EntityKind("function", "function", "F", 6, FUNCTIONS, Role.CALLABLE),
-        EntityKind("subroutine", "subroutine", "F", 6, FUNCTIONS, Role.CALLABLE),
+        cpdocs.languages.kinds.EntityKind("module", "module", "M", 1, roles=cpdocs.languages.kinds.Role.CONTAINER),
+        cpdocs.languages.kinds.EntityKind(
+            "derived_type",
+            "derived type",
+            "T",
+            2,
+            cpdocs.languages.kinds.TYPES,
+            cpdocs.languages.kinds.Role.TYPE_PAGE
+            | cpdocs.languages.kinds.Role.CLASS_LIKE
+            | cpdocs.languages.kinds.Role.TYPE,
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "function", "function", "F", 6, cpdocs.languages.kinds.FUNCTIONS, cpdocs.languages.kinds.Role.CALLABLE
+        ),
+        cpdocs.languages.kinds.EntityKind(
+            "subroutine", "subroutine", "F", 6, cpdocs.languages.kinds.FUNCTIONS, cpdocs.languages.kinds.Role.CALLABLE
+        ),
     ),
 )
 

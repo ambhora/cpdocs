@@ -7,14 +7,14 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 import shlex
 import subprocess
 import sys
-from pathlib import Path
 
-from ..contract import FeatureSetDeclaration, FeatureSets, Manifest, read_feature_sets, read_manifest, write_feature_set
-from ..filesystem import remove_tree
+import cpdocs.contract
+import cpdocs.filesystem
 
 _PLACEHOLDER = re.compile(r"\{\{\s*([a-z][a-z0-9_.-]*)\s*\}\}")
 
@@ -80,7 +80,7 @@ def _expand(command: str, values: dict[str, str], *, allowed: set[str], name: st
 
 
 def _run_command(
-    command: str, *, source: Path, values: dict[str, str], allowed: set[str], name: str, log: Path
+    command: str, *, source: pathlib.Path, values: dict[str, str], allowed: set[str], name: str, log: pathlib.Path
 ) -> None:
     """Run one build-system command in ``source`` and record its output in ``log``.
 
@@ -90,7 +90,7 @@ def _run_command(
     expanded, variables = _expand(command, values, allowed=allowed, name=name)
     environment = dict(os.environ)
     environment.update(variables)
-    package_root = str(Path(__file__).resolve().parents[2])
+    package_root = str(pathlib.Path(__file__).resolve().parents[2])
     pythonpath = environment.get("PYTHONPATH")
     environment["PYTHONPATH"] = package_root + (os.pathsep + pythonpath if pythonpath else "")
     # The log shows the values the command saw, quoted the way a shell would need them.
@@ -120,12 +120,12 @@ def _run_command(
 
 
 def discover_feature_sets(
-    command: str, *, source: Path, work: Path, template_values: dict[str, str] | None = None
-) -> FeatureSets:
+    command: str, *, source: pathlib.Path, work: pathlib.Path, template_values: dict[str, str] | None = None
+) -> cpdocs.contract.FeatureSets:
     """Run ``build.feature-sets`` and read ``feature-sets.json``."""
 
     directory = work / "feature-sets"
-    remove_tree(directory, owner=work)
+    cpdocs.filesystem.remove_tree(directory, owner=work)
     tmpdir = directory / "tmp"
     tmpdir.mkdir(parents=True)
     output = directory / "feature-sets.json"
@@ -143,26 +143,26 @@ def discover_feature_sets(
         name="feature-sets",
         log=directory / "log.txt",
     )
-    return read_feature_sets(output)
+    return cpdocs.contract.read_feature_sets(output)
 
 
 def resolve_manifest(
     command: str,
-    feature_set: FeatureSetDeclaration,
+    feature_set: cpdocs.contract.FeatureSetDeclaration,
     *,
-    source: Path,
-    work: Path,
+    source: pathlib.Path,
+    work: pathlib.Path,
     template_values: dict[str, str] | None = None,
-) -> Manifest:
+) -> cpdocs.contract.Manifest:
     """Run ``build.build`` for one feature set and read ``manifest.json``."""
 
     directory = work / "feature-sets" / feature_set.key
-    remove_tree(directory, owner=work)
+    cpdocs.filesystem.remove_tree(directory, owner=work)
     tmpdir = directory / "tmp"
     tmpdir.mkdir(parents=True)
     feature_set_file = directory / "feature-set.json"
     output = directory / "manifest.json"
-    write_feature_set(feature_set_file, feature_set)
+    cpdocs.contract.write_feature_set(feature_set_file, feature_set)
     _run_command(
         command,
         source=source.resolve(),
@@ -178,7 +178,7 @@ def resolve_manifest(
         name="build",
         log=directory / "log.txt",
     )
-    return read_manifest(output, source=source.resolve())
+    return cpdocs.contract.read_manifest(output, source=source.resolve())
 
 
 __all__ = ["discover_feature_sets", "resolve_manifest"]

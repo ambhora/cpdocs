@@ -7,33 +7,31 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
+import pathlib
 
-from . import __version__
-from .build import build_current, build_versions
-from .config import DEFAULT_CONFIG, load_config
-from .providers.cargo import write_feature_sets as write_rust_feature_sets
-from .providers.cargo import write_manifest as write_rust_manifest
-from .providers.python import write_feature_sets as write_python_feature_sets
-from .providers.python import write_manifest as write_python_manifest
+import cpdocs
+import cpdocs.build
+import cpdocs.config
+import cpdocs.providers.cargo
+import cpdocs.providers.python
 
 
-def _path(value: str) -> Path:
-    return Path(value).expanduser()
+def _path(value: str) -> pathlib.Path:
+    return pathlib.Path(value).expanduser()
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cpdocs", description="Semantic API documentation")
-    parser.add_argument("--version", action="version", version=f"cpdocs {__version__}")
+    parser.add_argument("--version", action="version", version=f"cpdocs {cpdocs.__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
     def documentation(name: str, help_text: str) -> argparse.ArgumentParser:
         command = commands.add_parser(name, help=help_text)
-        command.add_argument("--config", type=_path, default=DEFAULT_CONFIG)
+        command.add_argument("--config", type=_path, default=cpdocs.config.DEFAULT_CONFIG)
         command.add_argument(
             "--output",
             type=_path,
-            default=Path("build"),
+            default=pathlib.Path("build"),
             help="output root; cpdocs writes below <output>/cpdocs (default: build)",
         )
         command.add_argument(
@@ -82,9 +80,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == "manifest":
             if arguments.phase == "feature-sets":
-                write_python_feature_sets(arguments.source.resolve(), arguments.output.resolve())
+                cpdocs.providers.python.write_feature_sets(arguments.source.resolve(), arguments.output.resolve())
             else:
-                write_python_manifest(
+                cpdocs.providers.python.write_manifest(
                     arguments.source.resolve(),
                     arguments.feature_set.resolve(),
                     arguments.output.resolve(),
@@ -93,14 +91,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
         elif arguments.command == "rust":
             if arguments.rust_phase == "feature-sets":
-                write_rust_feature_sets(
+                cpdocs.providers.cargo.write_feature_sets(
                     arguments.source.resolve(),
                     arguments.output.resolve(),
                     package=arguments.package,
                     toolchain=arguments.toolchain,
                 )
             else:
-                write_rust_manifest(
+                cpdocs.providers.cargo.write_manifest(
                     arguments.source.resolve(),
                     arguments.feature_set.resolve(),
                     arguments.output.resolve(),
@@ -108,13 +106,13 @@ def main(argv: list[str] | None = None) -> int:
                     toolchain=arguments.toolchain,
                 )
         else:
-            config = load_config(arguments.config)
+            config = cpdocs.config.load_config(arguments.config)
             output = arguments.output.resolve()
             tmp_directory = arguments.tmp_directory.resolve() if arguments.tmp_directory is not None else None
             if arguments.command == "build":
-                build_current(config, output=output, version=arguments.label, tmp_directory=tmp_directory)
+                cpdocs.build.build_current(config, output=output, version=arguments.label, tmp_directory=tmp_directory)
             else:
-                build_versions(config, output=output, tmp_directory=tmp_directory)
+                cpdocs.build.build_versions(config, output=output, tmp_directory=tmp_directory)
     except RuntimeError as error:
         parser.exit(1, f"cpdocs: error: {error}\n")
     return 0

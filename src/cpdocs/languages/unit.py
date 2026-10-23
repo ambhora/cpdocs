@@ -11,16 +11,16 @@ function up with ``cpdocs.languages.extractor_for`` and passes it a ``UnitContex
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
+import collections.abc
+import dataclasses
+import pathlib
 
-from ..config import CpdocsConfig
-from ..contract import UnitManifest
-from ..model import ApiGraph
+import cpdocs.config
+import cpdocs.contract
+import cpdocs.model
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class UnitContext:
     """The build in which one unit is extracted.
 
@@ -31,13 +31,13 @@ class UnitContext:
 
     project: str
     version: str
-    project_root: Path
+    project_root: pathlib.Path
     feature_set: str
-    work_directory: Path
+    work_directory: pathlib.Path
     language_configuration: dict[str, object]
-    config: CpdocsConfig
+    config: cpdocs.config.CpdocsConfig
 
 
-UnitExtractor = Callable[[UnitManifest, UnitContext], ApiGraph]
+UnitExtractor = collections.abc.Callable[[cpdocs.contract.UnitManifest, UnitContext], cpdocs.model.ApiGraph]
 
 __all__ = ["UnitContext", "UnitExtractor"]

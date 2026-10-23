@@ -17,31 +17,32 @@ import dataclasses
 import fnmatch
 import html
 import json
+import pathlib
 import subprocess
 import sys
 import tempfile
-from pathlib import Path, PurePosixPath
 
-from .config import CpdocsConfig
-from .contract import ContractError, UnitManifest
-from .filesystem import contained_path, git_tracked_files, path_component, readable_file, remove_tree
-from .languages import UnitContext, extractor_for, rendering_for
-from .model import ApiGraph, merge_graphs, relative_source_path
-from .providers.contract import discover_feature_sets, language_template_values, resolve_manifest
-from .rendering.html import render_html_site
-from .resources import shared_template
-from .versioning import SelectedRef, current_branch, select_refs
+import cpdocs.config
+import cpdocs.contract
+import cpdocs.filesystem
+import cpdocs.languages
+import cpdocs.languages.unit
+import cpdocs.model
+import cpdocs.providers.contract
+import cpdocs.rendering.html
+import cpdocs.resources
+import cpdocs.versioning
 
 
 @dataclasses.dataclass(frozen=True)
 class Layout:
     """Published and temporary directories used by cpdocs."""
 
-    root: Path
-    work_root: Path
+    root: pathlib.Path
+    work_root: pathlib.Path
 
     @classmethod
-    def for_output(cls, output: Path, *, tmp_directory: Path | None = None) -> Layout:
+    def for_output(cls, output: pathlib.Path, *, tmp_directory: pathlib.Path | None = None) -> Layout:
         """The layout below ``<output>/cpdocs``, with work directories below ``tmp_directory`` if given."""
 
         # The output and temporary roots are the user's choice and may be reached through links.
@@ -52,18 +53,18 @@ class Layout:
         return cls(root=root, work_root=work_root)
 
     @property
-    def current(self) -> Path:
+    def current(self) -> pathlib.Path:
         """The API site of the working tree, written by ``cpdocs build``."""
         return self.root / "current"
 
     @property
-    def versions(self) -> Path:
+    def versions(self) -> pathlib.Path:
         """The versioned API site, one directory per documented ref, written by ``cpdocs versions``."""
         return self.root / "versions"
 
-    def work(self, ref: str) -> Path:
+    def work(self, ref: str) -> pathlib.Path:
         """The directory of requests, manifests and build trees handed to the build system for ``ref``."""
-        return self.work_root / "work" / path_component(ref.replace("/", "__"))
+        return self.work_root / "work" / cpdocs.filesystem.path_component(ref.replace("/", "__"))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -71,7 +72,14 @@ class Layout:
 # --------------------------------------------------------------------------------------------------
 
 
-def _browse_logical_path(path: Path, *, project_root: Path, unit: UnitManifest, category: str, root: Path) -> str:
+def _browse_logical_path(
+    path: pathlib.Path,
+    *,
+    project_root: pathlib.Path,
+    unit: cpdocs.contract.UnitManifest,
+    category: str,
+    root: pathlib.Path,
+) -> str:
     """The key of a browsed file: its project-relative path, or a ``_generated`` key outside the project."""
 
     try:
@@ -80,15 +88,15 @@ def _browse_logical_path(path: Path, *, project_root: Path, unit: UnitManifest, 
         # Keep a stable internal key for files outside the checkout. This path is not presented to
         # readers; rendering uses the semantic layout recorded in ``source_display_paths``. The
         # unit identifier comes from the build system and becomes a path, so it is made safe.
-        base = Path("_generated") / path_component(unit.id) / category
+        base = pathlib.Path("_generated") / cpdocs.filesystem.path_component(unit.id) / category
         try:
-            relative = path.resolve().relative_to(root.resolve()) if root.is_dir() else Path(path.name)
+            relative = path.resolve().relative_to(root.resolve()) if root.is_dir() else pathlib.Path(path.name)
         except (OSError, ValueError):
-            relative = Path(path.name)
+            relative = pathlib.Path(path.name)
         return (base / relative).as_posix()
 
 
-def _semantic_display_path(path: Path, *, root: Path, generated: bool) -> str:
+def _semantic_display_path(path: pathlib.Path, *, root: pathlib.Path, generated: bool) -> str:
     """Return the compiler-facing layout path shown in the file browser.
 
     Manifest roots are semantic roots. A file below ``.../src/cuda/include`` is therefore shown
@@ -101,19 +109,21 @@ def _semantic_display_path(path: Path, *, root: Path, generated: bool) -> str:
             relative = path.resolve().relative_to(root.resolve())
             root_name = root.name
         else:
-            relative = Path(path.name)
+            relative = pathlib.Path(path.name)
             root_name = root.parent.name
     except (OSError, ValueError):
-        relative = Path(path.name)
+        relative = pathlib.Path(path.name)
         root_name = root.name if root.name != path.name else root.parent.name
 
-    base = Path("_generated") if generated else Path()
+    base = pathlib.Path("_generated") if generated else pathlib.Path()
     if root_name:
         base /= root_name
     return (base / relative).as_posix()
 
 
-def _api_display_paths(unit: UnitManifest, graph: ApiGraph, *, project_root: Path) -> dict[str, str]:
+def _api_display_paths(
+    unit: cpdocs.contract.UnitManifest, graph: cpdocs.model.ApiGraph, *, project_root: pathlib.Path
+) -> dict[str, str]:
     """Map the keys of extracted API sources to the paths readers see, such as ``include/demo/x.hpp``."""
 
     values: dict[str, str] = {}
@@ -128,7 +138,7 @@ def _api_display_paths(unit: UnitManifest, graph: ApiGraph, *, project_root: Pat
                 root_relative = path.resolve().relative_to(root.resolve()).as_posix()
             except (OSError, ValueError):
                 root_relative = path.name
-            project_relative = relative_source_path(path, project_root)
+            project_relative = cpdocs.model.relative_source_path(path, project_root)
             logical = next(
                 (candidate for candidate in (root_relative, project_relative) if candidate in graph.sources), None
             )
@@ -140,7 +150,7 @@ def _api_display_paths(unit: UnitManifest, graph: ApiGraph, *, project_root: Pat
 
 
 def _collect_browse_files(
-    unit: UnitManifest, *, project_root: Path, tracked: frozenset[Path] | None
+    unit: cpdocs.contract.UnitManifest, *, project_root: pathlib.Path, tracked: frozenset[pathlib.Path] | None
 ) -> tuple[dict[str, str], list[str], dict[str, str]]:
     """Read the implementation sources a unit declares for the source browser.
 
@@ -166,7 +176,7 @@ def _collect_browse_files(
             else:
                 candidates = []
             for path in candidates:
-                if not readable_file(path, (root, project_root)):
+                if not cpdocs.filesystem.readable_file(path, (root, project_root)):
                     continue
                 resolved = path.resolve()
                 if (
@@ -188,18 +198,20 @@ def _collect_browse_files(
     return files, generated, display_paths
 
 
-def extract_unit(unit: UnitManifest, context: UnitContext) -> ApiGraph:
+def extract_unit(
+    unit: cpdocs.contract.UnitManifest, context: cpdocs.languages.unit.UnitContext
+) -> cpdocs.model.ApiGraph:
     """Extract the API graph of one manifest unit with the extractor of its language.
 
     A unit without a language only contributes files to the source browser, so its graph is empty.
     """
 
     if unit.language is None:
-        return ApiGraph(project=context.project, version=context.version, language="none")
+        return cpdocs.model.ApiGraph(project=context.project, version=context.version, language="none")
     try:
-        extractor = extractor_for(unit.language)
+        extractor = cpdocs.languages.extractor_for(unit.language)
     except ValueError as error:
-        raise ContractError(f"unsupported unit language {unit.language!r}") from error
+        raise cpdocs.contract.ContractError(f"unsupported unit language {unit.language!r}") from error
     return extractor(unit, context)
 
 
@@ -228,10 +240,12 @@ def _graph_language(languages: set[str]) -> str:
     return "mixed" if languages else "none"
 
 
-def _combine_unit_graphs(graphs: list[ApiGraph], *, project: str, version: str, language: str) -> ApiGraph:
+def _combine_unit_graphs(
+    graphs: list[cpdocs.model.ApiGraph], *, project: str, version: str, language: str
+) -> cpdocs.model.ApiGraph:
     """Combine the graphs of the units of one feature set into the graph of that feature set."""
 
-    combined = ApiGraph(project=project, version=version, language=language)
+    combined = cpdocs.model.ApiGraph(project=project, version=version, language=language)
     for graph in graphs:
         for entity in graph.entities.values():
             combined.add(entity)
@@ -244,7 +258,7 @@ def _combine_unit_graphs(graphs: list[ApiGraph], *, project: str, version: str, 
     return combined
 
 
-def _hide_configured_namespaces(graph: ApiGraph, config: CpdocsConfig) -> None:
+def _hide_configured_namespaces(graph: cpdocs.model.ApiGraph, config: cpdocs.config.CpdocsConfig) -> None:
     """Remove the C-family namespaces matching ``api.hide.cpp-namespaces``, with everything inside them."""
 
     patterns = config.hide_cpp_namespaces
@@ -269,7 +283,7 @@ def _hide_configured_namespaces(graph: ApiGraph, config: CpdocsConfig) -> None:
     graph.rebuild_children()
 
 
-def _report_undocumented(graph: ApiGraph, level: str) -> None:
+def _report_undocumented(graph: cpdocs.model.ApiGraph, level: str) -> None:
     """Warn about or fail on entities without documentation, as ``checks.undocumented`` asks.
 
     Containers such as namespaces and modules are exempt: they are often only documented once.
@@ -280,7 +294,8 @@ def _report_undocumented(graph: ApiGraph, level: str) -> None:
     missing = sorted(
         entity.qualified_name
         for entity in graph.entities.values()
-        if entity.kind not in rendering_for(entity.language).container_kinds and not entity.documentation.strip()
+        if entity.kind not in cpdocs.languages.rendering_for(entity.language).container_kinds
+        and not entity.documentation.strip()
     )
     if not missing:
         return
@@ -292,7 +307,12 @@ def _report_undocumented(graph: ApiGraph, level: str) -> None:
     print(f"cpdocs: warning: {message}", file=sys.stderr)
 
 
-def _document_unit(unit: UnitManifest, context: UnitContext, *, tracked: frozenset[Path] | None) -> ApiGraph:
+def _document_unit(
+    unit: cpdocs.contract.UnitManifest,
+    context: cpdocs.languages.unit.UnitContext,
+    *,
+    tracked: frozenset[pathlib.Path] | None,
+) -> cpdocs.model.ApiGraph:
     """Extract one unit and add the implementation files it declares for the source browser."""
 
     graph = extract_unit(unit, context)
@@ -314,7 +334,9 @@ def _document_unit(unit: UnitManifest, context: UnitContext, *, tracked: frozens
     return graph
 
 
-def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str) -> ApiGraph:
+def build_graph(
+    config: cpdocs.config.CpdocsConfig, *, source: pathlib.Path, work: pathlib.Path, version: str
+) -> cpdocs.model.ApiGraph:
     """Document one checkout: the API of every build variant, merged into one graph.
 
     For every concrete language configuration, the ``build.feature-sets`` hook lists the variants
@@ -323,7 +345,7 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
     every entity records the variants and language configurations it exists in.
     """
 
-    per_feature_set: list[tuple[str, ApiGraph]] = []
+    per_feature_set: list[tuple[str, cpdocs.model.ApiGraph]] = []
     metadata: dict[str, object] = {}
     languages: set[str] = set()
     units: dict[tuple[str, str], None] = {}
@@ -333,13 +355,13 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
     project_version = ""
     generator = ""
     multiple_languages = len(config.language_configurations) > 1
-    tracked = git_tracked_files(source)
+    tracked = cpdocs.filesystem.git_tracked_files(source)
 
     for index, configuration in enumerate(config.language_configurations, 1):
-        template_values = language_template_values(configuration)
+        template_values = cpdocs.providers.contract.language_template_values(configuration)
         # Preserve the existing work directory layout for projects with a single configuration.
         language_work = work / "language-configurations" / f"language-{index:03d}" if multiple_languages else work
-        feature_sets = discover_feature_sets(
+        feature_sets = cpdocs.providers.contract.discover_feature_sets(
             config.feature_sets, source=source, work=language_work, template_values=template_values
         )
         if project is None:
@@ -353,7 +375,7 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
 
         for feature_set in feature_sets.feature_sets:
             key = f"language-{index:03d}--{feature_set.key}" if multiple_languages else feature_set.key
-            manifest = resolve_manifest(
+            manifest = cpdocs.providers.contract.resolve_manifest(
                 config.build, feature_set, source=source, work=language_work, template_values=template_values
             )
             if manifest.options:
@@ -366,12 +388,12 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
             unit_graphs = [
                 _document_unit(
                     unit,
-                    UnitContext(
+                    cpdocs.languages.unit.UnitContext(
                         project=feature_sets.project,
                         version=version,
                         project_root=source,
                         feature_set=key,
-                        work_directory=unit_work / path_component(unit.id),
+                        work_directory=unit_work / cpdocs.filesystem.path_component(unit.id),
                         language_configuration=configuration,
                         config=config,
                     ),
@@ -391,7 +413,9 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
             per_feature_set.append((key, graph))
             all_feature_selections.append(feature_set.selection)
 
-    merged = merge_graphs(per_feature_set, project=project or "", version=version, language=_graph_language(languages))
+    merged = cpdocs.model.merge_graphs(
+        per_feature_set, project=project or "", version=version, language=_graph_language(languages)
+    )
     metadata["feature_sets"] = all_feature_selections
     metadata["language_configurations"] = list(config.language_configurations)
     sorted_units = sorted(units, key=lambda value: (value[0], value[1] or ""))
@@ -412,26 +436,33 @@ def build_graph(config: CpdocsConfig, *, source: Path, work: Path, version: str)
 # --------------------------------------------------------------------------------------------------
 
 
-def _graph_as_json(graph: ApiGraph) -> str:
+def _graph_as_json(graph: cpdocs.model.ApiGraph) -> str:
     """The API graph as JSON, written next to the rendered site for inspection and debugging."""
 
     return json.dumps(dataclasses.asdict(graph), indent=2, sort_keys=True, default=str) + "\n"
 
 
-def _project_docs_url(graph: ApiGraph, configured: str, *, root_depth: int) -> str:
+def _project_docs_url(graph: cpdocs.model.ApiGraph, configured: str, *, root_depth: int) -> str:
     """The link to the project website: ``site.project-docs``, or for ``auto`` the relative path up to it."""
 
     if configured != "auto":
         return configured
-    version_depth = max(1, len(PurePosixPath(graph.version).parts))
+    version_depth = max(1, len(pathlib.PurePosixPath(graph.version).parts))
     return "../" * (root_depth + version_depth)
 
 
-def _render_version(graph: ApiGraph, config: CpdocsConfig, *, output: Path, work: Path, root_depth: int) -> None:
+def _render_version(
+    graph: cpdocs.model.ApiGraph,
+    config: cpdocs.config.CpdocsConfig,
+    *,
+    output: pathlib.Path,
+    work: pathlib.Path,
+    root_depth: int,
+) -> None:
     """Render the API site of one version into ``output`` and keep its graph as JSON in ``work``."""
 
     work.mkdir(parents=True, exist_ok=True)
-    render_html_site(
+    cpdocs.rendering.html.render_html_site(
         graph,
         output_directory=output,
         project_docs_url=_project_docs_url(graph, config.project_docs, root_depth=root_depth),
@@ -443,13 +474,13 @@ def _render_version(graph: ApiGraph, config: CpdocsConfig, *, output: Path, work
 
 
 def build_current(
-    config: CpdocsConfig,
+    config: cpdocs.config.CpdocsConfig,
     *,
-    output: Path,
+    output: pathlib.Path,
     version: str = "main",
     project_docs_root_depth: int = 2,
-    tmp_directory: Path | None = None,
-) -> ApiGraph:
+    tmp_directory: pathlib.Path | None = None,
+) -> cpdocs.model.ApiGraph:
     """Document the working tree into ``<output>/cpdocs/current``."""
 
     layout = Layout.for_output(output, tmp_directory=tmp_directory)
@@ -459,7 +490,7 @@ def build_current(
     return graph
 
 
-def _html_page_paths(root: Path) -> list[str]:
+def _html_page_paths(root: pathlib.Path) -> list[str]:
     """Every HTML page of a rendered version, relative to it, for the version switcher."""
 
     if not root.is_dir():
@@ -470,10 +501,12 @@ def _html_page_paths(root: Path) -> list[str]:
 def _redirect_page(target: str) -> str:
     """An HTML page that sends the reader on to ``target``."""
 
-    return shared_template("api/versions-redirect.html").substitute(target=html.escape(target, quote=True))
+    return cpdocs.resources.shared_template("api/versions-redirect.html").substitute(
+        target=html.escape(target, quote=True)
+    )
 
 
-def _write_version_index(output: Path, built: list[SelectedRef]) -> None:
+def _write_version_index(output: pathlib.Path, built: list[cpdocs.versioning.SelectedRef]) -> None:
     """Write ``versions.json`` and the redirect to the default version, the first one built."""
 
     default_name = built[0].name if built else "main"
@@ -490,7 +523,7 @@ def _write_version_index(output: Path, built: list[SelectedRef]) -> None:
     (output / "index.html").write_text(_redirect_page(default_name + "/"), encoding="utf-8")
 
 
-def _run_git(command: list[str], *, cwd: Path) -> None:
+def _run_git(command: list[str], *, cwd: pathlib.Path) -> None:
     """Run a Git command in ``cwd`` and raise with its output if it fails."""
 
     result = subprocess.run(
@@ -500,7 +533,7 @@ def _run_git(command: list[str], *, cwd: Path) -> None:
         raise RuntimeError("Git command failed:\n" + result.stdout.rstrip())
 
 
-def _config_for_checkout(config: CpdocsConfig, checkout: Path) -> CpdocsConfig:
+def _config_for_checkout(config: cpdocs.config.CpdocsConfig, checkout: pathlib.Path) -> cpdocs.config.CpdocsConfig:
     """Use the current cpdocs policy against another checkout of the same project.
 
     The introduction is content and comes from the checkout. The theme is presentation and keeps
@@ -520,7 +553,7 @@ def _config_for_checkout(config: CpdocsConfig, checkout: Path) -> CpdocsConfig:
     )
 
 
-def _repository_root(project_root: Path) -> Path:
+def _repository_root(project_root: pathlib.Path) -> pathlib.Path:
     """The top directory of the Git repository that contains ``project_root``."""
 
     result = subprocess.run(
@@ -533,45 +566,45 @@ def _repository_root(project_root: Path) -> Path:
     )
     if result.returncode != 0:
         raise RuntimeError(f"{project_root} is not inside a Git repository")
-    return Path(result.stdout.strip()).resolve()
+    return pathlib.Path(result.stdout.strip()).resolve()
 
 
 def build_versions(
-    config: CpdocsConfig,
+    config: cpdocs.config.CpdocsConfig,
     *,
-    output: Path,
+    output: pathlib.Path,
     project_docs_root_depth: int = 2,
     include_working_tree: bool = False,
-    tmp_directory: Path | None = None,
+    tmp_directory: pathlib.Path | None = None,
 ) -> list[str]:
     """Document the explicitly configured ``versions`` in order."""
 
     layout = Layout.for_output(output, tmp_directory=tmp_directory)
     project_root = config.project_root.resolve()
     subdirectory = project_root.relative_to(_repository_root(project_root))
-    selected = select_refs(project_root, config.versions)
+    selected = cpdocs.versioning.select_refs(project_root, config.versions)
 
     if include_working_tree:
-        checked_out = current_branch(project_root)
+        checked_out = cpdocs.versioning.current_branch(project_root)
         if checked_out is not None:
             existing = next((ref for ref in selected if ref.name == checked_out), None)
             if existing is not None:
                 selected.remove(existing)
-            selected.insert(0, SelectedRef(name=checked_out, kind="worktree", checkout=None))
+            selected.insert(0, cpdocs.versioning.SelectedRef(name=checked_out, kind="worktree", checkout=None))
         elif not any(ref.checkout is None for ref in selected):
-            selected.insert(0, SelectedRef(name="current", kind="worktree", checkout=None))
+            selected.insert(0, cpdocs.versioning.SelectedRef(name="current", kind="worktree", checkout=None))
 
-    remove_tree(layout.versions, owner=layout.root.parent)
+    cpdocs.filesystem.remove_tree(layout.versions, owner=layout.root.parent)
     layout.versions.mkdir(parents=True, exist_ok=True)
 
-    built: list[SelectedRef] = []
+    built: list[cpdocs.versioning.SelectedRef] = []
     for ref in selected:
         temporary: tempfile.TemporaryDirectory[str] | None = None
-        worktree: Path | None = None
+        worktree: pathlib.Path | None = None
         checkout = project_root
         if ref.checkout is not None:
             temporary = tempfile.TemporaryDirectory(prefix="cpdocs-ref-")
-            worktree = Path(temporary.name) / "checkout"
+            worktree = pathlib.Path(temporary.name) / "checkout"
             _run_git(["worktree", "add", "--detach", str(worktree), ref.checkout], cwd=project_root)
             checkout = worktree / subdirectory
         try:
@@ -583,7 +616,7 @@ def build_versions(
             _render_version(
                 graph,
                 ref_config,
-                output=contained_path(layout.versions, Path(ref.name)),
+                output=cpdocs.filesystem.contained_path(layout.versions, pathlib.Path(ref.name)),
                 work=work / "render",
                 root_depth=project_docs_root_depth,
             )
@@ -597,7 +630,7 @@ def build_versions(
     return [ref.name for ref in built]
 
 
-def recorded_default_version(output: Path) -> str:
+def recorded_default_version(output: pathlib.Path) -> str:
     """The default version recorded by the last :func:`build_versions` run."""
 
     metadata = Layout.for_output(output).versions / "versions.json"
@@ -607,12 +640,4 @@ def recorded_default_version(output: Path) -> str:
         return "main"
 
 
-__all__ = [
-    "Layout",
-    "build_current",
-    "build_graph",
-    "build_versions",
-    "discover_feature_sets",
-    "recorded_default_version",
-    "resolve_manifest",
-]
+__all__ = ["Layout", "build_current", "build_graph", "build_versions", "recorded_default_version"]

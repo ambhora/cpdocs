@@ -12,10 +12,10 @@ used to extract it.
 
 from __future__ import annotations
 
+import dataclasses
 import json
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+import pathlib
+import typing
 
 CONTRACT_VERSION = 1
 LANGUAGES = ("c", "cpp", "cuda", "hip", "fortran", "python", "rust")
@@ -27,7 +27,7 @@ class ContractError(RuntimeError):
     """A build-system output does not satisfy the cpdocs contract."""
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FeatureSetDeclaration:
     """One unnamed concrete feature set returned by the build system.
 
@@ -37,14 +37,14 @@ class FeatureSetDeclaration:
 
     key: str
     features: tuple[str, ...]
-    selection: dict[str, Any]
+    selection: dict[str, typing.Any]
 
     def to_json(self) -> dict[str, object]:
         # Preserve the exact build-system-owned selection object, only adding the protocol marker.
         return {**self.selection, "cpdocs-feature-set": CONTRACT_VERSION}
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FeatureSets:
     project: str
     version: str
@@ -56,7 +56,7 @@ def _feature_set_key(index: int) -> str:
     return f"feature-set-{index + 1:03d}"
 
 
-def read_feature_sets(path: Path) -> FeatureSets:
+def read_feature_sets(path: pathlib.Path) -> FeatureSets:
     raw = _load_json(path, "feature-sets manifest")
     if raw.get("cpdocs-feature-sets") != CONTRACT_VERSION:
         raise ContractError(f"{path}: unsupported cpdocs-feature-sets {raw.get('cpdocs-feature-sets')!r}")
@@ -85,12 +85,12 @@ def read_feature_sets(path: Path) -> FeatureSets:
     )
 
 
-def write_feature_set(path: Path, feature_set: FeatureSetDeclaration) -> None:
+def write_feature_set(path: pathlib.Path, feature_set: FeatureSetDeclaration) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(feature_set.to_json(), indent=2) + "\n", encoding="utf-8")
 
 
-def read_feature_set(path: Path) -> FeatureSetDeclaration:
+def read_feature_set(path: pathlib.Path) -> FeatureSetDeclaration:
     raw = _load_json(path, "feature-set input")
     if raw.get("cpdocs-feature-set") != CONTRACT_VERSION:
         raise ContractError(f"{path}: unsupported cpdocs-feature-set {raw.get('cpdocs-feature-set')!r}")
@@ -99,24 +99,24 @@ def read_feature_set(path: Path) -> FeatureSetDeclaration:
     return FeatureSetDeclaration(key="selected", features=features, selection=selection)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ApiRoot:
-    path: Path
+    path: pathlib.Path
     generated: bool
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class ParseOptions:
     standard: str
-    include: tuple[Path, ...]
-    system_include: tuple[Path, ...]
+    include: tuple[pathlib.Path, ...]
+    system_include: tuple[pathlib.Path, ...]
     define: tuple[str, ...]
     flags: tuple[str, ...]
-    compile_database: Path | None
+    compile_database: pathlib.Path | None
     language: str = "cpp"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class UnitManifest:
     id: str
     # Semantic API language shown to readers: c, cpp, cuda, hip, ...
@@ -124,26 +124,26 @@ class UnitManifest:
     api: tuple[ApiRoot, ...]
     # Semantic layout roots/files are used only for the source browser.  They do not expand the API
     # boundary: API extraction still uses ``api`` (and, for Fortran, module sources).
-    headers: tuple[Path, ...]
-    sources: tuple[Path, ...]
-    modules: tuple[Path, ...]
-    executables: tuple[Path, ...]
+    headers: tuple[pathlib.Path, ...]
+    sources: tuple[pathlib.Path, ...]
+    modules: tuple[pathlib.Path, ...]
+    executables: tuple[pathlib.Path, ...]
     generated: bool
     # Parser/frontend details are independent of the semantic language.  CUDA and HIP headers, for
     # example, may be documented through the C++ frontend while remaining CUDA/HIP API units.
     parse: ParseOptions | None
     package: str | None
-    rustdoc_json: Path | None
+    rustdoc_json: pathlib.Path | None
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Manifest:
     units: tuple[UnitManifest, ...]
     # Optional build-system metadata; feature-set enumeration depends only on features.
-    options: tuple[dict[str, Any], ...] = ()
+    options: tuple[dict[str, typing.Any], ...] = ()
 
 
-def read_manifest(path: Path, *, source: Path) -> Manifest:
+def read_manifest(path: pathlib.Path, *, source: pathlib.Path) -> Manifest:
     """Read the output of one build; relative paths are resolved against ``source``."""
 
     raw = _load_json(path, "manifest")
@@ -170,7 +170,7 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
                 )
             )
 
-        def paths(field: str, *, data: dict[str, Any], where: str) -> tuple[Path, ...]:
+        def paths(field: str, *, data: dict[str, typing.Any], where: str) -> tuple[pathlib.Path, ...]:
             return tuple(_path(item, source) for item in _string_tuple(data.get(field, []), f"{where}.{field}", path))
 
         headers = paths("headers", data=data, where=where)
@@ -181,7 +181,7 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
 
         parse: ParseOptions | None = None
         package: str | None = None
-        rustdoc_json: Path | None = None
+        rustdoc_json: pathlib.Path | None = None
         if declaration.language in CLANG_LANGUAGES:
             if not api:
                 raise ContractError(f"{path}: {where}: a C/C++/CUDA/HIP unit needs at least one API root")
@@ -240,13 +240,13 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
     return Manifest(units=tuple(units), options=tuple(option_metadata))
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class UnitDeclaration:
     id: str
     language: str | None
 
 
-def _load_json(path: Path, what: str) -> dict[str, Any]:
+def _load_json(path: pathlib.Path, what: str) -> dict[str, typing.Any]:
     if not path.is_file():
         raise ContractError(f"the build system did not write the {what} {path}")
     try:
@@ -258,13 +258,13 @@ def _load_json(path: Path, what: str) -> dict[str, Any]:
     return raw
 
 
-def _mapping(value: object, name: str, path: Path) -> dict[str, Any]:
+def _mapping(value: object, name: str, path: pathlib.Path) -> dict[str, typing.Any]:
     if not isinstance(value, dict):
         raise ContractError(f"{path}: {name} must be an object")
     return {str(key): item for key, item in value.items()}
 
 
-def _string(data: dict[str, Any], key: str, path: Path, where: str = "") -> str:
+def _string(data: dict[str, typing.Any], key: str, path: pathlib.Path, where: str = "") -> str:
     value = data.get(key)
     if not isinstance(value, str) or not value:
         prefix = f"{where}." if where else ""
@@ -272,13 +272,13 @@ def _string(data: dict[str, Any], key: str, path: Path, where: str = "") -> str:
     return value
 
 
-def _string_tuple(value: object, name: str, path: Path) -> tuple[str, ...]:
+def _string_tuple(value: object, name: str, path: pathlib.Path) -> tuple[str, ...]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ContractError(f"{path}: {name} must be a list of strings")
     return tuple(value)
 
 
-def _feature_tuple(value: object, path: Path, where: str) -> tuple[str, ...]:
+def _feature_tuple(value: object, path: pathlib.Path, where: str) -> tuple[str, ...]:
     features = _string_tuple(value, f"{where}.features", path)
     if any(not feature for feature in features):
         raise ContractError(f"{path}: {where}.features must contain non-empty strings")
@@ -287,7 +287,7 @@ def _feature_tuple(value: object, path: Path, where: str) -> tuple[str, ...]:
     return features
 
 
-def _units(value: object, path: Path) -> tuple[UnitDeclaration, ...]:
+def _units(value: object, path: pathlib.Path) -> tuple[UnitDeclaration, ...]:
     if not isinstance(value, list) or not value:
         raise ContractError(f"{path}: units must be a non-empty list")
     units: list[UnitDeclaration] = []
@@ -307,6 +307,6 @@ def _units(value: object, path: Path) -> tuple[UnitDeclaration, ...]:
     return tuple(units)
 
 
-def _path(value: str, source: Path) -> Path:
-    path = Path(value).expanduser()
+def _path(value: str, source: pathlib.Path) -> pathlib.Path:
+    path = pathlib.Path(value).expanduser()
     return (path if path.is_absolute() else source / path).resolve()

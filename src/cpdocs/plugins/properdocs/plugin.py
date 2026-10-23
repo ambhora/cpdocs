@@ -9,30 +9,20 @@ from __future__ import annotations
 import json
 import logging
 import os
+import pathlib
 import re
 import shutil
 import subprocess
 import sys
-from pathlib import Path, PurePosixPath
 
-from properdocs.config import config_options as c
-from properdocs.exceptions import PluginError
-from properdocs.plugins import BasePlugin
+import properdocs.config.config_options
+import properdocs.exceptions
+import properdocs.plugins
 
-from cpdocs.build import Layout, build_versions, recorded_default_version
-from cpdocs.config import DEFAULT_CONFIG, CpdocsConfig, load_config
-from cpdocs.filesystem import remove_tree
-
-from .core import (
-    default_issue_url,
-    edit_url,
-    expand_versions_directive,
-    mount_path,
-    publish_api,
-    repository_provider,
-    resolve_api_references,
-    source_url,
-)
+import cpdocs.build
+import cpdocs.config
+import cpdocs.filesystem
+import cpdocs.plugins.properdocs.core
 
 _LOG = logging.getLogger("properdocs.plugins.cpdocs")
 _Fingerprint = tuple[tuple[str, int, int], ...]
@@ -42,75 +32,78 @@ def _symbol_key(symbol: str) -> tuple[str, ...]:
     return tuple(part for part in re.split(r"::|\.", symbol) if part)
 
 
-class CpdocsPlugin(BasePlugin):
+class CpdocsPlugin(properdocs.plugins.BasePlugin):
     """Build cpdocs before ProperDocs and mount it into the final static site."""
 
     config_scheme = (
-        ("config", c.Type(str, default=str(DEFAULT_CONFIG))),
-        ("output", c.Type(str, default="build")),
-        ("tmp_directory", c.Type(str, default="")),
-        ("mount", c.Type(str, default="reference/api")),
-        ("subsites", c.ListOfItems(c.Type(str), default=[])),
+        ("config", properdocs.config.config_options.Type(str, default=str(cpdocs.config.DEFAULT_CONFIG))),
+        ("output", properdocs.config.config_options.Type(str, default="build")),
+        ("tmp_directory", properdocs.config.config_options.Type(str, default="")),
+        ("mount", properdocs.config.config_options.Type(str, default="reference/api")),
+        (
+            "subsites",
+            properdocs.config.config_options.ListOfItems(properdocs.config.config_options.Type(str), default=[]),
+        ),
     )
 
     def __init__(self) -> None:
-        self._project_root: Path | None = None
-        self._cpdocs: CpdocsConfig | None = None
+        self._project_root: pathlib.Path | None = None
+        self._cpdocs: cpdocs.config.CpdocsConfig | None = None
         self._last_fingerprint: _Fingerprint | None = None
-        self._subsite_build_state: dict[Path, tuple[_Fingerprint, bool]] = {}
+        self._subsite_build_state: dict[pathlib.Path, tuple[_Fingerprint, bool]] = {}
         self._serve_active = False
         self._symbols: dict[str, dict[tuple[str, ...], str]] = {}
 
     @property
     def mount(self) -> str:
         try:
-            return mount_path(str(self.config.get("mount", "reference/api"))).as_posix()
+            return cpdocs.plugins.properdocs.core.mount_path(str(self.config.get("mount", "reference/api"))).as_posix()
         except ValueError as error:
-            raise PluginError(f"cpdocs: {error}") from error
+            raise properdocs.exceptions.PluginError(f"cpdocs: {error}") from error
 
     @property
-    def output(self) -> Path:
+    def output(self) -> pathlib.Path:
         assert self._project_root is not None
-        path = Path(str(self.config.get("output", "build")))
+        path = pathlib.Path(str(self.config.get("output", "build")))
         return path if path.is_absolute() else self._project_root / path
 
     @property
-    def tmp_directory(self) -> Path | None:
+    def tmp_directory(self) -> pathlib.Path | None:
         assert self._project_root is not None
         value = str(self.config.get("tmp_directory", "")).strip()
         if not value:
             return None
-        path = Path(value).expanduser()
+        path = pathlib.Path(value).expanduser()
         return path if path.is_absolute() else self._project_root / path
 
     def on_startup(self, *, command: str, dirty: bool = False) -> None:
         del dirty
         self._serve_active = command == "serve" or os.environ.get("_CPDOCS_SERVE_IN_SITU") == "1"
 
-    def _config_file(self, config) -> Path:
+    def _config_file(self, config) -> pathlib.Path:
         value = getattr(config, "config_file_path", None)
         if value:
-            return Path(value).resolve()
-        return (Path.cwd() / "properdocs.yml").resolve()
+            return pathlib.Path(value).resolve()
+        return (pathlib.Path.cwd() / "properdocs.yml").resolve()
 
     def on_config(self, config):
         self._project_root = self._config_file(config).parent
-        cpdocs_file = Path(str(self.config.get("config", DEFAULT_CONFIG)))
+        cpdocs_file = pathlib.Path(str(self.config.get("config", cpdocs.config.DEFAULT_CONFIG)))
         if not cpdocs_file.is_absolute():
             cpdocs_file = self._project_root / cpdocs_file
         try:
-            self._cpdocs = load_config(cpdocs_file)
+            self._cpdocs = cpdocs.config.load_config(cpdocs_file)
         except RuntimeError as error:
-            raise PluginError(f"cpdocs: {error}") from error
+            raise properdocs.exceptions.PluginError(f"cpdocs: {error}") from error
 
         extra = dict(config.get("extra", {}) or {})
         repo_url = str(config.get("repo_url") or "").strip()
         if repo_url:
-            provider = repository_provider(repo_url, extra)
+            provider = cpdocs.plugins.properdocs.core.repository_provider(repo_url, extra)
             extra["cpdocs_repo_provider"] = provider
             extra["cpdocs_source_ref"] = os.environ.get("CPDOCS_SOURCE_REF") or self._source_ref()
             if not extra.get("cpdocs_issue_url"):
-                extra["cpdocs_issue_url"] = default_issue_url(repo_url, provider)
+                extra["cpdocs_issue_url"] = cpdocs.plugins.properdocs.core.default_issue_url(repo_url, provider)
         config["extra"] = extra
         return config
 
@@ -132,7 +125,7 @@ class CpdocsPlugin(BasePlugin):
         result = self._git("describe", "--tags", "--exact-match")
         return result.stdout.strip() if result.returncode == 0 else "main"
 
-    def _watched_files(self) -> list[Path]:
+    def _watched_files(self) -> list[pathlib.Path]:
         """Files whose change should trigger a rebuild during ``properdocs serve``."""
 
         assert self._project_root is not None
@@ -162,14 +155,14 @@ class CpdocsPlugin(BasePlugin):
     def _fingerprint(self) -> _Fingerprint:
         return self._fingerprint_paths(self._watched_files())
 
-    def _subsite_fingerprint(self, project: Path, watched_files: list[Path]) -> _Fingerprint:
+    def _subsite_fingerprint(self, project: pathlib.Path, watched_files: list[pathlib.Path]) -> _Fingerprint:
         """Fingerprint one subsite and cpdocs itself, but not unrelated project docs."""
 
         assert self._project_root is not None
         project = project.resolve()
         refs = (self._project_root / ".git" / "refs").resolve()
-        plugin_source = Path(__file__).resolve().parent
-        selected: list[Path] = []
+        plugin_source = pathlib.Path(__file__).resolve().parent
+        selected: list[pathlib.Path] = []
         for path in watched_files:
             resolved = path.resolve()
             if (
@@ -181,12 +174,12 @@ class CpdocsPlugin(BasePlugin):
                 selected.append(path)
         return self._fingerprint_paths(selected)
 
-    def _watch_roots(self) -> list[Path]:
+    def _watch_roots(self) -> list[pathlib.Path]:
         """Compact watch set which still notices new files in project directories."""
 
         assert self._project_root is not None
         project_root = self._project_root.resolve()
-        roots: set[Path] = set()
+        roots: set[pathlib.Path] = set()
         for path in self._watched_files():
             resolved = path.resolve()
             try:
@@ -220,25 +213,25 @@ class CpdocsPlugin(BasePlugin):
         del config
         assert self._cpdocs is not None
         fingerprint = self._fingerprint()
-        versions = Layout.for_output(self.output).versions
+        versions = cpdocs.build.Layout.for_output(self.output).versions
         if self._serve_active and fingerprint == self._last_fingerprint and versions.is_dir():
             return
         try:
-            build_versions(
+            cpdocs.build.build_versions(
                 self._cpdocs,
                 output=self.output,
-                project_docs_root_depth=len(PurePosixPath(self.mount).parts),
+                project_docs_root_depth=len(pathlib.PurePosixPath(self.mount).parts),
                 include_working_tree=self._serve_active,
                 tmp_directory=self.tmp_directory,
             )
         except RuntimeError as error:
-            raise PluginError(f"cpdocs: {error}") from error
+            raise properdocs.exceptions.PluginError(f"cpdocs: {error}") from error
         self._last_fingerprint = fingerprint
         self._symbols = {}
 
     def _symbol_pages(self, version: str) -> dict[tuple[str, ...], str]:
         if version not in self._symbols:
-            path = Layout.for_output(self.output).versions / version / "symbols.json"
+            path = cpdocs.build.Layout.for_output(self.output).versions / version / "symbols.json"
             try:
                 names = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
@@ -250,7 +243,7 @@ class CpdocsPlugin(BasePlugin):
         return self._symbol_pages(version).get(_symbol_key(symbol))
 
     def _versions_metadata(self) -> dict[str, object]:
-        path = Layout.for_output(self.output).versions / "versions.json"
+        path = cpdocs.build.Layout.for_output(self.output).versions / "versions.json"
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -261,14 +254,14 @@ class CpdocsPlugin(BasePlugin):
         assert self._cpdocs is not None
         level = self._cpdocs.check_broken_references
         missing: list[tuple[str, str]] = []
-        markdown = expand_versions_directive(
+        markdown = cpdocs.plugins.properdocs.core.expand_versions_directive(
             markdown, page_dest_uri=page.file.dest_uri, mount=self.mount, metadata=self._versions_metadata()
         )
-        result = resolve_api_references(
+        result = cpdocs.plugins.properdocs.core.resolve_api_references(
             markdown,
             page_dest_uri=page.file.dest_uri,
             mount=self.mount,
-            default_version=recorded_default_version(self.output),
+            default_version=cpdocs.build.recorded_default_version(self.output),
             locate=self._locate,
             missing=missing,
         )
@@ -276,7 +269,7 @@ class CpdocsPlugin(BasePlugin):
             listing = ", ".join(f"{symbol} ({version})" for version, symbol in missing)
             message = f"cpdocs: {page.file.src_uri} references unknown API entities: {listing}"
             if level == "fail":
-                raise PluginError(message)
+                raise properdocs.exceptions.PluginError(message)
             _LOG.warning(message)
         return result
 
@@ -290,44 +283,52 @@ class CpdocsPlugin(BasePlugin):
         context["cpdocs_edit_url"] = None
         if not repo_url or not ref:
             return context
-        source = Path(page.file.abs_src_path).resolve()
+        source = pathlib.Path(page.file.abs_src_path).resolve()
         try:
             relative_source = source.relative_to(self._project_root).as_posix()
         except ValueError:
             return context
-        provider = repository_provider(repo_url, extra)
-        context["cpdocs_source_url"] = source_url(repo_url, provider, str(ref), relative_source)
-        context["cpdocs_edit_url"] = edit_url(repo_url, provider, str(ref), relative_source)
+        provider = cpdocs.plugins.properdocs.core.repository_provider(repo_url, extra)
+        context["cpdocs_source_url"] = cpdocs.plugins.properdocs.core.source_url(
+            repo_url, provider, str(ref), relative_source
+        )
+        context["cpdocs_edit_url"] = cpdocs.plugins.properdocs.core.edit_url(
+            repo_url, provider, str(ref), relative_source
+        )
         return context
 
-    def _subsites(self) -> list[tuple[Path, Path]]:
+    def _subsites(self) -> list[tuple[pathlib.Path, pathlib.Path]]:
         """Return configured ProperDocs sub-sites and their site-relative mounts."""
 
         assert self._project_root is not None
         root = self._project_root.resolve()
-        result: list[tuple[Path, Path]] = []
-        seen: set[Path] = set()
+        result: list[tuple[pathlib.Path, pathlib.Path]] = []
+        seen: set[pathlib.Path] = set()
         for configured in self.config.get("subsites", []) or []:
             value = str(configured).strip().strip("/")
             if not value:
-                raise PluginError("cpdocs: subsite paths must not be empty")
-            relative = Path(value)
+                raise properdocs.exceptions.PluginError("cpdocs: subsite paths must not be empty")
+            relative = pathlib.Path(value)
             if relative.is_absolute() or ".." in relative.parts:
-                raise PluginError(f"cpdocs: subsite must be below the project root: {configured}")
+                raise properdocs.exceptions.PluginError(f"cpdocs: subsite must be below the project root: {configured}")
             project = (root / relative).resolve()
             try:
                 mount = project.relative_to(root)
             except ValueError as error:
-                raise PluginError(f"cpdocs: subsite must be below the project root: {configured}") from error
+                raise properdocs.exceptions.PluginError(
+                    f"cpdocs: subsite must be below the project root: {configured}"
+                ) from error
             if project in seen:
                 continue
             if not (project / "properdocs.yml").is_file():
-                raise PluginError(f"cpdocs: subsite has no properdocs.yml: {configured}")
+                raise properdocs.exceptions.PluginError(f"cpdocs: subsite has no properdocs.yml: {configured}")
             seen.add(project)
             result.append((project, mount))
         return result
 
-    def _run_subsite_build(self, project: Path, mount: Path, destination: Path, *, strict: bool) -> None:
+    def _run_subsite_build(
+        self, project: pathlib.Path, mount: pathlib.Path, destination: pathlib.Path, *, strict: bool
+    ) -> None:
         environment = os.environ.copy()
         if self._serve_active:
             # The nested invocation uses ``build`` so that it writes once into a persistent
@@ -346,16 +347,18 @@ class CpdocsPlugin(BasePlugin):
             stderr=subprocess.STDOUT,
         )
         if result.returncode != 0:
-            raise PluginError(f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n{result.stdout}")
+            raise properdocs.exceptions.PluginError(
+                f"cpdocs: ProperDocs subsite build failed for {mount.as_posix()}:\n{result.stdout}"
+            )
         _LOG.info("Built ProperDocs subsite %s", mount.as_posix())
 
     @staticmethod
-    def _publish_subsite(source: Path, destination: Path, *, site_directory: Path) -> None:
-        remove_tree(destination, owner=site_directory)
+    def _publish_subsite(source: pathlib.Path, destination: pathlib.Path, *, site_directory: pathlib.Path) -> None:
+        cpdocs.filesystem.remove_tree(destination, owner=site_directory)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, destination)
 
-    def _build_subsites(self, site_directory: Path, *, strict: bool) -> None:
+    def _build_subsites(self, site_directory: pathlib.Path, *, strict: bool) -> None:
         """Build and mount nested ProperDocs projects.
 
         During ``serve`` the parent site directory is cleaned on every normal rebuild. Building
@@ -367,7 +370,7 @@ class CpdocsPlugin(BasePlugin):
 
         subsites = self._subsites()
         watched_files = self._watched_files() if self._serve_active else []
-        cache_root = Layout.for_output(self.output).root / "subsites"
+        cache_root = cpdocs.build.Layout.for_output(self.output).root / "subsites"
 
         for project, mount in subsites:
             destination = site_directory / mount
@@ -387,6 +390,8 @@ class CpdocsPlugin(BasePlugin):
             self._publish_subsite(cache, destination, site_directory=site_directory)
 
     def on_post_build(self, *, config) -> None:
-        site_directory = Path(config["site_dir"]).resolve()
-        publish_api(Layout.for_output(self.output).versions, site_directory, self.mount)
+        site_directory = pathlib.Path(config["site_dir"]).resolve()
+        cpdocs.plugins.properdocs.core.publish_api(
+            cpdocs.build.Layout.for_output(self.output).versions, site_directory, self.mount
+        )
         self._build_subsites(site_directory, strict=bool(config.get("strict", False)))

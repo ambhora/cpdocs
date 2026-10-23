@@ -6,15 +6,15 @@
 
 from __future__ import annotations
 
+import pathlib
 import re
-from pathlib import Path
 
 import pytest
 import yaml
 
-from conftest import REPOSITORY
+import conftest
 
-WORKFLOWS = sorted((REPOSITORY / ".github" / "workflows").glob("*.yml"))
+WORKFLOWS = sorted((conftest.REPOSITORY / ".github" / "workflows").glob("*.yml"))
 
 
 def _steps(workflow: dict[str, object]) -> list[dict[str, object]]:
@@ -24,13 +24,13 @@ def _steps(workflow: dict[str, object]) -> list[dict[str, object]]:
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
-def test_workflow_permissions_are_explicit(path: Path) -> None:
+def test_workflow_permissions_are_explicit(path: pathlib.Path) -> None:
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert "permissions" in workflow
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
-def test_actions_are_pinned_to_commits(path: Path) -> None:
+def test_actions_are_pinned_to_commits(path: pathlib.Path) -> None:
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     for step in _steps(workflow):
         uses = step.get("uses")
@@ -39,7 +39,7 @@ def test_actions_are_pinned_to_commits(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
-def test_checkouts_do_not_persist_credentials(path: Path) -> None:
+def test_checkouts_do_not_persist_credentials(path: pathlib.Path) -> None:
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     for step in _steps(workflow):
         uses = step.get("uses")
@@ -48,7 +48,7 @@ def test_checkouts_do_not_persist_credentials(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
-def test_run_steps_do_not_inline_expressions(path: Path) -> None:
+def test_run_steps_do_not_inline_expressions(path: pathlib.Path) -> None:
     # Values reach scripts through env, never by text substitution into the script.
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     for step in _steps(workflow):

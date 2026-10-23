@@ -6,15 +6,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from functools import cached_property
+import collections.abc
+import dataclasses
+import functools
 
-from ..model import ApiEntity, ApiSignature
-from .kinds import EntityKinds, Role
+import cpdocs.languages.kinds
+import cpdocs.model
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class LanguageRendering:
     """Presentation rules that belong to a programming language, not to HTML.
 
@@ -23,43 +23,43 @@ class LanguageRendering:
     """
 
     separator: str
-    kinds: EntityKinds
+    kinds: cpdocs.languages.kinds.EntityKinds
     source_suffixes: frozenset[str]
-    signature_spelling: Callable[[ApiEntity, ApiSignature], str]
-    entity_declaration: Callable[[ApiEntity], str]
-    member_summary: Callable[[ApiEntity], str]
+    signature_spelling: collections.abc.Callable[[cpdocs.model.ApiEntity, cpdocs.model.ApiSignature], str]
+    entity_declaration: collections.abc.Callable[[cpdocs.model.ApiEntity], str]
+    member_summary: collections.abc.Callable[[cpdocs.model.ApiEntity], str]
 
-    @cached_property
+    @functools.cached_property
     def container_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.CONTAINER)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.CONTAINER)
 
-    @cached_property
+    @functools.cached_property
     def class_like_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.CLASS_LIKE)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.CLASS_LIKE)
 
-    @cached_property
+    @functools.cached_property
     def type_page_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.TYPE_PAGE)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.TYPE_PAGE)
 
-    @cached_property
+    @functools.cached_property
     def type_like_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.TYPE)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.TYPE)
 
-    @cached_property
+    @functools.cached_property
     def function_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.CALLABLE)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.CALLABLE)
 
-    @cached_property
+    @functools.cached_property
     def member_value_kinds(self) -> frozenset[str]:
-        return self.kinds.with_role(Role.VALUE)
+        return self.kinds.with_role(cpdocs.languages.kinds.Role.VALUE)
 
-    def member_group(self, entity: ApiEntity) -> str | None:
+    def member_group(self, entity: cpdocs.model.ApiEntity) -> str | None:
         """The heading an entity is listed under on the page of its type, if it is listed there."""
 
         return self.kinds[entity.kind].group
 
 
-def parameter_spelling(signature: ApiSignature) -> str:
+def parameter_spelling(signature: cpdocs.model.ApiSignature) -> str:
     """Render conventional typed parameters used by C-family, Fortran and Rust APIs."""
 
     values: list[str] = []
@@ -73,13 +73,13 @@ def parameter_spelling(signature: ApiSignature) -> str:
     return ", ".join(values)
 
 
-def assigned_property(entity: ApiEntity) -> str:
+def assigned_property(entity: cpdocs.model.ApiEntity) -> str:
     """Return an ``= value`` property without its marker."""
 
     return next((value[2:] for value in entity.properties if value.startswith("= ")), "")
 
 
-def typed_property(entity: ApiEntity, *, ignored: frozenset[str] = frozenset()) -> str:
+def typed_property(entity: cpdocs.model.ApiEntity, *, ignored: frozenset[str] = frozenset()) -> str:
     """Return the first property that represents a type rather than an assignment/flag."""
 
     return next((value for value in entity.properties if not value.startswith("=") and value not in ignored), "")

@@ -15,15 +15,15 @@ text and this module decodes it, so ``1.10`` stays ``"1.10"`` instead of becomin
 
 from __future__ import annotations
 
+import dataclasses
+import pathlib
 import re
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
+import typing
 
 import korml
 
 CONTRACT_VERSION = 3
-DEFAULT_CONFIG = Path("docs/cpdocs.yml")
+DEFAULT_CONFIG = pathlib.Path("docs/cpdocs.yml")
 _CHECK_LEVELS = {"ignore", "warn", "fail"}
 
 # The colours a theme may set, one set per colour scheme of the API site.
@@ -33,7 +33,7 @@ _HEX_COLOR = re.compile(r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")
 _IMAGE_SUFFIXES = (".svg", ".png", ".ico", ".webp", ".jpg", ".jpeg", ".gif")
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class SiteTheme:
     """Presentation of the API site: logo, favicon, colours and an extra stylesheet.
 
@@ -42,21 +42,21 @@ class SiteTheme:
     each a name in ``THEME_COLORS`` with a hexadecimal value.
     """
 
-    logo: Path | None = None
-    favicon: Path | None = None
-    stylesheet: Path | None = None
-    colors: dict[str, dict[str, str]] = field(default_factory=dict)
+    logo: pathlib.Path | None = None
+    favicon: pathlib.Path | None = None
+    stylesheet: pathlib.Path | None = None
+    colors: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class CpdocsConfig:
-    config_file: Path
-    project_root: Path
+    config_file: pathlib.Path
+    project_root: pathlib.Path
     feature_sets: str
     build: str
-    language_configurations: tuple[dict[str, Any], ...]
+    language_configurations: tuple[dict[str, typing.Any], ...]
     versions: tuple[str, ...]
-    index: Path | None
+    index: pathlib.Path | None
     copyright: str | None
     project_docs: str
     theme: SiteTheme
@@ -66,14 +66,14 @@ class CpdocsConfig:
     check_broken_references: str
 
 
-def project_root_for(config_file: Path) -> Path:
+def project_root_for(config_file: pathlib.Path) -> pathlib.Path:
     """Return the repository root for a configuration file."""
 
     parent = config_file.resolve().parent
     return parent.parent if parent.name == "docs" else parent
 
 
-def _mapping(value: object, name: str) -> dict[str, Any]:
+def _mapping(value: object, name: str) -> dict[str, typing.Any]:
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -112,7 +112,7 @@ def _command(value: object, name: str) -> str:
     return value.strip()
 
 
-def _theme_file(value: object, name: str, root: Path, *, suffixes: tuple[str, ...]) -> Path | None:
+def _theme_file(value: object, name: str, root: pathlib.Path, *, suffixes: tuple[str, ...]) -> pathlib.Path | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
@@ -149,7 +149,7 @@ def _theme_colors(value: object) -> dict[str, dict[str, str]]:
     return result
 
 
-def _theme(value: object, root: Path) -> SiteTheme:
+def _theme(value: object, root: pathlib.Path) -> SiteTheme:
     theme = _mapping(value, "site.theme")
     unknown = sorted(set(theme) - {"logo", "favicon", "stylesheet", "colors"})
     if unknown:
@@ -165,7 +165,7 @@ def _theme(value: object, root: Path) -> SiteTheme:
     )
 
 
-def _keyso_integers(value: object, name: str) -> Any:
+def _keyso_integers(value: object, name: str) -> typing.Any:
     """Decode the integer bounds of Keyso ``_interval`` operators; every other scalar stays text.
 
     Korml scalars are text, and Keyso needs integers only for ``_interval``. Values that become
@@ -176,10 +176,10 @@ def _keyso_integers(value: object, name: str) -> Any:
         return [_keyso_integers(item, f"{name}[{index}]") for index, item in enumerate(value)]
     if not isinstance(value, dict):
         return value
-    result: dict[str, Any] = {}
+    result: dict[str, typing.Any] = {}
     for key, child in value.items():
         if key == "_interval" and isinstance(child, dict):
-            bounds: dict[str, Any] = {}
+            bounds: dict[str, typing.Any] = {}
             for bound, text in child.items():
                 if not isinstance(text, str) or not re.fullmatch(r"[+-]?[0-9]+", text):
                     raise RuntimeError(f"cpdocs.yml: {name}._interval.{bound} must be an integer")
@@ -190,7 +190,7 @@ def _keyso_integers(value: object, name: str) -> Any:
     return result
 
 
-def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+def _language_configurations(raw: dict[str, typing.Any]) -> tuple[dict[str, typing.Any], ...]:
     """Expand the optional Keyso language space, preserving the original default build."""
 
     if "languages" not in raw:
@@ -211,7 +211,7 @@ def _language_configurations(raw: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     return tuple(configurations)
 
 
-def _read(config_file: Path) -> dict[str, Any]:
+def _read(config_file: pathlib.Path) -> dict[str, typing.Any]:
     """Read the single Korml document of ``config_file`` as a mapping of text scalars."""
 
     try:
@@ -226,8 +226,8 @@ def _read(config_file: Path) -> dict[str, Any]:
     return raw
 
 
-def load_config(path: Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
-    config_file = Path(path).expanduser().resolve()
+def load_config(path: pathlib.Path | str = DEFAULT_CONFIG) -> CpdocsConfig:
+    config_file = pathlib.Path(path).expanduser().resolve()
     if not config_file.is_file():
         raise RuntimeError(f"cpdocs configuration does not exist: {config_file}")
     raw = _read(config_file)

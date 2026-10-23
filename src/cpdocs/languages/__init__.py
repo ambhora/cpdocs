@@ -6,32 +6,58 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import functools
+import pathlib
 
-from .base import LanguageRendering
-from .cpp.extract import extract_unit as _extract_c_family
-from .cpp.render import RENDERING as CPP
-from .fortran.extract import extract_unit as _extract_fortran
-from .fortran.render import RENDERING as FORTRAN
-from .kinds import EntityKind, EntityKinds, Role
-from .python.extract import extract_unit as _extract_python
-from .python.render import RENDERING as PYTHON
-from .rust.extract import extract_unit as _extract_rust
-from .rust.render import RENDERING as RUST
-from .unit import UnitContext, UnitExtractor
+# These three modules use nothing of this package at import time, so they may load with it.
+import cpdocs.languages.base
+import cpdocs.languages.kinds
+import cpdocs.languages.unit
 
-_RENDERINGS = {"c": CPP, "cpp": CPP, "cuda": CPP, "hip": CPP, "fortran": FORTRAN, "python": PYTHON, "rust": RUST}
 
-# The extractor of each semantic manifest language. C, CUDA and HIP units share the Clang frontend.
-_EXTRACTORS: dict[str, UnitExtractor] = {
-    "c": _extract_c_family,
-    "cpp": _extract_c_family,
-    "cuda": _extract_c_family,
-    "hip": _extract_c_family,
-    "fortran": _extract_fortran,
-    "python": _extract_python,
-    "rust": _extract_rust,
-}
+@functools.cache
+def _renderings() -> dict[str, cpdocs.languages.base.LanguageRendering]:
+    """The presentation rules of each semantic language.
+
+    The language packages are imported on first use rather than with this package: their modules
+    use ``cpdocs.languages`` at import time, which is only possible once this package is complete.
+    """
+
+    import cpdocs.languages.cpp.render
+    import cpdocs.languages.fortran.render
+    import cpdocs.languages.python.render
+    import cpdocs.languages.rust.render
+
+    return {
+        "c": cpdocs.languages.cpp.render.RENDERING,
+        "cpp": cpdocs.languages.cpp.render.RENDERING,
+        "cuda": cpdocs.languages.cpp.render.RENDERING,
+        "hip": cpdocs.languages.cpp.render.RENDERING,
+        "fortran": cpdocs.languages.fortran.render.RENDERING,
+        "python": cpdocs.languages.python.render.RENDERING,
+        "rust": cpdocs.languages.rust.render.RENDERING,
+    }
+
+
+@functools.cache
+def _extractors() -> dict[str, cpdocs.languages.unit.UnitExtractor]:
+    """The extractor of each semantic manifest language. C, CUDA and HIP share the Clang frontend."""
+
+    import cpdocs.languages.cpp.extract
+    import cpdocs.languages.fortran.extract
+    import cpdocs.languages.python.extract
+    import cpdocs.languages.rust.extract
+
+    return {
+        "c": cpdocs.languages.cpp.extract.extract_unit,
+        "cpp": cpdocs.languages.cpp.extract.extract_unit,
+        "cuda": cpdocs.languages.cpp.extract.extract_unit,
+        "hip": cpdocs.languages.cpp.extract.extract_unit,
+        "fortran": cpdocs.languages.fortran.extract.extract_unit,
+        "python": cpdocs.languages.python.extract.extract_unit,
+        "rust": cpdocs.languages.rust.extract.extract_unit,
+    }
+
 
 _LANGUAGE_LABELS = {
     "c": "C",
@@ -44,20 +70,20 @@ _LANGUAGE_LABELS = {
 }
 
 
-def extractor_for(language: str) -> UnitExtractor:
+def extractor_for(language: str) -> cpdocs.languages.unit.UnitExtractor:
     """Return the function that extracts manifest units of one semantic language."""
 
     try:
-        return _EXTRACTORS[language]
+        return _extractors()[language]
     except KeyError as error:
         raise ValueError(f"unsupported API language: {language}") from error
 
 
-def rendering_for(language: str) -> LanguageRendering:
+def rendering_for(language: str) -> cpdocs.languages.base.LanguageRendering:
     """Return rendering semantics for one programming language."""
 
     try:
-        return _RENDERINGS[language]
+        return _renderings()[language]
     except KeyError as error:
         raise ValueError(f"unsupported API language: {language}") from error
 
@@ -66,7 +92,7 @@ def language_label(language: str) -> str:
     return _LANGUAGE_LABELS.get(language, language)
 
 
-def entity_kind(language: str, kind: str) -> EntityKind:
+def entity_kind(language: str, kind: str) -> cpdocs.languages.kinds.EntityKind:
     """The declaration of ``kind`` in the kind table of ``language``.
 
     Raises ``ValueError`` for an unknown language and ``KeyError`` for a kind the language does
@@ -89,7 +115,7 @@ def kind_marker(kind: str, language: str) -> str:
 
 
 def source_language(path: str) -> str:
-    suffix = Path(path).suffix.casefold()
+    suffix = pathlib.Path(path).suffix.casefold()
     if suffix in {".cu", ".cuh"}:
         return "cuda"
     if suffix == ".hip":
@@ -99,18 +125,12 @@ def source_language(path: str) -> str:
     if suffix in {".h", ".hh", ".hpp", ".hxx", ".cc", ".cpp", ".cxx"}:
         return "cpp"
     for language in ("fortran", "python", "rust"):
-        if suffix in _RENDERINGS[language].source_suffixes:
+        if suffix in _renderings()[language].source_suffixes:
             return language
     return "text"
 
 
 __all__ = [
-    "EntityKind",
-    "EntityKinds",
-    "LanguageRendering",
-    "Role",
-    "UnitContext",
-    "UnitExtractor",
     "entity_kind",
     "extractor_for",
     "kind_label",

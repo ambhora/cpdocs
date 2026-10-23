@@ -7,11 +7,11 @@
 from __future__ import annotations
 
 import functools
-from pathlib import Path
-from string import Template
+import pathlib
+import string
 
 
-def resource(*parts: str) -> Path:
+def resource(*parts: str) -> pathlib.Path:
     """Locate shared assets in either the source tree or an installed wheel.
 
     The repository stores assets in ``share/cpdocs``; Hatch installs them at
@@ -19,7 +19,7 @@ def resource(*parts: str) -> Path:
     ``share`` is a namespace shared with other directories (including
     ``test/share``), and its ``MultiplexedPath`` may resolve the wrong root.
     """
-    package = Path(__file__).resolve()
+    package = pathlib.Path(__file__).resolve()
     for parent in (package.parents[1], package.parents[2]):
         root = parent / "share" / "cpdocs"
         if root.is_dir():
@@ -33,5 +33,5 @@ def shared_text(path: str) -> str:
 
 
 @functools.cache
-def shared_template(path: str) -> Template:
-    return Template(shared_text(path))
+def shared_template(path: str) -> string.Template:
+    return string.Template(shared_text(path))

@@ -42,6 +42,15 @@ Both values in `cpdocs.yml` are shell command strings run from the source direct
 
 A non-zero command status fails the documentation build.
 
+cpdocs never pastes a placeholder's value into the command text. Each placeholder becomes a
+reference to an environment variable holding its value, `CPDOCS_ARG_` followed by the name in upper
+case with `.` and `-` turned into `_`: `{{output-file}}` becomes `${CPDOCS_ARG_OUTPUT_FILE}` and a
+language property `{{cxx.standard}}` becomes `${CPDOCS_ARG_CXX_STANDARD}`. The shell expands the
+reference after it has parsed the command, so a value is never run as shell syntax, whatever it
+contains. Quote placeholders as in the examples, `"{{source}}"`, so that a value with spaces stays one
+argument; a build script may also read the variables directly. Two placeholders that map to the same
+variable, such as `output-file` and a language property `output_file`, are rejected.
+
 ## `feature-sets.json`
 
 Feature sets are deliberately **unnamed**. A feature set is just one concrete list of project

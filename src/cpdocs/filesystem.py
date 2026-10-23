@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 cpdocs developers
 # --------------------------------------------------------------------------------------------------
-"""Where cpdocs may write and delete.
+"""Where cpdocs may write, delete and read.
 
 cpdocs writes and deletes only below directories it owns, and names inside them often come from
 documented code or from the build system: unit identifiers, symbol names, source paths. These
-helpers turn such names into paths that cannot leave the owning directory and delete only what
-cpdocs created rather than the target of a symbolic link placed in its way.
+helpers turn such names into paths that cannot leave the owning directory, delete only what cpdocs
+created rather than the target of a symbolic link placed in its way, and decide which files found
+while walking a source tree may be read and published.
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
+import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 _SAFE_COMPONENT = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.+-]*")
@@ -71,4 +74,44 @@ def remove_tree(path: Path, *, owner: Path) -> None:
         shutil.rmtree(path)
 
 
-__all__ = ["contained_path", "path_component", "remove_tree"]
+def readable_file(path: Path, roots: Iterable[Path]) -> bool:
+    """Whether a file found while walking a tree may be read and published.
+
+    The file, after following symbolic links, must lie below one of ``roots``. A link between
+    files of the project is fine; a link from a browsed tree to anything else, such as a file in
+    the builder's home directory or ``/proc/self/environ``, is not followed.
+    """
+
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    if not resolved.is_file():
+        return False
+    return any(resolved.is_relative_to(root.resolve()) for root in roots)
+
+
+def git_tracked_files(directory: Path) -> frozenset[Path] | None:
+    """The resolved paths of files Git tracks below ``directory``, or ``None`` outside Git.
+
+    Files in a checkout that Git does not track, such as a local ``.env`` or credentials a CI job
+    wrote into the tree, are not part of the project's source and are not published.
+    """
+
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--cached"],
+            cwd=directory,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    names = result.stdout.decode("utf-8", errors="surrogateescape").split("\0")
+    return frozenset((directory / name).resolve() for name in names if name)
+
+
+__all__ = ["contained_path", "git_tracked_files", "path_component", "readable_file", "remove_tree"]

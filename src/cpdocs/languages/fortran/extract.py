@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
     ApiGraph,
@@ -38,7 +39,7 @@ _DECL = re.compile(r"^\s*([^!]+?)\s*::\s*(.+)$")
 _DOC = re.compile(r"^\s*(?:!>|!!)[ ]?(.*)$")
 
 
-def _source_files(roots: list[Path]) -> list[Path]:
+def _source_files(roots: list[Path], project_root: Path) -> list[Path]:
     values: set[Path] = set()
     for root in roots:
         if root.is_file():
@@ -48,7 +49,10 @@ def _source_files(roots: list[Path]) -> list[Path]:
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
-            if path.is_file() and path.suffix.casefold() in _FORTRAN_SUFFIXES:
+            # A link out of the declared root and the project is not followed.
+            if path.suffix.casefold() in _FORTRAN_SUFFIXES and readable_file(
+                path, (root, project_root)
+            ):
                 values.add(path.resolve())
     return sorted(values)
 
@@ -148,7 +152,7 @@ def extract_fortran_graph(
     """Extract public module/type/routine declarations from Fortran source roots."""
 
     graph = ApiGraph(project=project, version=version, language="fortran")
-    for path in _source_files(api_roots):
+    for path in _source_files(api_roots, project_root):
         try:
             content = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

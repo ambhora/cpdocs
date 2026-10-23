@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
     ApiGraph,
@@ -350,7 +351,8 @@ def build_rust_graph(
                 if isinstance(begin[1], int):
                     column = begin[1]
             source = SourceLocation(filename_text, line, column)
-            if project_root is not None:
+            # Only the project's own files are published, not dependency sources a span may name.
+            if project_root is not None and readable_file(physical, (project_root,)):
                 try:
                     graph.sources.setdefault(filename_text, physical.read_text(encoding="utf-8"))
                 except (OSError, UnicodeDecodeError):

@@ -123,5 +123,12 @@ produced or consumed by the unit. cpdocs uses them for the file hierarchy only; 
 the API boundary. This is why implementation files can be browsed without becoming API entities.
 For Fortran, `modules` is also the natural public declaration source and is parsed as API.
 
+Every file read from these roots is published, so cpdocs reads a file only if, after following
+symbolic links, it lies below the declared root or the project; a link from a source tree to
+anything else is skipped. Inside a Git checkout, a unit that is not marked `generated` publishes
+only files Git tracks, so untracked local files such as credentials never reach the site. The same
+link rule applies to API roots, Python packages and Rust sources; rustdoc spans into dependencies
+outside the project keep their location but their source is not published.
+
 For C-family APIs a compile database is preferred when available. Explicit API roots still matter:
 a compilation database describes how translation units are compiled, not which headers are public.

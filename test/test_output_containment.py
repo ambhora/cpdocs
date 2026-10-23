@@ -119,7 +119,7 @@ def test_manifest_unit_ids_cannot_escape(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     unit = read_manifest(manifest, source=project).units[0]
-    files, _generated, _display = _collect_browse_files(unit, project_root=project)
+    files, _generated, _display = _collect_browse_files(unit, project_root=project, tracked=None)
     assert all(".." not in Path(path).parts for path in files)
 
     graph = ApiGraph(project="p", version="main", language="fortran")

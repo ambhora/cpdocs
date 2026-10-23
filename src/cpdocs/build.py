@@ -27,7 +27,13 @@ from pathlib import Path, PurePosixPath
 
 from .config import CpdocsConfig
 from .contract import ContractError, UnitManifest
-from .filesystem import contained_path, path_component, remove_tree
+from .filesystem import (
+    contained_path,
+    git_tracked_files,
+    path_component,
+    readable_file,
+    remove_tree,
+)
 from .languages import rendering_for
 from .languages.cpp.extract import extract_clang_graph
 from .languages.fortran.extract import extract_fortran_graph
@@ -168,8 +174,17 @@ def _api_display_paths(
 
 
 def _collect_browse_files(
-    unit: UnitManifest, *, project_root: Path
+    unit: UnitManifest, *, project_root: Path, tracked: frozenset[Path] | None
 ) -> tuple[dict[str, str], list[str], dict[str, str]]:
+    """Read the implementation sources a unit declares for the source browser.
+
+    Everything returned here is published. A file is read only if, after following symbolic
+    links, it lies below its declared root or the project. Inside the project, a unit that is not
+    marked ``generated`` publishes only files Git tracks (``tracked``; ``None`` outside Git), so
+    untracked local files such as credentials are not published.
+    """
+
+    project = project_root.resolve()
     files: dict[str, str] = {}
     generated: list[str] = []
     display_paths: dict[str, str] = {}
@@ -189,7 +204,15 @@ def _collect_browse_files(
             else:
                 candidates = []
             for path in candidates:
-                if not path.is_file():
+                if not readable_file(path, (root, project_root)):
+                    continue
+                resolved = path.resolve()
+                if (
+                    tracked is not None
+                    and not unit.generated
+                    and resolved.is_relative_to(project)
+                    and resolved not in tracked
+                ):
                     continue
                 try:
                     content = path.read_text(encoding="utf-8")
@@ -384,6 +407,7 @@ def build_graph(
     project_version = ""
     generator = ""
     multiple_languages = len(config.language_configurations) > 1
+    tracked = git_tracked_files(source)
 
     for index, configuration in enumerate(config.language_configurations, 1):
         template_values = language_template_values(configuration)
@@ -456,7 +480,7 @@ def build_graph(
                     display_paths.setdefault(path, display)
 
                 browse_files, generated_files, browse_display_paths = _collect_browse_files(
-                    unit, project_root=source
+                    unit, project_root=source, tracked=tracked
                 )
                 for path, content in browse_files.items():
                     unit_graph.files.setdefault(path, content)

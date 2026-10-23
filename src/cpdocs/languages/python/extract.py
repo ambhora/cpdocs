@@ -16,6 +16,7 @@ import inspect
 from pathlib import Path
 from typing import Any
 
+from ...filesystem import readable_file
 from ...model import (
     ApiEntity,
     ApiGraph,
@@ -540,7 +541,10 @@ def build_python_graph(
 
     def package_source(path: Path) -> bool:
         parts = path.relative_to(package_root).parts
-        return not any(part.startswith(".") or part == "__pycache__" for part in parts)
+        if any(part.startswith(".") or part == "__pycache__" for part in parts):
+            return False
+        # A link out of the package and the project is not followed.
+        return readable_file(path, (package_root, project_root))
 
     def public_source(path: Path) -> bool:
         if include_private:

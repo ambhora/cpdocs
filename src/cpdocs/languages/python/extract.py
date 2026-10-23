@@ -551,6 +551,12 @@ def build_python_graph(
             not path.stem.startswith("_") and all(not part.startswith("_") for part in parts[:-1])
         )
 
+    def importable_source(path: Path) -> bool:
+        # A file whose name is not an identifier cannot be imported, so it is not API. Its name
+        # would otherwise become a module name shown to readers, as in ``<img ...>.py``.
+        parts = path.relative_to(package_root).with_suffix("").parts
+        return all(part.isidentifier() for part in parts)
+
     every_source = sorted(
         {
             path
@@ -560,12 +566,12 @@ def build_python_graph(
         },
         key=lambda path: (path.relative_to(package_root).as_posix(), path.suffix != ".py"),
     )
-    sources = [path for path in every_source if public_source(path)]
+    sources = [path for path in every_source if public_source(path) and importable_source(path)]
 
     # Hidden modules are not part of the API, but they are files of the package: the file hierarchy
     # lists them and their source can be read like any other.
     for path in every_source:
-        if public_source(path):
+        if public_source(path) and importable_source(path):
             continue
         try:
             graph.sources.setdefault(

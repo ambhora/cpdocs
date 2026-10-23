@@ -123,9 +123,15 @@
     if (!results) return;
     results.replaceChildren();
     for (const item of values.slice(0, 20)) {
+      // API names are data, not markup: C++ names such as operator< or a module named after an
+      // arbitrary file name must reach the reader as text, so every value goes through textContent.
       const link = document.createElement("a");
       link.href = versionRoot + item.url;
-      link.innerHTML = `<strong>${item.label}</strong><br><small>${item.kind} · ${item.qualified}</small>`;
+      const label = document.createElement("strong");
+      label.textContent = item.label;
+      const detail = document.createElement("small");
+      detail.textContent = `${item.kind} · ${item.qualified}`;
+      link.append(label, document.createElement("br"), detail);
       results.appendChild(link);
     }
     results.hidden = values.length === 0;

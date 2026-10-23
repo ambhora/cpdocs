@@ -233,6 +233,11 @@ def read_manifest(path: Path, *, source: Path) -> Manifest:
             if len(api) != 1:
                 raise ContractError(f"{path}: {where}: a Python unit needs exactly one API root")
             package = _string(data, "package", path, where)
+            # The package name becomes the root of every Python API name shown to readers.
+            if not all(part.isidentifier() for part in package.split(".")):
+                raise ContractError(
+                    f"{path}: {where}.package must be a dotted Python identifier, found {package!r}"
+                )
         elif declaration.language == "rust":
             rustdoc_json = _path(_string(data, "rustdoc-json", path, where), source)
         elif declaration.language == "fortran":

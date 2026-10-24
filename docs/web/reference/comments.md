@@ -19,11 +19,13 @@ int add(int left, int right);
 In Python, docstrings document modules, classes and functions; a string literal directly below an
 assignment documents the assigned name.
 
-`@tparam`, `@param`, `@return` and `@throws` are shown as titled lists below the description,
-whatever their order in the comment.
+`@tparam NAME`, `@param NAME`, `@return` and `@throws TYPE` are shown as titled lists below the
+description, whatever their order in the comment. The type named by `@throws` links to its page when
+it is part of the documented API.
 
-Prose may use inline code, `**strong**` text and Markdown links. Links to the project website use
-`projectdocs:`.
+Prose may use inline code, `**strong**` text and Markdown links. Inline code that names an entity of
+the documented API, such as `` `Algorithm` `` or `` `secret()` ``, links to it. Links to the project
+website use `projectdocs:`.
 
 A comment line of the form
 

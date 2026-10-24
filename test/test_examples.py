@@ -560,7 +560,10 @@ def test_documentation_fields_and_strong_text() -> None:
     assert rendered.startswith("<p>Add <strong>two</strong> values.</p>")
     assert "<dt><code>left</code></dt><dd>Left operand.</dd>" in rendered
     assert '<p class="api-doc-field-title">Returns</p><p>Their sum.</p>' in rendered
-    assert '<p class="api-doc-field-title">Throws</p><p>std::overflow_error on overflow.</p>' in rendered
+    assert (
+        '<p class="api-doc-field-title">Throws</p><dl><dt><code>std::overflow_error</code></dt><dd>on overflow.</dd>'
+        in rendered
+    )
 
 
 def test_sidebars_are_resizable(tmp_path: pathlib.Path) -> None:

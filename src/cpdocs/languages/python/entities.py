@@ -35,7 +35,14 @@ ENTITY_KINDS = cpdocs.languages.kinds.EntityKinds(
         cpdocs.languages.kinds.EntityKind("module", "module", "M", 1, roles=cpdocs.languages.kinds.Role.CONTAINER),
         cpdocs.languages.kinds.EntityKind("class", "class", "C", 2, cpdocs.languages.kinds.TYPES, _CLASS),
         cpdocs.languages.kinds.EntityKind("protocol", "protocol", "P", 2, cpdocs.languages.kinds.TYPES, _CLASS),
-        cpdocs.languages.kinds.EntityKind("enum", "enum", "E", 3),
+        cpdocs.languages.kinds.EntityKind(
+            "enum",
+            "enum",
+            "E",
+            3,
+            cpdocs.languages.kinds.TYPES,
+            cpdocs.languages.kinds.Role.TYPE_PAGE | cpdocs.languages.kinds.Role.TYPE,
+        ),
         cpdocs.languages.kinds.EntityKind(
             "type_alias", "type alias", "T", 4, cpdocs.languages.kinds.TYPES, cpdocs.languages.kinds.Role.TYPE
         ),

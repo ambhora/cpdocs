@@ -22,6 +22,7 @@ import posixpath
 import re
 import secrets
 import shutil
+import typing
 
 import markdown_it
 
@@ -399,13 +400,49 @@ def _toc(items: list[tuple[str, str, int]]) -> str:
     return "".join(parts)
 
 
-def _inline_documentation(text: str) -> str:
+_EntityLinker = typing.Callable[[str], str | None]
+"""Maps a name written in API prose to the href of the entity it names, or ``None``."""
+
+_ENTITY_REFERENCE = re.compile(r"[A-Za-z_]\w*(?:(?:\.|::)[A-Za-z_]\w*)*")
+
+
+def _no_entity_links(_name: str) -> str | None:
+    return None
+
+
+def _entity_linker(
+    entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path
+) -> _EntityLinker:
+    """Return a linker resolving names relative to ``entity``, as related-entity references are."""
+
+    def link(name: str) -> str | None:
+        reference = name.removesuffix("()")
+        if not _ENTITY_REFERENCE.fullmatch(reference):
+            return None
+        target = cpdocs.rendering.common._resolve_related_entity(reference, entity, graph)
+        if target is None or target.id == entity.id:
+            return None
+        return _entity_href(document, target, graph)
+
+    return link
+
+
+def _code_reference(name: str, link: _EntityLinker) -> str:
+    """Render ``name`` as inline code, linked to the API entity it names if there is one."""
+
+    code = f"<code>{html.escape(name)}</code>"
+    href = link(name)
+    return code if href is None else f'<a href="{html.escape(href, quote=True)}">{code}</a>'
+
+
+def _inline_documentation(text: str, link: _EntityLinker = _no_entity_links) -> str:
     """Render the small Markdown-like inline subset accepted in extracted API prose.
 
     API comments are intentionally not routed through a full Markdown engine.  We only need stable,
     predictable inline constructs here: code spans, Markdown links, and cpdocs's ``@projectdocs``
     shorthand.  A Markdown link may use ``projectdocs:`` as its destination and is resolved later,
-    once the renderer knows the final depth of the generated API page.
+    once the renderer knows the final depth of the generated API page.  A code span that names an
+    API entity links to it.
     """
 
     result: list[str] = []
@@ -413,7 +450,7 @@ def _inline_documentation(text: str) -> str:
     for match in _INLINE_DOCUMENTATION.finditer(text):
         result.append(html.escape(text[position : match.start()]))
         if match.group("code") is not None:
-            result.append(f"<code>{html.escape(match.group('code'))}</code>")
+            result.append(_code_reference(match.group("code"), link))
         elif match.group("strong") is not None:
             result.append(f"<strong>{html.escape(match.group('strong'))}</strong>")
         elif match.group("label") is not None:
@@ -437,11 +474,45 @@ _DOCUMENTATION_FIELD = re.compile(r"@(?P<command>tparam|param|returns?|throws?)\
 _FIELD_TITLES = {"tparam": "Template parameters", "param": "Parameters", "return": "Returns", "throws": "Throws"}
 
 
-def _documentation_description(text: str) -> str:
+_NAMED_FIELDS = ("tparam", "param", "throws")
+
+
+def _documentation_field(paragraph: str) -> tuple[str, str, str] | None:
+    """Split a ``@command`` paragraph into its command, its name (empty for ``@return``) and its text."""
+
+    field = _DOCUMENTATION_FIELD.fullmatch(paragraph)
+    if field is None:
+        return None
+    command = {"returns": "return", "throw": "throws"}.get(field.group("command"), field.group("command"))
+    rest = field.group("rest").strip()
+    if command not in _NAMED_FIELDS:
+        return command, "", rest
+    name, _, description = rest.partition(" ")
+    return command, name, description.strip()
+
+
+def _field_entries(command: str, entries: list[tuple[str, str]], link: _EntityLinker) -> str:
+    """Render the entries of one field: a name/description list, or paragraphs for ``@return``."""
+
+    if command not in _NAMED_FIELDS:
+        return "".join(f"<p>{_inline_documentation(value, link)}</p>" for _name, value in entries)
+    # Parameter names are local to the declaration; an exception names a type that may be documented.
+    name_link = link if command == "throws" else _no_entity_links
+    return (
+        "<dl>"
+        + "".join(
+            f"<dt>{_code_reference(name, name_link)}</dt><dd>{_inline_documentation(description, link)}</dd>"
+            for name, description in entries
+        )
+        + "</dl>"
+    )
+
+
+def _documentation_description(text: str, link: _EntityLinker = _no_entity_links) -> str:
     """Render documentation prose, followed by its parameter, return and exception fields.
 
     Paragraphs of the form ``@tparam NAME text``, ``@param NAME text``, ``@return text`` and
-    ``@throws text`` are collected, wherever they appear, into titled lists after the prose.
+    ``@throws TYPE text`` are collected, wherever they appear, into titled lists after the prose.
     """
 
     paragraphs: list[str] = []
@@ -453,40 +524,27 @@ def _documentation_description(text: str) -> str:
         # Doc-comment line wrapping is not semantically significant.  Keep explicit Markdown-like
         # inline syntax intact while presenting the prose as a normal paragraph.
         normalized = " ".join(line.strip() for line in paragraph.splitlines())
-        field = _DOCUMENTATION_FIELD.fullmatch(normalized)
+        field = _documentation_field(normalized)
         if field is None:
-            paragraphs.append(f"<p>{_inline_documentation(normalized)}</p>")
+            paragraphs.append(f"<p>{_inline_documentation(normalized, link)}</p>")
             continue
-        command = {"returns": "return", "throw": "throws"}.get(field.group("command"), field.group("command"))
-        rest = field.group("rest").strip()
-        if command in {"tparam", "param"}:
-            name, _, description = rest.partition(" ")
-            fields.setdefault(command, []).append((name, description.strip()))
-        else:
-            fields.setdefault(command, []).append(("", rest))
+        command, name, description = field
+        fields.setdefault(command, []).append((name, description))
     for command in ("tparam", "param", "return", "throws"):
         entries = fields.get(command)
         if not entries:
             continue
-        paragraphs.append(f'<div class="api-doc-field"><p class="api-doc-field-title">{_FIELD_TITLES[command]}</p>')
-        if command in {"tparam", "param"}:
-            paragraphs.append(
-                "<dl>"
-                + "".join(
-                    f"<dt><code>{html.escape(name)}</code></dt><dd>{_inline_documentation(description)}</dd>"
-                    for name, description in entries
-                )
-                + "</dl>"
-            )
-        else:
-            paragraphs.extend(f"<p>{_inline_documentation(value)}</p>" for _name, value in entries)
-        paragraphs.append("</div>")
+        paragraphs.append(
+            f'<div class="api-doc-field"><p class="api-doc-field-title">{_FIELD_TITLES[command]}</p>'
+            + _field_entries(command, entries, link)
+            + "</div>"
+        )
     return "".join(paragraphs)
 
 
 def _documentation(entity: cpdocs.model.ApiEntity, graph: cpdocs.model.ApiGraph, document: pathlib.Path) -> str:
     _, related = cpdocs.rendering.common._documentation_blocks(entity, graph)
-    description = _documentation_description(entity.documentation)
+    description = _documentation_description(entity.documentation, _entity_linker(entity, graph, document))
     if not description and not related:
         description = '<p class="api-undocumented">No API documentation has been provided.</p>'
     if not related:

@@ -90,6 +90,66 @@ def test_python_backend_uses_same_graph_model(tmp_path: pathlib.Path) -> None:
     assert {signature.compact for signature in solve.signatures} == {"(int)", "(float)"}
 
 
+def test_python_api_types_are_linked_from_signatures_and_documentation(tmp_path: pathlib.Path) -> None:
+    package = tmp_path / "src" / "vault"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        '''"""Vault package."""
+import enum
+
+
+class Algorithm(enum.Enum):
+    """An encryption algorithm."""
+
+    ARGON2 = "argon2"
+
+
+class MissingSecret(Exception):
+    """A secret is a placeholder."""
+
+
+class UnsafeOutput(Exception):
+    """The output path is unsafe."""
+
+
+def secret(value: str) -> str:
+    """Mark a secret."""
+    return value
+
+
+def store(*, algorithm: Algorithm) -> int:
+    """Store data.
+
+    Mark each secret with `secret`.
+
+    @param algorithm The `Algorithm`; refuses with `UnsafeOutput`.
+
+    @throws MissingSecret A secret is a placeholder.
+    """
+    return 0
+''',
+        encoding="utf-8",
+    )
+    graph = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="vault", version="main"
+    )
+    site = tmp_path / "site"
+    cpdocs.rendering.html.render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    store = graph.entities[cpdocs.model.stable_entity_id("python", "function", "vault.store")]
+    document = cpdocs.rendering.html._output_file(cpdocs.rendering.common.entity_document(store))
+    page = (site / document).read_text(encoding="utf-8")
+    card = page[page.index('class="api-signature-card"') :]
+    # A Python enum is a type, so the declaration links it like a class.
+    signature = card[: card.index("</pre>")]
+    assert re.search(r'<a class="cpdocs-api-signature-type" href="[^"]*enum-algorithm[^"]*">', signature)
+    # The exception named by @throws is a linked term of a list, apart from its description.
+    assert re.search(r'Throws</p><dl><dt><a href="[^"]+"><code>MissingSecret</code></a></dt><dd>A secret', card)
+    # Code spans naming API entities link to them; parameter names do not.
+    assert re.search(r'<a href="[^"]+"><code>secret</code></a>', card)
+    assert re.search(r'<a href="[^"]+"><code>UnsafeOutput</code></a>', card)
+    assert "<dt><code>algorithm</code></dt>" in card
+
+
 def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "dice"
     (package / "_impl").mkdir(parents=True)

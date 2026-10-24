@@ -1,7 +1,7 @@
 {
   "generator": "brandgen",
   "version": "2.0.0",
-  "name": "keyloom",
+  "name": "cpdocs",
   "sources": {
     "icon.svg": "df10ce9bd00142070690a3109d607ee0cd87418ef25a65ee8ed37b633bc63adc",
     "wordmark.svg": "de0e7354dbbbd915aad627df9ca730363be6593ad58c98c1f6407c7a649a7a3a",
@@ -24,7 +24,7 @@
   ],
   "files": [
     {
-      "path": "icon/pdf/keyloom-icon-color-on-transparent-none.pdf",
+      "path": "icon/pdf/cpdocs-icon-color-on-transparent-none.pdf",
       "mark": "icon",
       "colorway": "color",
       "background": "transparent",
@@ -40,7 +40,7 @@
       "sha256": "fe7cecff359489941b7d8a9d5bb7b52fbc459ae6613e144e68f0d78c09417dc8"
     },
     {
-      "path": "icon/png/keyloom-icon-color-on-transparent-none-2048px.png",
+      "path": "icon/png/cpdocs-icon-color-on-transparent-none-2048px.png",
       "mark": "icon",
       "colorway": "color",
       "background": "transparent",
@@ -57,7 +57,7 @@
       "width_px": 2048
     },
     {
-      "path": "icon/svg/keyloom-icon-color-on-transparent-none.svg",
+      "path": "icon/svg/cpdocs-icon-color-on-transparent-none.svg",
       "mark": "icon",
       "colorway": "color",
       "background": "transparent",
@@ -73,7 +73,7 @@
       "sha256": "4090954c2557f762976a9fc97a9fa1d61143448500f1792fa37fb9ad94078fe7"
     },
     {
-      "path": "logo-horizontal/pdf/keyloom-logo-horizontal-color-on-transparent-none.pdf",
+      "path": "logo-horizontal/pdf/cpdocs-logo-horizontal-color-on-transparent-none.pdf",
       "mark": "logo-horizontal",
       "colorway": "color",
       "background": "transparent",
@@ -89,7 +89,7 @@
       "sha256": "89450173291e0c69add8729c8a399d7990c23db6d192d41e5bc0108b168207e5"
     },
     {
-      "path": "logo-horizontal/png/keyloom-logo-horizontal-color-on-transparent-none-2048px.png",
+      "path": "logo-horizontal/png/cpdocs-logo-horizontal-color-on-transparent-none-2048px.png",
       "mark": "logo-horizontal",
       "colorway": "color",
       "background": "transparent",
@@ -106,7 +106,7 @@
       "width_px": 2048
     },
     {
-      "path": "logo-horizontal/svg/keyloom-logo-horizontal-color-on-transparent-none.svg",
+      "path": "logo-horizontal/svg/cpdocs-logo-horizontal-color-on-transparent-none.svg",
       "mark": "logo-horizontal",
       "colorway": "color",
       "background": "transparent",
@@ -122,7 +122,7 @@
       "sha256": "9f395a76b5febff9616c68a58abe376aa01c37bd4c4bca6ab8f07996d8d36ad2"
     },
     {
-      "path": "wordmark/pdf/keyloom-wordmark-color-on-transparent-none.pdf",
+      "path": "wordmark/pdf/cpdocs-wordmark-color-on-transparent-none.pdf",
       "mark": "wordmark",
       "colorway": "color",
       "background": "transparent",
@@ -138,7 +138,7 @@
       "sha256": "e7b2b0bc570c2536c4627fc126647ada3fe2e030a79f666c08d760ddde9fee0f"
     },
     {
-      "path": "wordmark/png/keyloom-wordmark-color-on-transparent-none-2048px.png",
+      "path": "wordmark/png/cpdocs-wordmark-color-on-transparent-none-2048px.png",
       "mark": "wordmark",
       "colorway": "color",
       "background": "transparent",
@@ -155,7 +155,7 @@
       "width_px": 2048
     },
     {
-      "path": "wordmark/svg/keyloom-wordmark-color-on-transparent-none.svg",
+      "path": "wordmark/svg/cpdocs-wordmark-color-on-transparent-none.svg",
       "mark": "wordmark",
       "colorway": "color",
       "background": "transparent",

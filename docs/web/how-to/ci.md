@@ -11,13 +11,13 @@ units.
 ## GitHub Actions
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
     persist-credentials: false
 - run: pip install 'cpdocs[properdocs]' mkdocs-materialx
 - run: properdocs build
-- uses: actions/upload-pages-artifact@v3
+- uses: actions/upload-pages-artifact@v5
   with:
     path: build/site
 ```

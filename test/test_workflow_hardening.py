@@ -39,6 +39,17 @@ def test_actions_are_pinned_to_commits(path: pathlib.Path) -> None:
 
 
 @pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
+def test_pins_name_their_release_on_their_own_line(path: pathlib.Path) -> None:
+    # Dependabot updates a version comment only on the line of the pin; one on the line above would
+    # keep naming the old release.
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for line in lines:
+        assert not re.fullmatch(r"\s*# v\d+(\.\d+)*", line), line
+        if re.search(r"uses: \S+@[0-9a-f]{40}", line):
+            assert re.search(r"@[0-9a-f]{40} # v\d+\.\d+\.\d+$", line), line
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda path: path.name)
 def test_checkouts_do_not_persist_credentials(path: pathlib.Path) -> None:
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     for step in _steps(workflow):

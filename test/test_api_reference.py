@@ -150,6 +150,73 @@ def store(*, algorithm: Algorithm) -> int:
     assert "<dt><code>algorithm</code></dt>" in card
 
 
+@pytest.mark.parametrize(
+    ("documentation", "parameters", "returns"),
+    [
+        ("Add.\n\n@param a One.\n\n@param b Two.\n\n@return Sum.", ["a", "b"], "Sum."),
+        ("Add.\n\n@param a One.\n@param b Two.\n@return Sum.", ["a", "b"], "Sum."),
+        ("Add.\n@param a One.\n@return Sum.", ["a"], "Sum."),
+        ("Add.\n\n@param a One\n    wrapped.\n@returns Sum\n    wrapped.", ["a"], "Sum wrapped."),
+        ("Add.\n\n    @param a One.\n    @param b Two.", ["a", "b"], None),
+    ],
+)
+def test_a_field_starts_at_its_line(documentation: str, parameters: list[str], returns: str | None) -> None:
+    rendered = cpdocs.rendering.html._documentation_description(documentation)
+
+    assert re.findall(r"<dt><code>(.*?)</code></dt>", rendered) == parameters
+    assert "<p>Add.</p>" in rendered
+    assert "@" not in re.sub(r"<[^>]+>", "", rendered)
+    assert (f"Returns</p><p>{returns}</p>" in rendered) == (returns is not None)
+
+
+def test_a_wrapped_field_keeps_its_description() -> None:
+    rendered = cpdocs.rendering.html._documentation_description("@param a One\n    two.\n@param b Three.")
+
+    assert "<dd>One two.</dd>" in rendered
+    assert "<dd>Three.</dd>" in rendered
+
+
+def test_a_field_named_in_a_sentence_stays_prose() -> None:
+    rendered = cpdocs.rendering.html._documentation_description("Write @param and @return\nin a sentence.")
+
+    assert rendered == "<p>Write @param and @return in a sentence.</p>"
+
+
+def test_consecutive_python_fields_render_like_separate_ones(tmp_path: pathlib.Path) -> None:
+    package = tmp_path / "src" / "calc"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        '''"""Calc package."""
+
+
+def add(left: int, right: int) -> int:
+    """Add two values.
+
+    @param left Left operand.
+    @param right Right operand.
+    @return Their sum.
+    @throws ValueError The values do not fit.
+    """
+    return left + right
+''',
+        encoding="utf-8",
+    )
+    graph = cpdocs.languages.python.extract.build_python_graph(
+        project_root=tmp_path, package_root=package, package="calc", version="main"
+    )
+    site = tmp_path / "site"
+    cpdocs.rendering.html.render_html_site(graph, output_directory=site, project_docs_url="../", copyright_text="c")
+    add = graph.entities[cpdocs.model.stable_entity_id("python", "function", "calc.add")]
+    document = cpdocs.rendering.html._output_file(cpdocs.rendering.common.entity_document(add))
+    page = (site / document).read_text(encoding="utf-8")
+    card = page[page.index('class="api-signature-card"') :]
+
+    assert "<dt><code>left</code></dt><dd>Left operand.</dd>" in card
+    assert "<dt><code>right</code></dt><dd>Right operand.</dd>" in card
+    assert "Returns</p><p>Their sum.</p>" in card
+    assert "Throws</p><dl><dt><code>ValueError</code></dt><dd>The values do not fit.</dd>" in card
+
+
 def test_hidden_python_modules_stay_in_the_file_hierarchy(tmp_path: pathlib.Path) -> None:
     package = tmp_path / "src" / "dice"
     (package / "_impl").mkdir(parents=True)

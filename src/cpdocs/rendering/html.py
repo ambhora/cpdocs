@@ -470,7 +470,12 @@ def _inline_documentation(text: str, link: _EntityLinker = _no_entity_links) -> 
     return "".join(result)
 
 
-_DOCUMENTATION_FIELD = re.compile(r"@(?P<command>tparam|param|returns?|throws?)\b\s*(?P<rest>.*)", re.DOTALL)
+_FIELD_COMMANDS = r"tparam|param|returns?|throws?"
+_DOCUMENTATION_FIELD = re.compile(rf"@(?P<command>{_FIELD_COMMANDS})\b\s*(?P<rest>.*)", re.DOTALL)
+# Clang gives each field a paragraph of its own; a docstring or a Rust comment comes as written, where
+# consecutive fields are lines of one block. A line that starts with a command therefore starts a
+# paragraph too, or the first field would swallow the rest. One that only names a command stays prose.
+_DOCUMENTATION_PARAGRAPH_BREAK = re.compile(rf"\n\s*\n|\n(?=[ \t]*@(?:{_FIELD_COMMANDS})\b)")
 _FIELD_TITLES = {"tparam": "Template parameters", "param": "Parameters", "return": "Returns", "throws": "Throws"}
 
 
@@ -512,12 +517,13 @@ def _documentation_description(text: str, link: _EntityLinker = _no_entity_links
     """Render documentation prose, followed by its parameter, return and exception fields.
 
     Paragraphs of the form ``@tparam NAME text``, ``@param NAME text``, ``@return text`` and
-    ``@throws TYPE text`` are collected, wherever they appear, into titled lists after the prose.
+    ``@throws TYPE text`` are collected, wherever they appear, into titled lists after the prose. A
+    field starts at a line that starts with its command and runs to the next field or blank line.
     """
 
     paragraphs: list[str] = []
     fields: dict[str, list[tuple[str, str]]] = {}
-    for block in re.split(r"\n\s*\n", text.strip()):
+    for block in _DOCUMENTATION_PARAGRAPH_BREAK.split(text.strip()):
         paragraph = block.strip()
         if not paragraph or paragraph.startswith("CPDOCS-API-RELATES-TO:"):
             continue
